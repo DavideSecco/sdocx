@@ -34,10 +34,15 @@ pub struct RenderedPage {
 ///
 /// Dark-mode handling, the document background color, and embedded media assets
 /// are all sourced from the document metadata, mirroring the CLI behavior.
+///
+/// Pages with no strokes and no elements are skipped: Samsung Notes archives can
+/// carry a trailing blank page that the user never authored, and rendering it
+/// would show a phantom empty page.
 pub fn render_document(doc: &Document) -> Vec<RenderedPage> {
     let dark_mode = doc.metadata.dark_mode_compatibility.unwrap_or(false);
     doc.pages
         .iter()
+        .filter(|page| !(page.strokes.is_empty() && page.elements.is_empty()))
         .map(|page| RenderedPage {
             width: page.width,
             height: page.height,
@@ -364,7 +369,7 @@ pub fn normalized_stroke_width(pen_width: f32) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::{normalized_stroke_width, page_to_svg, render_document};
-    use sdocx::{BoundingBox, Color, Page, Point, Stroke};
+    use sdocx::{BoundingBox, Color, Document, DocumentMetadata, Page, Point, Stroke};
 
     #[test]
     fn normalizes_invalid_stroke_widths() {
@@ -403,6 +408,27 @@ mod tests {
         assert!(svg.contains(r#"viewBox="0.0 0.0 1080.0 1527.0""#));
         assert!(svg.contains(r#"width="1080" height="1527""#));
         assert!(svg.contains(r##"fill="#cbdadd""##));
+    }
+
+    #[test]
+    fn render_document_skips_empty_pages() {
+        let empty = Page {
+            uuid: "blank".into(),
+            width: 100,
+            height: 100,
+            content_bbox: BoundingBox::default(),
+            background_color: None,
+            template: None,
+            strokes: Vec::new(),
+            elements: Vec::new(),
+        };
+        let doc = Document {
+            pages: vec![page_with_uncolored_stroke(), empty],
+            metadata: DocumentMetadata::default(),
+        };
+
+        let rendered = render_document(&doc);
+        assert_eq!(rendered.len(), 1, "trailing blank page must be skipped");
     }
 
     fn page_with_uncolored_stroke() -> Page {
