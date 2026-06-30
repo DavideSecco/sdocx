@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>sdocx viewer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header id="toolbar" hidden>
+    <span id="file-name" class="file-name"></span>
+    <div class="spacer"></div>
+    <div class="pager">
+      <button id="prev" type="button" title="Pagina precedente" aria-label="Pagina precedente">‹</button>
+      <span id="page-label">Pagina 1 / 1</span>
+      <button id="next" type="button" title="Pagina successiva" aria-label="Pagina successiva">›</button>
+    </div>
+    <button id="fit" type="button" title="Adatta alla finestra">Adatta</button>
+    <button id="export-png" type="button">Esporta PNG</button>
+    <button id="export-svg" type="button">Esporta SVG</button>
+    <button id="open" type="button">Apri…</button>
+  </header>
+
+  <main id="stage">
+    <div id="viewport"></div>
+
+    <div id="dropzone" class="dropzone">
+      <div class="dropzone-inner">
+        <h1>sdocx viewer</h1>
+        <p>Trascina qui un file <code>.sdocx</code> oppure</p>
+        <button id="pick" type="button">Scegli un file</button>
+        <p class="hint">Le note vengono renderizzate localmente nel browser. Nessun file lascia il tuo dispositivo.</p>
+      </div>
+    </div>
+
+    <div id="message" class="message" hidden></div>
+  </main>
+
+  <input id="file-input" type="file" accept=".sdocx" hidden />
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

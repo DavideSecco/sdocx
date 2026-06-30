@@ -106,5 +106,10 @@ docs/_build/
 # Rust
 target/
 
+# Generated WASM viewer package (regenerate with wasm-pack; see viewer/README.md)
+viewer/pkg/
+# Stray output if wasm-pack --out-dir is run crate-relative by mistake
+crates/sdocx-wasm/viewer/
+
 # JetBrains IDEs
 .idea/
