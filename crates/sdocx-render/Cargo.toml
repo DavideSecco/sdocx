@@ -1,0 +1,12 @@
+[package]
+name = "sdocx-render"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "SVG rendering for sdocx — turn parsed Samsung Notes (.sdocx) documents into SVG"
+license = "GPL-3.0"
+repository = "https://github.com/twangodev/sdocx"
+
+[dependencies]
+sdocx = { version = "0.5.0", path = "../sdocx" }
+base64 = "0.22"
