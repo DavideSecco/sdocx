@@ -1,7 +1,7 @@
 use crate::decode::{decode_coordinates, decode_trailing};
 use crate::error::{Error, Result};
 use crate::types::{
-    BoundingBox, Color, Page, PageElement, PageTemplate, PageTemplateSource, RichTextBox,
+    BoundingBox, Color, Page, PageElement, PageTemplate, PageTemplateSource, Point, RichTextBox,
     RichTextRun, Stroke,
 };
 
@@ -12,6 +12,75 @@ const EXTRA_LEN_BIAS: u8 = 0x79; // byte value at record+3 when no extras are pr
 struct ParsedStroke {
     stroke: Stroke,
     next_record_off: usize,
+    /// Whether the decoded points actually lie within the stroke's bounding box.
+    /// A misread start-point offset (wrong layout variant) scatters points far
+    /// outside the box, so this tells a correct decode from a garbage one.
+    fits_bbox: bool,
+}
+
+/// A correctly-decoded stroke's points fall inside its bounding box, which
+/// Samsung stores as the exact min/max of those points. When a layout variant
+/// misreads the absolute start point, the decoded coordinates land wildly
+/// outside the box (e.g. `1e266` or collapsed on the origin), so bbox
+/// containment distinguishes the right layout from a garbage one.
+fn points_fit_bbox(points: &[Point], bbox: &BoundingBox) -> bool {
+    const TOL: f64 = 4.0;
+    if points.is_empty()
+        || ![bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max]
+            .iter()
+            .all(|v| v.is_finite())
+        || bbox.x_max < bbox.x_min
+        || bbox.y_max < bbox.y_min
+    {
+        return false;
+    }
+    let inside = points
+        .iter()
+        .filter(|p| {
+            p.x >= bbox.x_min - TOL
+                && p.x <= bbox.x_max + TOL
+                && p.y >= bbox.y_min - TOL
+                && p.y <= bbox.y_max + TOL
+        })
+        .count();
+    inside * 5 >= points.len() * 4 // >= 80% inside
+}
+
+/// All points are finite and lie within the page (a generous margin allows for
+/// content that slightly overflows the page rectangle). Distinguishes a real
+/// on-page decode from garbage coordinates (e.g. `1e266`) or NaN.
+fn within_page_bounds(points: &[Point], width: u32, height: u32) -> bool {
+    if points.len() < 2 {
+        return false;
+    }
+    let mx = (width as f64 * 0.1).max(50.0);
+    let my = (height as f64 * 0.1).max(50.0);
+    let (w, h) = (width as f64, height as f64);
+    points.iter().all(|p| {
+        p.x.is_finite()
+            && p.y.is_finite()
+            && p.x >= -mx
+            && p.x <= w + mx
+            && p.y >= -my
+            && p.y <= h + my
+    })
+}
+
+/// Axis-aligned bounds of a decoded point set.
+fn bbox_of(points: &[Point]) -> BoundingBox {
+    let mut b = BoundingBox {
+        x_min: f64::MAX,
+        y_min: f64::MAX,
+        x_max: f64::MIN,
+        y_max: f64::MIN,
+    };
+    for p in points {
+        b.x_min = b.x_min.min(p.x);
+        b.y_min = b.y_min.min(p.y);
+        b.x_max = b.x_max.max(p.x);
+        b.y_max = b.y_max.max(p.y);
+    }
+    b
 }
 
 /// Parse a `.page` binary file into a `Page`.
@@ -77,19 +146,40 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
         let current = parse_stroke(data, off, extra_len, StrokeLayout::Current);
         let shifted = parse_stroke(data, off, extra_len, StrokeLayout::StartPointMinusThree);
 
-        let parsed = match (current, shifted) {
-            (Some(current), Some(shifted))
-                if shifted.stroke.points.len() > current.stroke.points.len() =>
-            {
-                shifted
-            }
-            (Some(current), _) => current,
+        // Pick the layout whose decoded points are consistent with the stroke's
+        // bounding box, not the one that merely yields more points — a garbage
+        // decode can read a larger (bogus) point count and win the old tiebreak.
+        let mut parsed = match (current, shifted) {
+            (Some(current), Some(shifted)) => match (current.fits_bbox, shifted.fits_bbox) {
+                (true, false) => current,
+                (false, true) => shifted,
+                // Both consistent: keep the legacy "more points" tiebreak.
+                (true, true) if shifted.stroke.points.len() > current.stroke.points.len() => {
+                    shifted
+                }
+                (true, true) => current,
+                // Neither consistent: advance the stream with `current`; the
+                // stroke itself is dropped below rather than rendered as garbage.
+                (false, false) => current,
+            },
+            (Some(current), None) => current,
             (None, Some(shifted)) => shifted,
             (None, None) => break,
         };
 
         record_off = parsed.next_record_off;
-        strokes.push(parsed.stroke);
+        if parsed.fits_bbox {
+            strokes.push(parsed.stroke);
+        } else if within_page_bounds(&parsed.stroke.points, width, height) {
+            // The 32 bytes at off+0..32 aren't this stroke's real bounding box
+            // (some strokes — e.g. ruler lines — store a different rectangle
+            // there), so the bbox test rejected a good decode. The points form
+            // a coherent on-page path, so keep the real geometry and recompute
+            // the bbox to match.
+            parsed.stroke.bbox = bbox_of(&parsed.stroke.points);
+            strokes.push(parsed.stroke);
+        }
+        // else: genuinely off-page/garbage → drop
     }
 
     let elements = parse_page_elements(data, record_off, width, height);
@@ -156,6 +246,7 @@ fn parse_stroke(
     }
 
     let trailing = decode_trailing(data_blob, n_coord_bytes, points.len().saturating_sub(1));
+    let fits_bbox = points_fit_bbox(&points, &bbox);
 
     Some(ParsedStroke {
         stroke: Stroke {
@@ -169,6 +260,7 @@ fn parse_stroke(
             pen_width: trailing.pen_width,
         },
         next_record_off: data_end + next_record_adjust,
+        fits_bbox,
     })
 }
 
@@ -510,8 +602,78 @@ fn infer_rotation_degrees(record: &[u8], bbox: BoundingBox) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_page;
-    use crate::types::{Color, PageTemplate, PageTemplateSource};
+    use super::{bbox_of, parse_page, within_page_bounds};
+    use crate::types::{Color, PageTemplate, PageTemplateSource, Point};
+
+    #[test]
+    fn within_page_bounds_accepts_onpage_rejects_garbage() {
+        let onpage = [Point { x: 100.0, y: 200.0 }, Point { x: 150.0, y: 40.0 }];
+        assert!(within_page_bounds(&onpage, 1600, 2262));
+
+        // A garbage start point from a misread layout lands far off-page.
+        let garbage = [Point { x: 1e266, y: 5.0 }, Point { x: 10.0, y: 20.0 }];
+        assert!(!within_page_bounds(&garbage, 1600, 2262));
+
+        // NaN and single-point paths are rejected.
+        assert!(!within_page_bounds(
+            &[
+                Point {
+                    x: f64::NAN,
+                    y: 1.0
+                },
+                Point { x: 2.0, y: 3.0 }
+            ],
+            1600,
+            2262
+        ));
+        assert!(!within_page_bounds(&[Point { x: 1.0, y: 1.0 }], 1600, 2262));
+    }
+
+    #[test]
+    fn bbox_of_computes_min_max() {
+        let b = bbox_of(&[
+            Point { x: 10.0, y: 50.0 },
+            Point { x: 30.0, y: 5.0 },
+            Point { x: 20.0, y: 80.0 },
+        ]);
+        assert_eq!(
+            (b.x_min, b.y_min, b.x_max, b.y_max),
+            (10.0, 5.0, 30.0, 80.0)
+        );
+    }
+
+    #[test]
+    fn kept_strokes_lie_within_their_bbox() {
+        // Every stroke we keep must be decoded with the layout that places its
+        // points inside the stroke's own bounding box. Before the bbox-aware
+        // layout selection, ~3-4% of strokes here decoded to garbage
+        // coordinates (off-canvas or collapsed on the origin).
+        let doc = crate::parse("../../samples/handwritten.sdocx").expect("parse sample");
+        let mut checked = 0;
+        for page in &doc.pages {
+            for stroke in &page.strokes {
+                let tol = 8.0;
+                let inside = stroke
+                    .points
+                    .iter()
+                    .filter(|p| {
+                        p.x >= stroke.bbox.x_min - tol
+                            && p.x <= stroke.bbox.x_max + tol
+                            && p.y >= stroke.bbox.y_min - tol
+                            && p.y <= stroke.bbox.y_max + tol
+                    })
+                    .count();
+                assert!(
+                    inside * 5 >= stroke.points.len() * 4,
+                    "stroke points fall outside their bbox: {}/{} inside",
+                    inside,
+                    stroke.points.len(),
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "sample produced no strokes to check");
+    }
 
     #[test]
     fn parses_page_header_background_color() {
