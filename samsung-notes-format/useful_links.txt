@@ -1,0 +1,9 @@
+blog post: https://musaab.io/posts/2026/reverse-engineering-samsung-notes/
+
+github: https://github.com/bxff/samsung-notes-format
+
+research.md su github: 
+
+render.py su github: https://github.com/bxff/samsung-notes-format/blob/main/render.py
+
+sdocx_extractor: https://github.com/bxff/samsung-notes-format/blob/main/sdocx_extractor.py
