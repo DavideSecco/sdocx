@@ -9,6 +9,35 @@ const PRE_STROKE_RECORD_LEN: usize = 71;
 const STROKE_HEADER_LEN: usize = 89; // bbox(32) + meta(41) + start(16)
 const EXTRA_LEN_BIAS: u8 = 0x79; // byte value at record+3 when no extras are present
 
+// Strokes with extra_len == 48 are a distinct "flat synthetic line" variant
+// (confirmed on samples/Allsamsungnotes_260630_113259.sdocx, page e9561382,
+// the "EVIDENZIATORE/PENNARELLO LINEA DRITTA" — straight-line highlighter/
+// marker — labeled groups): bbox height is always exactly 1.0 px and the
+// coordinate-delta-decoded points cover only a small fraction of the bbox
+// width, in all 5 instances found across every sample checked, no
+// counterexamples. The bbox itself (already correct — these strokes pass
+// `fits_bbox` without needing recovery) is the real line; the decoded
+// points are not the path to render, for reasons not yet understood.
+const FLAT_LINE_EXTRA_LEN: usize = 48;
+const FLAT_LINE_MAX_HEIGHT: f64 = 1.5;
+const FLAT_LINE_MAX_DECODED_FRACTION: f64 = 0.5;
+
+fn looks_like_flat_synthetic_line(stroke: &Stroke, extra_len: usize) -> bool {
+    let bbox_width = stroke.bbox.x_max - stroke.bbox.x_min;
+    let bbox_height = stroke.bbox.y_max - stroke.bbox.y_min;
+    if extra_len != FLAT_LINE_EXTRA_LEN || bbox_height > FLAT_LINE_MAX_HEIGHT || bbox_width <= 0.0 {
+        return false;
+    }
+    let Some(first) = stroke.points.first() else {
+        return false;
+    };
+    let Some(last) = stroke.points.last() else {
+        return false;
+    };
+    let decoded_len = (last.x - first.x).hypot(last.y - first.y);
+    decoded_len < FLAT_LINE_MAX_DECODED_FRACTION * bbox_width
+}
+
 struct ParsedStroke {
     stroke: Stroke,
     next_record_off: usize,
@@ -169,6 +198,13 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
 
         record_off = parsed.next_record_off;
         if parsed.fits_bbox {
+            if looks_like_flat_synthetic_line(&parsed.stroke, extra_len) {
+                let bbox = parsed.stroke.bbox;
+                parsed.stroke.points = vec![
+                    Point { x: bbox.x_min, y: bbox.y_min },
+                    Point { x: bbox.x_max, y: bbox.y_max },
+                ];
+            }
             strokes.push(parsed.stroke);
         } else if within_page_bounds(&parsed.stroke.points, width, height) {
             // The 32 bytes at off+0..32 aren't this stroke's real bounding box
@@ -258,6 +294,8 @@ fn parse_stroke(
             tilt_y: trailing.tilt_y,
             color: trailing.color,
             pen_width: trailing.pen_width,
+            tool_id: trailing.tool_id,
+            tapered: trailing.tapered,
         },
         next_record_off: data_end + next_record_adjust,
         fits_bbox,
@@ -602,8 +640,67 @@ fn infer_rotation_degrees(record: &[u8], bbox: BoundingBox) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{bbox_of, parse_page, within_page_bounds};
-    use crate::types::{Color, PageTemplate, PageTemplateSource, Point};
+    use super::{bbox_of, looks_like_flat_synthetic_line, parse_page, within_page_bounds};
+    use crate::types::{BoundingBox, Color, PageTemplate, PageTemplateSource, Point, Stroke};
+
+    fn stroke_with(bbox: BoundingBox, points: Vec<Point>) -> Stroke {
+        Stroke {
+            bbox,
+            points,
+            pressures: Vec::new(),
+            timestamps: Vec::new(),
+            tilt_x: Vec::new(),
+            tilt_y: Vec::new(),
+            color: None,
+            pen_width: 57.37,
+            tool_id: Some(0),
+            tapered: false,
+        }
+    }
+
+    #[test]
+    fn detects_flat_synthetic_line() {
+        // samples/Allsamsungnotes_260630_113259.sdocx, page e9561382, idx127:
+        // bbox 343.7px wide, height exactly 1.0, but the decoded points only
+        // span 7.7px — the bbox is the real line, not the decoded points.
+        let bbox = BoundingBox {
+            x_min: 137.7,
+            y_min: 180.7,
+            x_max: 481.4,
+            y_max: 181.7,
+        };
+        let points = vec![Point { x: 137.7, y: 180.7 }, Point { x: 145.4, y: 180.7 }];
+        let stroke = stroke_with(bbox, points);
+        assert!(looks_like_flat_synthetic_line(&stroke, 48));
+        // Wrong extra_len -> not treated as this variant.
+        assert!(!looks_like_flat_synthetic_line(&stroke, 36));
+    }
+
+    #[test]
+    fn rejects_normal_strokes_as_flat_synthetic_line() {
+        // A real short horizontal stroke whose decoded points DO span the
+        // bbox must not be reinterpreted.
+        let bbox = BoundingBox {
+            x_min: 0.0,
+            y_min: 0.0,
+            x_max: 10.0,
+            y_max: 1.0,
+        };
+        let points = vec![Point { x: 0.0, y: 0.0 }, Point { x: 10.0, y: 1.0 }];
+        let stroke = stroke_with(bbox, points);
+        assert!(!looks_like_flat_synthetic_line(&stroke, 48));
+
+        // Tall bbox (not flat) -> never this variant even with extra_len 48.
+        let tall_bbox = BoundingBox {
+            x_min: 0.0,
+            y_min: 0.0,
+            x_max: 10.0,
+            y_max: 50.0,
+        };
+        let short_points = vec![Point { x: 0.0, y: 0.0 }, Point { x: 1.0, y: 1.0 }];
+        let tall_stroke = stroke_with(tall_bbox, short_points);
+        assert!(!looks_like_flat_synthetic_line(&tall_stroke, 48));
+    }
 
     #[test]
     fn within_page_bounds_accepts_onpage_rejects_garbage() {

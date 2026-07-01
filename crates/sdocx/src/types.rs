@@ -158,6 +158,15 @@ pub struct Stroke {
     pub color: Option<Color>,
     /// Pen width in pixels.
     pub pen_width: f32,
+    /// Pen tool (0=pen, 1=fountain pen, 2=calligraphy pen, 3=pencil,
+    /// 4=calligraphy brush; other values seen but not yet identified).
+    /// `None` when no color marker was found at all.
+    pub tool_id: Option<u8>,
+    /// `true` for ink-pen-category tools, which have pressure-sensitive
+    /// width (a fountain/calligraphy nib effect); `false` for highlighter/
+    /// marker-category tools, which render at a constant width regardless
+    /// of pressure (a flat felt tip).
+    pub tapered: bool,
 }
 
 /// A 2D point.

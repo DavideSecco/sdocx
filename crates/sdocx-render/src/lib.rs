@@ -319,8 +319,13 @@ fn render_stroke(svg: &mut String, stroke: &Stroke, default_ink: &str) {
         .as_ref()
         .map(color_hex)
         .unwrap_or_else(|| default_ink.into());
+
     let base_width = normalized_stroke_width(stroke.pen_width);
-    let has_pressure = stroke.pressures.len() >= stroke.points.len() - 1
+    // Only ink-pen-category tools (stroke.tapered) have pressure-sensitive
+    // width (a fountain/calligraphy nib effect) — highlighters/markers are
+    // flat felt tips and render at a constant width regardless of pressure.
+    let has_pressure = stroke.tapered
+        && stroke.pressures.len() >= stroke.points.len() - 1
         && stroke
             .pressures
             .iter()
@@ -357,10 +362,15 @@ fn render_stroke(svg: &mut String, stroke: &Stroke, default_ink: &str) {
 }
 
 /// Normalize a raw Samsung pen width into a sensible SVG stroke width.
+///
+/// The upper bound (30.0) covers highlighters, which use much larger
+/// pen_width values than ink pens (up to 57.37 seen so far, vs. 17.26 for
+/// the widest pen tool) — a tighter clamp here was visibly flattening
+/// highlighter strokes to a fraction of their real width.
 pub fn normalized_stroke_width(pen_width: f32) -> f64 {
     let raw_width = pen_width as f64 / 2.5;
     if raw_width.is_finite() && raw_width > 0.0 {
-        raw_width.clamp(0.4, 12.0)
+        raw_width.clamp(0.4, 30.0)
     } else {
         1.0
     }
@@ -382,8 +392,16 @@ mod tests {
     #[test]
     fn clamps_extreme_stroke_widths() {
         assert_eq!(normalized_stroke_width(0.1), 0.4);
-        assert_eq!(normalized_stroke_width(10_000.0), 12.0);
+        assert_eq!(normalized_stroke_width(10_000.0), 30.0);
         assert_eq!(normalized_stroke_width(5.0), 2.0);
+    }
+
+    #[test]
+    fn does_not_clamp_highlighter_widths() {
+        // Widest highlighter width seen so far (size 100), confirmed on
+        // samples/OnlyHighlighterBlack_*.sdocx — must not be flattened.
+        let raw = 57.368_893_f32;
+        assert!((normalized_stroke_width(raw) - 22.947557).abs() < 1e-4);
     }
 
     #[test]
@@ -448,6 +466,8 @@ mod tests {
                 tilt_y: Vec::new(),
                 color: None,
                 pen_width: 2.0,
+                tool_id: None,
+                tapered: false,
             }],
             elements: Vec::new(),
         }
