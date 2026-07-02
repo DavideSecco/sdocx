@@ -306,8 +306,13 @@ def render_table(ax, table, line_color=TABLE_LINE_COLOR, text_color=DEFAULT_INK,
     """Draw a table (from pysdocx.parse_tables) as a grid of cells with their text.
 
     The table's cell texts + geometry live in note.note (like the typed text); parse_tables
-    reconstructs the row/column grid from the cell anchor points. Text is drawn light for
-    contrast on the dark page background.
+    reconstructs the row/column grid from the cell anchor points. Each cell also carries its own
+    rich-text style (`bold`/`italic`/`underline`/`color`/`font_size`, from note.py's `_cell_style`
+    — the same per-run TLV markers as the document's typed text, just scoped to the cell's own
+    text instead of the document-wide field). `font_size` becomes the shrink-to-fit baseline
+    (still capped by `fontpt`/the cell width) instead of a flat size for every cell, so a cell
+    explicitly set smaller (e.g. Samsung Notes' own auto-shrink) renders smaller than its
+    neighbors, not just when its width forces it to.
     """
     x_edges, y_edges = table["x_edges"], table["y_edges"]
     for x in x_edges:
@@ -320,10 +325,19 @@ def render_table(ax, table, line_color=TABLE_LINE_COLOR, text_color=DEFAULT_INK,
         cx = x0 + pad
         cy = (y_edges[cell["row"]] + y_edges[cell["row"] + 1]) / 2
         text = cell["text"]
+        base_pt = min(cell.get("font_size") or fontpt, fontpt)
         usable = max(x1 - x0 - 2 * pad, 1.0)
-        approx_width = max(len(text), 1) * fontpt * 7.0
-        cell_fontpt = max(5.5, min(fontpt, fontpt * usable / approx_width))
-        ax.text(cx, cy, text, color=text_color, fontsize=cell_fontpt, va="center", ha="left", zorder=3)
+        approx_width = max(len(text), 1) * base_pt * 7.0
+        cell_fontpt = max(5.5, min(base_pt, base_pt * usable / approx_width))
+        color = cell.get("color")
+        hexc = f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}" if color and color != TEXT_DEFAULT_COLOR else text_color
+        ax.text(
+            cx, cy, text, color=hexc, fontsize=cell_fontpt, va="center", ha="left", zorder=3,
+            fontweight="bold" if cell.get("bold") else "normal",
+            fontstyle="italic" if cell.get("italic") else "normal",
+        )
+        if cell.get("underline"):
+            ax.plot([cx, x1 - pad], [cy - cell_fontpt * 0.55, cy - cell_fontpt * 0.55], "-", color=hexc, lw=1.0, zorder=3)
 
 
 def _resolve_bg(bg, stored_bg):

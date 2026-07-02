@@ -146,6 +146,61 @@ TABLE_CELL_MARKER_LEN = 10
 TABLE_ANCHOR_X_BACK = 16
 TABLE_ANCHOR_Y_BACK = 8
 
+# Each cell's rich-text style follows immediately after its own text, as its OWN small run of
+# the exact same TLV markers used by parse_typed_text (`18 00 <tag> 00 | pad | u32 start |
+# u32 end | u32 value | u32 enabled`) — just scoped locally: start=0, end=char_count (the cell's
+# own text length), not offsets into the document-wide typed-text field. Confirmed on
+# Associationpages...'s table: cell "c12ingrassettoepiccolo" (22 chars) is immediately followed
+# by a color run (default), a font run (enabled=4.0 as f32 — "piccolo"/small), and a bold run
+# (tag 0x5, enabled=1 — "grassetto"/bold); its sibling cells (plain text, no styling) only carry
+# the color+font runs, no bold run. The window below (200 bytes) comfortably covers all of a
+# cell's runs without reaching into the next cell's (observed span for a 3-run cell: ~100 bytes).
+CELL_STYLE_WINDOW = 200
+
+
+def _cell_style(note_bytes: bytes, cell_end: int, char_count: int) -> dict:
+    """Read one cell's style runs from the TLV block right after its text.
+
+    Returns `{bold, italic, underline, color, font_size}` (color/font_size None if not an
+    explicit non-default run). Only runs matching this cell exactly (start=0, end=char_count)
+    are accepted, so a run window overrunning into the next cell can't be mistaken for this one's.
+    """
+    window = note_bytes[cell_end : cell_end + CELL_STYLE_WINDOW]
+    style = {"bold": False, "italic": False, "underline": False, "color": None, "font_size": None}
+    for tag, key in ((BOLD_TAG, "bold"), (ITALIC_TAG, "italic"), (UNDERLINE_TAG, "underline")):
+        marker = STYLE_MARKER_PREFIX + bytes([tag & 0xFF, tag >> 8])
+        i = window.find(marker)
+        if i >= 0 and i + RUN_MARKER_LEN <= len(window):
+            start = struct.unpack_from("<I", window, i + RUN_START_OFF)[0]
+            end = struct.unpack_from("<I", window, i + RUN_END_OFF)[0]
+            enabled = struct.unpack_from("<I", window, i + RUN_ENABLED_OFF)[0]
+            if start == 0 and end == char_count and enabled:
+                style[key] = True
+
+    color_marker = STYLE_MARKER_PREFIX + bytes([COLOR_TAG, 0])
+    i = window.find(color_marker)
+    if i >= 0 and i + RUN_MARKER_LEN <= len(window):
+        start = struct.unpack_from("<I", window, i + RUN_START_OFF)[0]
+        end = struct.unpack_from("<I", window, i + RUN_END_OFF)[0]
+        argb = struct.unpack_from("<I", window, i + RUN_ENABLED_OFF)[0]
+        if start == 0 and end == char_count and (argb >> 24) == 0xFF:
+            # Always set, including the body-default gray — mirrors parse_typed_text's `colors`
+            # list, which likewise includes default-colored runs; the renderer decides what to
+            # treat as "no explicit color" (its own contrast-fallback logic).
+            style["color"] = ((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF)
+
+    font_marker = STYLE_MARKER_PREFIX + bytes([FONT_TAG, 0])
+    i = window.find(font_marker)
+    if i >= 0 and i + RUN_MARKER_LEN <= len(window):
+        start = struct.unpack_from("<I", window, i + RUN_START_OFF)[0]
+        end = struct.unpack_from("<I", window, i + RUN_END_OFF)[0]
+        raw = struct.pack("<I", struct.unpack_from("<I", window, i + RUN_ENABLED_OFF)[0])
+        candidate = struct.unpack("<f", raw)[0]
+        if start == 0 and end == char_count and candidate == candidate and 4.0 <= candidate <= 200.0:
+            style["font_size"] = candidate
+
+    return style
+
 
 def _cluster(values: list[float], tol: float = 8.0) -> list[float]:
     """Collapse near-equal coordinates (grid lines) into single averaged values."""
@@ -162,9 +217,11 @@ def parse_tables(note_bytes: bytes) -> list[dict]:
     """Extract tables from `note.note`.
 
     Returns a list of `{rows, cols, bbox, x_edges, y_edges, cells}` where each cell is
-    `{row, col, text, anchor}` (anchor = bottom-left corner in page coords). Cells are read in
-    document (row-major) order; the grid is reconstructed by clustering the cell anchors into
-    column/row lines (Samsung tables use equal-sized cells). Returns [] if no table cells found.
+    `{row, col, text, anchor, bold, italic, underline, color, font_size}` (anchor = bottom-left
+    corner in page coords; style fields from `_cell_style`, each cell's own local TLV run block).
+    Cells are read in document (row-major) order; the grid is reconstructed by clustering the
+    cell anchors into column/row lines (Samsung tables use equal-sized cells). Returns [] if no
+    table cells found.
     """
     cells = []
     off = note_bytes.find(TABLE_CELL_PREFIX)
@@ -201,7 +258,9 @@ def parse_tables(note_bytes: bytes) -> list[dict]:
             if 0 <= x <= 3000 and 0 <= y <= 4000:
                 anchor = (x, y)
         if anchor is not None:
-            cells.append({"text": "".join(chr(u) for u in units), "anchor": anchor})
+            cell = {"text": "".join(chr(u) for u in units), "anchor": anchor}
+            cell.update(_cell_style(note_bytes, text_end, char_count))
+            cells.append(cell)
         off = note_bytes.find(TABLE_CELL_PREFIX, off + 1)
 
     anchored = [c for c in cells if c["anchor"] is not None]
