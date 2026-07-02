@@ -5,7 +5,7 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from pysdocx.container import list_pages, load_page
+from pysdocx.container import list_attachments, list_pages, load_page
 from pysdocx.dump import dump_container
 from pysdocx.ink import color_hex
 from pysdocx.page import parse_page
@@ -99,6 +99,20 @@ def _iter_cli_objects(objects: list[dict]):
         yield from _iter_cli_objects(obj["children"])
 
 
+def _print_attachments(attachments: list[dict]) -> None:
+    """List document-level media attachments (images/audio/sticky-memos) not tied to any page.
+
+    Verified on a dedicated GT sample that sticky-note/audio pages have a completely empty
+    object tree — so these can't be found by walking pages; list_attachments reads them
+    straight from the archive's media/ entries instead.
+    """
+    if not attachments:
+        return
+    print("attachments (not necessarily placed on any page):")
+    for att in sorted(attachments, key=lambda a: a["index"]):
+        print(f"  [{att['index']}] {att['kind']:<11} {att['size']:>10,}B  {att['name']}")
+
+
 def _print_object_summary(page_results: list[dict]) -> None:
     counts = Counter()
     header_counts = Counter()
@@ -136,9 +150,11 @@ def cmd_objects(args: argparse.Namespace) -> None:
     for page_name in page_names:
         _, page_data = load_page(args.file, page_name)
         page_results.append(parse_page(page_data))
+    attachments = list_attachments(args.file)
 
     if args.summary:
         _print_object_summary(page_results)
+        _print_attachments(attachments)
         return
 
     for page_idx, result in enumerate(page_results, 1):
@@ -157,6 +173,8 @@ def cmd_objects(args: argparse.Namespace) -> None:
             )
             for obj in layer["objects"]:
                 _print_object(obj, 2, args.detail, media_by_object)
+
+    _print_attachments(attachments)
 
 
 def cmd_render(args: argparse.Namespace) -> None:

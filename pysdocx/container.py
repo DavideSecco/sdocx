@@ -73,6 +73,48 @@ def raster_media_indices(path: Path) -> set[int]:
     return indices
 
 
+ATTACHMENT_EXT_KIND = {
+    ".jpg": "image",
+    ".jpeg": "image",
+    ".png": "image",
+    ".m4a": "audio",
+    ".spi": "thumbnail",
+}
+
+
+def list_attachments(path: Path) -> list[dict]:
+    """Enumerate document-level media attachments: images, audio, nested sticky-memos.
+
+    These are not necessarily placed via any `.page` object tree: on a dedicated GT sample
+    (`Associationpages&stickynote&images&audio`), the pages meant to host the sticky-notes and
+    audio recording have a completely EMPTY object tree (parse_page_tree finds zero objects on
+    them) — so unlike images/shapes/drawings, no per-page placement is known for these yet.
+    Surfacing them here at least makes them visible (`kind`, `size`) instead of silently absent
+    from any render. Returns `[{index, name, kind, size}]`, `kind` in
+    `{"image", "audio", "sticky_note", "thumbnail", "other"}`.
+    """
+    attachments: list[dict] = []
+    with zipfile.ZipFile(path) as z:
+        for info in z.infolist():
+            name = info.filename
+            if not name.startswith("media/") or "@" not in name:
+                continue
+            try:
+                index = int(name.split("/")[1].split("@")[0])
+            except ValueError:
+                continue
+            lower = name.lower()
+            if "@stickymemo" in lower or lower.endswith(".sdocx"):
+                kind = "sticky_note"
+            else:
+                kind = next(
+                    (k for ext, k in ATTACHMENT_EXT_KIND.items() if lower.endswith(ext)),
+                    "other",
+                )
+            attachments.append({"index": index, "name": name, "kind": kind, "size": info.file_size})
+    return attachments
+
+
 def load_note(path: Path) -> bytes | None:
     """Read the container's note.note (document metadata + typed rich text), or None if absent."""
     with zipfile.ZipFile(path) as z:

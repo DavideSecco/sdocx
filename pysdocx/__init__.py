@@ -6,6 +6,7 @@ findings can be checked from the shell or a notebook before being ported back.
 
 from pysdocx.container import (
     bg_color_from_note,
+    list_attachments,
     list_pages,
     load_bg_color,
     load_media_by_index,
@@ -45,6 +46,7 @@ __all__ = [
     "load_media_by_index",
     "load_note",
     "raster_media_indices",
+    "list_attachments",
     "parse_typed_text",
     "parse_tables",
     "hexdump",

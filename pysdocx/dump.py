@@ -10,6 +10,17 @@ PURPOSES = {
     ".spi": "Page thumbnail (Samsung proprietary)",
     "note.note": "Note metadata & settings",
     "end_tag.bin": "Document footer & timestamps",
+    # media/<index>@... attachments, classified by extension. Sticky-notes and audio are not
+    # referenced from any .page object tree (verified empty object trees on a dedicated GT
+    # sample) — they're document-level attachments, not per-page placements, at least in the
+    # one sample seen so far. Nested .sdocx = a full sticky-memo sub-document (open with
+    # pysdocx itself); .m4a = a voice-memo recording.
+    ".m4a": "Audio attachment (voice memo)",
+    ".jpg": "Imported image",
+    ".jpeg": "Imported image",
+    ".png": "Imported image",
+    "@stickymemo": "Nested sticky-memo (embedded .sdocx sub-document)",
+    ".sdocx": "Nested embedded .sdocx sub-document",  # fallback for naming schemes other than stickymemo_*
 }
 
 
