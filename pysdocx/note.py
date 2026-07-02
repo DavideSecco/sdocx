@@ -62,6 +62,12 @@ PARAGRAPH_STYLES = {0: "heading1", 1: "heading2", 2: "heading3", 3: "body1"}
 LIST_TYPES = {2: "todo", 4: "numbered", 8: "bullet"}
 
 MIN_TEXT_FIELD_CHARS = 16
+# The typed-text field is preceded by a u32 char-count header; the count matches the field length
+# exactly or is off by one (a trailing terminator). Everything else that decodes as a long printable
+# UTF-16LE run — chiefly the pen-preload resource path read at the wrong byte alignment — lacks a
+# matching header, so validating it rejects those false positives without inspecting the text itself
+# (works regardless of the body language, including CJK).
+TEXT_FIELD_LEN_TOLERANCE = 2
 
 
 # 0xFFFC (object replacement char) anchors inline objects inside the text and must be kept as
@@ -75,12 +81,16 @@ _LEADING_PAD = "\n￼"
 
 
 def _find_text_field(data: bytes) -> tuple[int, str] | None:
-    """Return `(start_byte, text)` of the longest printable UTF-16LE run (the typed-text field).
+    """Return `(start_byte, text)` of the typed-text field, or None if the note carries no text.
 
-    The run markers index characters from the start of this field (which begins with the
-    header-inserted leading newlines), so the field start is char index 0 for the run offsets.
+    The field is the longest printable UTF-16LE run whose u32 char-count header (immediately before
+    it) matches its length. Requiring the header rejects the false positive that would otherwise win
+    on note-only-drawing files: the pen-preload resource string (`com.samsung...InkPen2`), which is
+    itself UTF-16LE but gets picked up one byte off, turning its ASCII into a long CJK run. The run
+    markers index characters from the field start (which begins with the header-inserted leading
+    newlines), so the field start is char index 0 for the run offsets.
     """
-    best_start = best_len = 0
+    candidates: list[tuple[int, int]] = []
     i = 0
     n = len(data)
     while i + 2 <= n:
@@ -88,15 +98,21 @@ def _find_text_field(data: bytes) -> tuple[int, str] | None:
             j = i
             while j + 2 <= n and _is_printable_unit(struct.unpack_from("<H", data, j)[0]):
                 j += 2
-            if (j - i) // 2 > best_len:
-                best_start, best_len = i, (j - i) // 2
+            length = (j - i) // 2
+            if length >= MIN_TEXT_FIELD_CHARS:
+                candidates.append((i, length))
             i = j + 2
         else:
             i += 2
-    if best_len < MIN_TEXT_FIELD_CHARS:
-        return None
-    text = data[best_start : best_start + best_len * 2].decode("utf-16-le", errors="replace")
-    return best_start, text
+    candidates.sort(key=lambda c: -c[1])
+    for start, length in candidates:
+        if start < 4:
+            continue
+        declared = struct.unpack_from("<I", data, start - 4)[0]
+        if abs(declared - length) <= TEXT_FIELD_LEN_TOLERANCE:
+            text = data[start : start + length * 2].decode("utf-16-le", errors="replace")
+            return start, text
+    return None
 
 
 def _marker_runs(data: bytes, marker: bytes, text_len: int) -> list[tuple[int, int, int, int]]:
