@@ -36,6 +36,7 @@ MAX_PRESSURE = 1400.0
 DEFAULT_INK = "#ffffff"
 GRID_COLOR = "#d3dae8"  # faint blue-gray, as in the Samsung Notes squared template
 TEXT_DEFAULT_COLOR = (37, 37, 37)  # body default; ≈ the dark page bg, so we contrast it below
+TODO_DONE_COLOR = (150, 150, 150)
 TABLE_LINE_COLOR = "#8a8f9a"
 
 # Named backgrounds accepted by render_document/CLI (`--bg dark|white`).
@@ -140,6 +141,41 @@ def render_shape(ax, shape, bg_color, default_ink=DEFAULT_INK):
         ax.plot([q[0] for q in poly], [q[1] for q in poly], "-", color=color, linewidth=lw, zorder=2)
 
 
+def _text_box_layout(box):
+    """Anchor/wrap parameters for a text-box from its bbox + decoded rotation.
+
+    Samsung stores the text-box angle as the same clockwise-positive f32 used by images, but the
+    TEXT anchor itself is not always the bbox's top-left corner after rotation. Near-vertical
+    boxes (≈90°/270°) visually start from the bbox's top-RIGHT/left edge respectively; anchoring
+    every box at `(x0, y0)` mirrors the column order compared to the GT sample. This helper picks
+    a stable anchor corner and logical wrap width before the shared rich-text renderer takes over.
+    """
+    x0, y0, x1, y1 = box["bbox"]
+    angle_deg = (box.get("angle_deg") or 0.0) % 360.0
+    box_w = max(x1 - x0 - 16, 1.0)
+    box_h = max(y1 - y0 - 16, 1.0)
+    if abs(angle_deg - 90.0) <= 15.0:
+        return {
+            "anchor_x": x1 - 8,
+            "anchor_y": y0 + 8,
+            "wrap_width": box_h,
+            "line_dir": 1.0,
+        }
+    if abs(angle_deg - 270.0) <= 15.0:
+        return {
+            "anchor_x": x0 + 8,
+            "anchor_y": y1 - 8,
+            "wrap_width": box_h,
+            "line_dir": 1.0,
+        }
+    return {
+        "anchor_x": x0 + 8,
+        "anchor_y": y0 + 8,
+        "wrap_width": box_w,
+        "line_dir": 1.0,
+    }
+
+
 def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_boxes=(),
                 sticky_notes=(), page_size=None, template=None, default_ink=DEFAULT_INK):
     """Draw a parsed page (strokes, inserted shapes, imported images) onto a matplotlib Axes.
@@ -151,6 +187,9 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
     background (contrast against the page); it is white on a dark page, black on a light one.
     """
     ax.set_facecolor(bg_color)
+    if page_size is not None:
+        ax.set_xlim(0, page_size[0])
+        ax.set_ylim(page_size[1], 0)  # y increases downward in page coords
 
     # Squared-paper background goes above the flat fill but below images/strokes.
     if page_size is not None and template is not None and template["kind"] == "grid":
@@ -226,10 +265,23 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
     for box in text_boxes:
         if box["bbox"] is None:
             continue
-        x0, y0, _x1, _y1 = box["bbox"]
-        ax.text(
-            x0 + 8, y0 + 8, box["text"], color=default_ink, fontsize=15,
-            va="top", ha="left", zorder=3, wrap=True,
+        angle_deg = box.get("angle_deg") or 0.0
+        layout = _text_box_layout(box)
+        fontpt = max((box.get("font_size") or 11.0) * 1.36, 12.0)
+        line_h = max(fontpt * 3.2, 36.0)
+        blank_h = max(fontpt * 2.0, 24.0)
+        _render_rich_text(
+            ax,
+            box,
+            x0=layout["anchor_x"],
+            y0=layout["anchor_y"],
+            max_width=layout["wrap_width"],
+            line_h=line_h,
+            blank_h=blank_h,
+            fontpt=fontpt,
+            default_ink=default_ink,
+            angle_deg=angle_deg,
+            line_dir=layout["line_dir"],
         )
 
     # Sticky-note placements (scan_sticky_notes) aren't recursively rendered — a nested .sdocx
@@ -265,8 +317,7 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
 
 
 def _char_styles(parsed):
-    """Expand per-run styles into per-character (bold, italic, underline, strike, color, highlight)
-    arrays."""
+    """Expand per-run styles into per-character style arrays."""
     n = len(parsed["text"])
     bold = [False] * n
     italic = [False] * n
@@ -274,6 +325,7 @@ def _char_styles(parsed):
     strike = [False] * n
     color = [None] * n
     highlight = [None] * n
+    font_size = [None] * n
     for r in parsed["runs"]:
         for i in range(r["start"], min(r["end"], n)):
             if r["style"] == "bold":
@@ -291,66 +343,351 @@ def _char_styles(parsed):
     for h in parsed.get("highlights", ()):
         for i in range(h["start"], min(h["end"], n)):
             highlight[i] = h["color"]
-    return bold, italic, underline, strike, color, highlight
+    for f in parsed.get("font_sizes", ()):
+        for i in range(f["start"], min(f["end"], n)):
+            font_size[i] = f["font_size"]
+    return bold, italic, underline, strike, color, highlight, font_size
 
 
-def render_typed_text(ax, parsed, bg_color, x0=64, y0=80, line_h=60, blank_h=34, fontpt=17,
-                      default_ink=DEFAULT_INK):
-    """Draw parsed typed text onto the axes with inline bold/italic/underline/strikethrough,
-    color and highlight background.
+def _measure_text(ax, renderer, inv, x, y, text, fontpt, bold, italic, angle_deg=0.0):
+    probe = ax.text(
+        x, y, text, fontsize=fontpt, va="top", ha="left",
+        fontweight="bold" if bold else "normal",
+        fontstyle="italic" if italic else "normal",
+        alpha=0.0,
+        rotation=-angle_deg if angle_deg else 0.0,
+        rotation_mode="anchor",
+    )
+    corners = inv.transform(probe.get_window_extent(renderer).corners())
+    probe.remove()
+    return corners
 
-    The default text color equals the dark page background, so it falls back to the contrast ink
-    (same idea as the stroke renderer); explicit colors (e.g. red "testorosso") are kept.
+
+def _style_fontpt(style, fontpt):
+    return (style[6] * 1.36) if style[6] else fontpt
+
+
+def _rotate_point(x, y, origin_x, origin_y, angle_deg):
+    if not angle_deg:
+        return x, y
+    return mtransforms.Affine2D().rotate_deg_around(origin_x, origin_y, angle_deg).transform((x, y))
+
+
+def _line_fontpt(font_sizes, start, end, fontpt):
+    sizes = [fs * 1.36 for fs in font_sizes[start:end] if fs]
+    return max(sizes, default=fontpt)
+
+
+def _paragraph_spacing(paragraph: dict | None) -> float:
+    spacing = (paragraph or {}).get("line_spacing")
+    if isinstance(spacing, (int, float)) and spacing == spacing and spacing > 0:
+        return spacing / 1.35
+    return 1.0
+
+
+def _line_advance(line_h, paragraph, line_fontpt, fontpt):
+    sized = line_h * max(line_fontpt / fontpt, 1.0)
+    return max(sized * _paragraph_spacing(paragraph), line_fontpt * 2.25)
+
+
+def _blank_advance(blank_h, paragraph):
+    return blank_h * _paragraph_spacing(paragraph)
+
+
+def _draw_text_segment(
+    ax,
+    renderer,
+    inv,
+    x,
+    y,
+    seg,
+    fontpt,
+    style,
+    default_ink,
+    angle_deg=0.0,
+    origin=None,
+):
+    b, it, u, st, c, hl, fs = style
+    seg_fontpt = _style_fontpt(style, fontpt)
+    hexc = f"#{c[0]:02x}{c[1]:02x}{c[2]:02x}" if c else default_ink
+    corners = _measure_text(ax, renderer, inv, x, y, seg, seg_fontpt, b, it)
+    w = corners[:, 0].max() - corners[:, 0].min()
+    y_top = corners[:, 1].min()
+    y_bottom = corners[:, 1].max()
+    line_transform = None
+    text_x, text_y = x, y
+    if angle_deg:
+        origin_x, origin_y = origin or (x, y)
+        text_x, text_y = _rotate_point(x, y, origin_x, origin_y, angle_deg)
+        line_transform = mtransforms.Affine2D().rotate_deg_around(origin_x, origin_y, angle_deg) + ax.transData
+    if hl:
+        hexhl = f"#{hl[0]:02x}{hl[1]:02x}{hl[2]:02x}"
+        fill_kw = {"transform": line_transform} if line_transform is not None else {}
+        ax.fill_between([x, x + w], y_top, y_bottom, color=hexhl, zorder=2, linewidth=0, **fill_kw)
+    text = ax.text(
+        text_x, text_y, seg, color=hexc, fontsize=seg_fontpt, va="top", ha="left", zorder=3,
+        fontweight="bold" if b else "normal", fontstyle="italic" if it else "normal",
+        rotation=-angle_deg if angle_deg else 0.0, rotation_mode="anchor",
+    )
+    text.set_in_layout(False)
+    if u:
+        line_kw = {"transform": line_transform} if line_transform is not None else {}
+        ax.plot([x, x + w], [y_bottom, y_bottom], "-", color=hexc, lw=1.3, zorder=3, **line_kw)
+    if st:
+        y_mid = (y_top + y_bottom) / 2
+        line_kw = {"transform": line_transform} if line_transform is not None else {}
+        ax.plot([x, x + w], [y_mid, y_mid], "-", color=hexc, lw=1.3, zorder=3, **line_kw)
+    return w
+
+
+def _fit_segment_prefix(ax, renderer, inv, x, y, seg, fontpt, bold, italic, max_x, angle_deg=0.0):
+    lo, hi = 1, len(seg)
+    best = 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        corners = _measure_text(ax, renderer, inv, x, y, seg[:mid], fontpt, bold, italic)
+        width = corners[:, 0].max() - corners[:, 0].min()
+        if x + width <= max_x:
+            best = mid
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return best
+
+
+def _wrap_cut(seg: str, fit_len: int) -> tuple[str, str]:
+    if fit_len >= len(seg):
+        return seg, ""
+    cut = fit_len
+    ws = max(seg.rfind(" ", 0, fit_len + 1), seg.rfind("\t", 0, fit_len + 1))
+    if ws > 0:
+        cut = ws + 1
+    head = seg[:cut]
+    tail = seg[cut:].lstrip(" \t")
+    if not head and seg:
+        head, tail = seg[:1], seg[1:]
+    return head, tail
+
+
+def _wrap_plain_text(ax, renderer, inv, text, fontpt, max_width):
+    wrapped_lines: list[str] = []
+    for raw_line in text.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            wrapped_lines.append("")
+            continue
+        remaining = line
+        while remaining:
+            corners = _measure_text(ax, renderer, inv, 0, 0, remaining, fontpt, False, False)
+            width = corners[:, 0].max() - corners[:, 0].min()
+            if width <= max_width:
+                wrapped_lines.append(remaining)
+                break
+            fit_len = _fit_segment_prefix(ax, renderer, inv, 0, 0, remaining, fontpt, False, False, max_width)
+            if fit_len <= 0:
+                fit_len = 1
+            head, tail = _wrap_cut(remaining, fit_len)
+            wrapped_lines.append(head.rstrip())
+            remaining = tail
+    return "\n".join(wrapped_lines)
+
+
+def _paragraph_prefix(paragraph: dict | None) -> str:
+    if not paragraph or not paragraph.get("list"):
+        return ""
+    item = paragraph["list"]
+    if item["type"] == "numbered":
+        return f"{item.get('number', 1)}. "
+    if item["type"] == "bullet":
+        return "• "
+    if item["type"] == "todo":
+        return "☑ " if item.get("checked") else "☐ "
+    return ""
+
+
+def _is_checked_todo(paragraph: dict | None) -> bool:
+    item = (paragraph or {}).get("list")
+    return bool(item and item["type"] == "todo" and item.get("checked"))
+
+
+def _render_rich_text(
+    ax,
+    parsed,
+    *,
+    x0,
+    y0,
+    max_width,
+    line_h,
+    blank_h,
+    fontpt,
+    default_ink,
+    angle_deg=0.0,
+    line_dir=1.0,
+):
+    """Shared rich-text renderer for note.note typed text and in-page text boxes.
+
+    Layout is computed in an unrotated logical space (`x` = inline advance, `y` = next wrapped
+    line) and only the final artists are rotated. This keeps wrapping/measurement identical across
+    note.note text and text-box text, and is also why vertical boxes need an explicit anchor/line
+    direction policy in `_text_box_layout` instead of relying on matplotlib's default text bbox.
     """
     fig = ax.figure
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
     inv = ax.transData.inverted()
-    bold, italic, underline, strike, color, highlight = _char_styles(parsed)
+    bold, italic, underline, strike, color, highlight, font_size = _char_styles(parsed)
+    paragraphs = parsed.get("paragraphs") or []
 
     gi = 0
     y = y0
-    for line in parsed["text"].split("\n"):
+    for para_idx, line in enumerate(parsed["text"].split("\n")):
+        paragraph = paragraphs[para_idx] if para_idx < len(paragraphs) else None
+        line_start = gi
+        line_end = gi + len(line)
+        rendered_line_h = _line_advance(line_h, paragraph, _line_fontpt(font_size, line_start, line_end, fontpt), fontpt)
+        indent = (paragraph or {}).get("indent") or 0
+        line_x0 = x0 + indent * 70
+        line_max_width = max(max_width - indent * 70, fontpt * 4)
+        prefix = _paragraph_prefix(paragraph)
+        checked_todo = _is_checked_todo(paragraph)
+        if prefix:
+            prefix_w = max(fontpt * 3.0, 44.0)
+            prefix_color = TODO_DONE_COLOR if checked_todo else None
+            _draw_text_segment(
+                ax,
+                renderer,
+                inv,
+                line_x0,
+                y,
+                prefix,
+                fontpt,
+                (False, False, False, False, prefix_color, None, None),
+                default_ink,
+                angle_deg=angle_deg,
+                origin=(x0, y0),
+            )
+            line_x0 += prefix_w
+            line_max_width = max(line_max_width - prefix_w, fontpt * 4)
+        align = (paragraph or {}).get("alignment", "left")
+        if line and align in {"center", "right"}:
+            corners = _measure_text(ax, renderer, inv, line_x0, y, line, fontpt, False, False, angle_deg=angle_deg)
+            line_width = corners[:, 0].max() - corners[:, 0].min()
+            if line_width < line_max_width:
+                if align == "center":
+                    line_x0 += (line_max_width - line_width) / 2
+                else:
+                    line_x0 += line_max_width - line_width
+        max_x = line_x0 + line_max_width
         if not line:
             gi += 1
-            y += blank_h
+            y += _blank_advance(blank_h, paragraph) * line_dir
             continue
-        x = x0
+        x = line_x0
         i = 0
         while i < len(line):
             style = (
                 bold[gi + i], italic[gi + i], underline[gi + i], strike[gi + i],
-                color[gi + i], highlight[gi + i],
+                color[gi + i], highlight[gi + i], font_size[gi + i],
             )
+            if checked_todo:
+                style = (
+                    style[0],
+                    style[1],
+                    style[2],
+                    True,
+                    style[4] or TODO_DONE_COLOR,
+                    style[5],
+                    style[6],
+                )
             j = i
-            while j < len(line) and (
-                bold[gi + j], italic[gi + j], underline[gi + j], strike[gi + j],
-                color[gi + j], highlight[gi + j],
-            ) == style:
+            while j < len(line):
+                next_style = (
+                    bold[gi + j], italic[gi + j], underline[gi + j], strike[gi + j],
+                    color[gi + j], highlight[gi + j], font_size[gi + j],
+                )
+                if checked_todo:
+                    next_style = (
+                        next_style[0],
+                        next_style[1],
+                        next_style[2],
+                        True,
+                        next_style[4] or TODO_DONE_COLOR,
+                        next_style[5],
+                        next_style[6],
+                    )
+                if next_style != style:
+                    break
                 j += 1
             seg = line[i:j]
-            b, it, u, st, c, hl = style
-            hexc = f"#{c[0]:02x}{c[1]:02x}{c[2]:02x}" if c else default_ink
-            t = ax.text(
-                x, y, seg, color=hexc, fontsize=fontpt, va="top", ha="left", zorder=3,
-                fontweight="bold" if b else "normal", fontstyle="italic" if it else "normal",
-            )
-            corners = inv.transform(t.get_window_extent(renderer).corners())
-            w = corners[:, 0].max() - corners[:, 0].min()
-            y_top = corners[:, 1].min()
-            y_bottom = corners[:, 1].max()
-            if hl:
-                hexhl = f"#{hl[0]:02x}{hl[1]:02x}{hl[2]:02x}"
-                ax.fill_between([x, x + w], y_top, y_bottom, color=hexhl, zorder=2, linewidth=0)
-            if u:
-                ax.plot([x, x + w], [y_bottom, y_bottom], "-", color=hexc, lw=1.3, zorder=3)
-            if st:
-                y_mid = (y_top + y_bottom) / 2
-                ax.plot([x, x + w], [y_mid, y_mid], "-", color=hexc, lw=1.3, zorder=3)
-            x += w
+            while seg:
+                seg_fontpt = _style_fontpt(style, fontpt)
+                corners = _measure_text(
+                    ax, renderer, inv, x, y, seg, seg_fontpt, style[0], style[1]
+                )
+                width = corners[:, 0].max() - corners[:, 0].min()
+                if x + width <= max_x:
+                    x += _draw_text_segment(
+                        ax,
+                        renderer,
+                        inv,
+                        x,
+                        y,
+                        seg,
+                        fontpt,
+                        style,
+                        default_ink,
+                        angle_deg=angle_deg,
+                        origin=(x0, y0),
+                    )
+                    seg = ""
+                    continue
+                fit_len = _fit_segment_prefix(
+                    ax, renderer, inv, x, y, seg, seg_fontpt, style[0], style[1], max_x, angle_deg=angle_deg
+                )
+                if fit_len <= 0:
+                    x = line_x0
+                    y += rendered_line_h * line_dir
+                    continue
+                head, seg = _wrap_cut(seg, fit_len)
+                if not head:
+                    x = line_x0
+                    y += rendered_line_h * line_dir
+                    continue
+                x += _draw_text_segment(
+                    ax,
+                    renderer,
+                    inv,
+                    x,
+                    y,
+                    head,
+                    fontpt,
+                    style,
+                    default_ink,
+                    angle_deg=angle_deg,
+                    origin=(x0, y0),
+                )
+                if seg:
+                    x = line_x0
+                    y += rendered_line_h * line_dir
             i = j
         gi += len(line) + 1
-        y += line_h
+        y += rendered_line_h * line_dir
+
+
+def render_typed_text(ax, parsed, bg_color, x0=64, y0=80, line_h=60, blank_h=34, fontpt=17,
+                      default_ink=DEFAULT_INK):
+    """Draw parsed typed text with inline rich-text runs, wrapped to the page width."""
+    _render_rich_text(
+        ax,
+        parsed,
+        x0=x0,
+        y0=y0,
+        max_width=max(ax.get_xlim()) - x0,
+        line_h=line_h,
+        blank_h=blank_h,
+        fontpt=fontpt,
+        default_ink=default_ink,
+    )
 
 
 def render_table(ax, table, line_color=TABLE_LINE_COLOR, text_color=DEFAULT_INK, fontpt=15, pad=18):

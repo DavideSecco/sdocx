@@ -1,13 +1,15 @@
 """CLI entry point: python -m pysdocx <command> ..."""
 
 import argparse
+import json
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from pysdocx.container import list_attachments, list_pages, load_page
+from pysdocx.container import list_attachments, list_pages, load_note, load_page
 from pysdocx.dump import dump_container
 from pysdocx.ink import color_hex
+from pysdocx.note import parse_typed_text
 from pysdocx.page import parse_page
 
 
@@ -25,6 +27,15 @@ def _fmt_bbox(bbox: tuple[float, float, float, float]) -> str:
 
 def _fmt_optional_bbox(bbox: tuple[float, float, float, float] | None) -> str:
     return _fmt_bbox(bbox) if bbox is not None else "(none)"
+
+
+def _preview(text: str, limit: int = 72) -> str:
+    flat = text.replace("\n", "\\n")
+    return flat if len(flat) <= limit else flat[: limit - 1] + "…"
+
+
+def _fmt_range(item: dict) -> str:
+    return f"{item['start']}..{item['end']}"
 
 
 def cmd_stroke_table(args: argparse.Namespace) -> None:
@@ -187,6 +198,110 @@ def cmd_objects(args: argparse.Namespace) -> None:
     _print_attachments(attachments)
 
 
+def _paragraph_is_default(paragraph: dict) -> bool:
+    return (
+        paragraph.get("alignment") == "left"
+        and not paragraph.get("indent")
+        and paragraph.get("style") is None
+        and paragraph.get("line_spacing") is None
+        and paragraph.get("list") is None
+    )
+
+
+def _print_typed_text_debug(parsed: dict, show_all_paragraphs: bool) -> None:
+    text = parsed["text"]
+    paragraphs = parsed.get("paragraphs") or []
+    print(
+        f"typed_text chars={len(text)} paragraphs={len(text.splitlines())} "
+        f"runs={len(parsed.get('runs', []))} colors={len(parsed.get('colors', []))} "
+        f"highlights={len(parsed.get('highlights', []))} font_sizes={len(parsed.get('font_sizes', []))}"
+    )
+    print(f"  preview={_preview(text)!r}")
+    for run in parsed.get("runs", ()):
+        print(f"  run {_fmt_range(run):>9} {run['style']}")
+    for color in parsed.get("colors", ()):
+        print(f"  color {_fmt_range(color):>7} #{color['color'][0]:02x}{color['color'][1]:02x}{color['color'][2]:02x}")
+    for highlight in parsed.get("highlights", ()):
+        print(
+            f"  highlight {_fmt_range(highlight):>3} "
+            f"#{highlight['color'][0]:02x}{highlight['color'][1]:02x}{highlight['color'][2]:02x}"
+        )
+    for font in parsed.get("font_sizes", ()):
+        print(f"  font {_fmt_range(font):>8} {font['font_size']:.2f}")
+
+    lines = text.split("\n")
+    for idx, paragraph in enumerate(paragraphs):
+        if not show_all_paragraphs and _paragraph_is_default(paragraph):
+            continue
+        line = lines[idx] if idx < len(lines) else ""
+        print(
+            f"  paragraph {idx:>3} align={paragraph.get('alignment', 'left'):<6} "
+            f"indent={paragraph.get('indent', 0)} style={paragraph.get('style') or '-':<8} "
+            f"spacing={paragraph.get('line_spacing') or '-'} list={paragraph.get('list') or '-'} "
+            f"text={_preview(line)!r}"
+        )
+
+
+def _print_text_box_debug(page_idx: int, result: dict) -> None:
+    if not result["text_boxes"]:
+        return
+    print(f"page {page_idx} {result['uuid'][:8]} text_boxes={len(result['text_boxes'])}")
+    for box in result["text_boxes"]:
+        bbox = _fmt_optional_bbox(box["bbox"])
+        print(
+            f"  object={box['object_idx']} angle={box.get('angle_deg') or 0.0:.2f} "
+            f"bbox={bbox} chars={len(box['text'])} font={box.get('font_size') or '-'} "
+            f"text={_preview(box['text'])!r}"
+        )
+        for run in box.get("runs", ()):
+            print(f"    run {_fmt_range(run):>9} {run['style']}")
+        for color in box.get("colors", ()):
+            print(f"    color {_fmt_range(color):>7} #{color['color'][0]:02x}{color['color'][1]:02x}{color['color'][2]:02x}")
+        for font in box.get("font_sizes", ()):
+            print(f"    font {_fmt_range(font):>8} {font['font_size']:.2f}")
+
+
+def _text_debug_json(typed_text: dict | None, page_results: list[tuple[int, str, dict]]) -> dict:
+    pages = []
+    for page_idx, page_name, result in page_results:
+        pages.append({
+            "page": page_idx,
+            "name": page_name,
+            "uuid": result["uuid"],
+            "text_boxes": result["text_boxes"],
+        })
+    return {"typed_text": typed_text, "pages": pages}
+
+
+def cmd_text(args: argparse.Namespace) -> None:
+    """Print note.note typed text metadata and page-object text-box metadata."""
+    note = load_note(args.file) or b""
+    typed_text = parse_typed_text(note)
+    page_names = list_pages(args.file)
+    if args.page:
+        page_names = [p for p in page_names if args.page in p]
+        if not page_names:
+            print(f"no .page file matches {args.page!r}", file=sys.stderr)
+            sys.exit(1)
+    page_results = []
+    for page_idx, page_name in enumerate(list_pages(args.file), 1):
+        if page_name not in page_names:
+            continue
+        _, page_data = load_page(args.file, page_name)
+        page_results.append((page_idx, page_name, parse_page(page_data)))
+
+    if args.json:
+        print(json.dumps(_text_debug_json(typed_text, page_results), indent=2, ensure_ascii=False))
+        return
+
+    if typed_text is None:
+        print("typed_text: none")
+    else:
+        _print_typed_text_debug(typed_text, args.all_paragraphs)
+    for page_idx, _page_name, result in page_results:
+        _print_text_box_debug(page_idx, result)
+
+
 def cmd_render(args: argparse.Namespace) -> None:
     # Imported lazily so `dump`/`stroke-table` don't pull in matplotlib/Pillow.
     from pysdocx.render import render_document
@@ -226,6 +341,17 @@ def main() -> None:
     p_objects.add_argument("--detail", action="store_true", help="print object header details")
     p_objects.add_argument("--summary", action="store_true", help="print aggregate object type counts")
     p_objects.set_defaults(func=cmd_objects)
+
+    p_text = sub.add_parser("text", help="print typed-text and text-box rich-text diagnostics")
+    p_text.add_argument("file", type=Path)
+    p_text.add_argument("--page", help="filter text boxes to .page files whose name contains this substring")
+    p_text.add_argument(
+        "--all-paragraphs",
+        action="store_true",
+        help="include default paragraphs, not only paragraphs with decoded metadata",
+    )
+    p_text.add_argument("--json", action="store_true", help="emit parsed text/page metadata as JSON")
+    p_text.set_defaults(func=cmd_text)
 
     p_render = sub.add_parser("render", help="render each page to an image (one file per page)")
     p_render.add_argument("file", type=Path)
