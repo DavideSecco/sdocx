@@ -140,8 +140,8 @@ def render_shape(ax, shape, bg_color, default_ink=DEFAULT_INK):
         ax.plot([q[0] for q in poly], [q[1] for q in poly], "-", color=color, linewidth=lw, zorder=2)
 
 
-def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_boxes=(), page_size=None,
-                template=None, default_ink=DEFAULT_INK):
+def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_boxes=(),
+                sticky_notes=(), page_size=None, template=None, default_ink=DEFAULT_INK):
     """Draw a parsed page (strokes, inserted shapes, imported images) onto a matplotlib Axes.
 
     `images` is a list of {"bbox": (x0, y0, x1, y1), "data": <image bytes>}. When `page_size`
@@ -162,7 +162,17 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
     for im in images:
         x0, y0, x1, y1 = im["bbox"]
         pic = np.asarray(Image.open(io.BytesIO(im["data"])).convert("RGB"))
-        ax.imshow(pic, extent=(x0, x1, y0, y1), origin="lower", aspect="auto", zorder=1)
+        artist = ax.imshow(pic, extent=(x0, x1, y0, y1), origin="lower", aspect="auto", zorder=1)
+        angle_deg = im.get("angle_deg") or 0.0
+        if angle_deg:
+            # angle_deg is clockwise-positive on screen (see pysdocx.page.IMAGE_ANGLE_OFFSET).
+            # rotate_deg_around is counterclockwise-positive in data space, but the y-axis is
+            # inverted for the whole page (set_ylim(height, 0) below), which flips the apparent
+            # rotation sense back to clockwise on screen — so the raw decoded angle is used as-is.
+            # Pivot is the placement bbox's own center: bbox is the pre-rotation reference rect
+            # (verified: its width/height match this same source image's unrotated placements).
+            cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+            artist.set_transform(mtransforms.Affine2D().rotate_deg_around(cx, cy, angle_deg) + ax.transData)
 
     for s in strokes:
         pts = s["points"]
@@ -217,6 +227,20 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
             va="top", ha="left", zorder=3, wrap=True,
         )
 
+    # Sticky-note placements (scan_sticky_notes) aren't recursively rendered — a nested .sdocx
+    # sub-document's contents aren't loaded here — just marked as a labeled box at its decoded
+    # bbox so the attachment's existence and rough position are visible instead of silently
+    # absent from the render (matches the "at least enumerate them" bar used for audio/images
+    # elsewhere in this module).
+    for note in sticky_notes:
+        x0, y0, x1, y1 = note["bbox"]
+        ax.add_patch(
+            plt.Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, edgecolor=default_ink,
+                          lw=1.0, linestyle="--", zorder=3)
+        )
+        ax.text(x0 + 4, y0 + 4, f"sticky note (media {note['media_index']})", color=default_ink,
+                fontsize=9, va="top", ha="left", zorder=3)
+
     if page_size is not None:
         # Fix the view to the whole page so the grid fills it and content sits in place.
         ax.set_xlim(0, page_size[0])
@@ -236,12 +260,15 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
 
 
 def _char_styles(parsed):
-    """Expand per-run styles into per-character (bold, italic, underline, color) arrays."""
+    """Expand per-run styles into per-character (bold, italic, underline, strike, color, highlight)
+    arrays."""
     n = len(parsed["text"])
     bold = [False] * n
     italic = [False] * n
     underline = [False] * n
+    strike = [False] * n
     color = [None] * n
+    highlight = [None] * n
     for r in parsed["runs"]:
         for i in range(r["start"], min(r["end"], n)):
             if r["style"] == "bold":
@@ -250,16 +277,22 @@ def _char_styles(parsed):
                 italic[i] = True
             elif r["style"] == "underline":
                 underline[i] = True
+            elif r["style"] == "strikethrough":
+                strike[i] = True
     for c in parsed["colors"]:
         if c["color"] != TEXT_DEFAULT_COLOR:  # default color is handled by the contrast fallback
             for i in range(c["start"], min(c["end"], n)):
                 color[i] = c["color"]
-    return bold, italic, underline, color
+    for h in parsed.get("highlights", ()):
+        for i in range(h["start"], min(h["end"], n)):
+            highlight[i] = h["color"]
+    return bold, italic, underline, strike, color, highlight
 
 
 def render_typed_text(ax, parsed, bg_color, x0=64, y0=80, line_h=60, blank_h=34, fontpt=17,
                       default_ink=DEFAULT_INK):
-    """Draw parsed typed text onto the axes with inline bold/italic/underline/color.
+    """Draw parsed typed text onto the axes with inline bold/italic/underline/strikethrough,
+    color and highlight background.
 
     The default text color equals the dark page background, so it falls back to the contrast ink
     (same idea as the stroke renderer); explicit colors (e.g. red "testorosso") are kept.
@@ -268,7 +301,7 @@ def render_typed_text(ax, parsed, bg_color, x0=64, y0=80, line_h=60, blank_h=34,
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
     inv = ax.transData.inverted()
-    bold, italic, underline, color = _char_styles(parsed)
+    bold, italic, underline, strike, color, highlight = _char_styles(parsed)
 
     gi = 0
     y = y0
@@ -280,12 +313,18 @@ def render_typed_text(ax, parsed, bg_color, x0=64, y0=80, line_h=60, blank_h=34,
         x = x0
         i = 0
         while i < len(line):
-            style = (bold[gi + i], italic[gi + i], underline[gi + i], color[gi + i])
+            style = (
+                bold[gi + i], italic[gi + i], underline[gi + i], strike[gi + i],
+                color[gi + i], highlight[gi + i],
+            )
             j = i
-            while j < len(line) and (bold[gi + j], italic[gi + j], underline[gi + j], color[gi + j]) == style:
+            while j < len(line) and (
+                bold[gi + j], italic[gi + j], underline[gi + j], strike[gi + j],
+                color[gi + j], highlight[gi + j],
+            ) == style:
                 j += 1
             seg = line[i:j]
-            b, it, u, c = style
+            b, it, u, st, c, hl = style
             hexc = f"#{c[0]:02x}{c[1]:02x}{c[2]:02x}" if c else default_ink
             t = ax.text(
                 x, y, seg, color=hexc, fontsize=fontpt, va="top", ha="left", zorder=3,
@@ -293,9 +332,16 @@ def render_typed_text(ax, parsed, bg_color, x0=64, y0=80, line_h=60, blank_h=34,
             )
             corners = inv.transform(t.get_window_extent(renderer).corners())
             w = corners[:, 0].max() - corners[:, 0].min()
+            y_top = corners[:, 1].min()
+            y_bottom = corners[:, 1].max()
+            if hl:
+                hexhl = f"#{hl[0]:02x}{hl[1]:02x}{hl[2]:02x}"
+                ax.fill_between([x, x + w], y_top, y_bottom, color=hexhl, zorder=2, linewidth=0)
             if u:
-                y_bottom = corners[:, 1].max()
                 ax.plot([x, x + w], [y_bottom, y_bottom], "-", color=hexc, lw=1.3, zorder=3)
+            if st:
+                y_mid = (y_top + y_bottom) / 2
+                ax.plot([x, x + w], [y_mid, y_mid], "-", color=hexc, lw=1.3, zorder=3)
             x += w
             i = j
         gi += len(line) + 1
@@ -425,6 +471,7 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
         kept, total = page_result["kept"], page_result["stroke_count"]
         shapes = page_result["shapes"]
         text_boxes = page_result["text_boxes"]
+        sticky_notes = page_result["sticky_notes"]
 
         # Imported images and freehand drawings render the same way. Both are now read from the
         # page object tree, then resolved to media bytes here.
@@ -435,10 +482,13 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
         for pl in placements:
             media = load_media_by_index(path, pl["media_index"])
             if media is not None:
-                images.append({"bbox": pl["bbox"], "data": media[1]})
+                images.append({"bbox": pl["bbox"], "data": media[1], "angle_deg": pl.get("angle_deg", 0.0)})
 
         page_tables = [t for t in tables if t["bbox"] is not None] if idx == table_target_page else []
-        is_empty = kept == 0 and not shapes and not images and not text_boxes and not page_tables
+        is_empty = (
+            kept == 0 and not shapes and not images and not text_boxes
+            and not sticky_notes and not page_tables
+        )
         shows_typed_text = (
             typed_text is not None
             and not typed_text_placed
@@ -451,6 +501,7 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
                 f"  +{len(shapes)} shapes" if shapes else "",
                 f"  +{len(images)} images" if images else "",
                 f"  +{len(text_boxes)} text boxes" if text_boxes else "",
+                f"  +{len(sticky_notes)} sticky notes" if sticky_notes else "",
                 f"  +{len(page_tables)} tables" if page_tables else "",
                 "  +typed text" if shows_typed_text else "",
             )
@@ -465,7 +516,7 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
         # Always render through render_page so the grid template shows even on empty pages.
         render_page(
             ax, page_result["strokes"], page_bg, title=title, shapes=shapes, images=images,
-            text_boxes=text_boxes,
+            text_boxes=text_boxes, sticky_notes=sticky_notes,
             page_size=(page_result["width"], page_result["height"]), template=page_result["template"],
             default_ink=default_ink,
         )

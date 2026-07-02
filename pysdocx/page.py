@@ -85,7 +85,44 @@ IMAGE_MARKER = b"\x01\x00\x04\x20"
 IMAGE_MEDIA_INDEX_BACK = 6  # u16 media index this many bytes before the marker
 IMAGE_BBOX_FWD = 11  # 4 x f64 bbox this many bytes after the marker
 IMAGE_MEDIA_REF_MARKER = b"\x06\x00\x3e\x00\x00\x00\x02\x00"
+
+# A rotated image object carries a `field_flags` bit (0x1, alongside 0x40000 — both newly set
+# vs. an unrotated placement's 0xe000) and, right at the common header's `attributes_offset`
+# (== OBJECT_BASE_HEADER_LEN == 105, confirmed stable across every image object in every sample),
+# a plain little-endian f32 holding the rotation angle IN DEGREES, clockwise-positive on screen
+# (matplotlib's rotate_deg_around is counterclockwise-positive in data space, but our y-axis is
+# inverted for page rendering, which flips the visual sense back to clockwise — see render.py).
+# For an unrotated placement this same offset just lands in the middle of other fields (timestamp/
+# resizable), giving a near-zero garbage float, so ANGLE_FLAG doubles as the reliable gate.
+#
+# Cracked and verified against samples/OnlyImages_260702_190147.sdocx (9 hand-labeled images: 3
+# groups of 3, GT photo samples/OnlyImages_260702_190147/photo_2026-07-02_19-05-02.jpg), whose
+# labels were 0/28/53, 0/90/180, 0/332/254 degrees. Decoded values were 0(unrotated)/29/53,
+# 0/90/180, 0/-28(=332 mod 360)/254 — i.e. exact matches on 5 of 6 non-zero angles and 1 off by
+# 1 degree (hand-drawn protractor label, not a real mismatch). Also cross-checked against
+# samples/Associationpages&stickynote&images&audio_260701_183225.sdocx page 5 (the file that
+# first flagged "extra ~20 bytes" before this sample existed): its two rotated placements decode
+# to exactly -45.0 and 90.0, matching that file's "~45°/~90°" visual estimate exactly.
+IMAGE_ANGLE_OFFSET = OBJECT_BASE_HEADER_LEN  # == 105
+IMAGE_ANGLE_FIELD_FLAG = 0x1
 TEXT_BOX_TEXT_MARKER = b"\x06\x00\xbf\x00\x00\x00"
+
+# Sticky-note (file-attachment) placements on a page are a property-bag object type that isn't
+# reachable via the normal layer-object-count-driven tree walk: on the sample where this was
+# found (Associationpages...sdocx, page 6ffea07a / logical page 4), the LAYER'S OWN declared
+# `object_count` field reads 0 (confirmed, not a walker bug), yet the page's raw bytes contain 2
+# real sticky-note placements *outside* that count — same situation as markerless arrows, so the
+# same whole-page-scan fix applies (see scan_arrows). Layout: ASCII property bag,
+# `<u32 key_len><ascii key>` pairs. The "co_attach_file" key's value breaks the general pattern:
+# the u32 right after the key IS the media index itself (not a byte-length prefix), followed by
+# a u32 "type tag" (observed value 2, meaning unknown, unused here). Every other key in the bag
+# (seen: "skn_bg_color", "skn_collapse_rect") follows the normal `<u32 len><ascii value>` shape;
+# "skn_collapse_rect"'s value is a CSV bbox string "x0,y0,x1,y1" in page coordinates. Verified:
+# media index 8 -> media/8@stickymemo_...sdocx (the "big" sticky memo) at bbox ~(25,28)-(105,108)
+# (top-left corner); media index 6 -> media/6@stickymemo_...sdocx (the "small" one) at bbox
+# ~(1320,1870)-(1400,1950) (bottom-right corner) — both anchored to this same page.
+STICKY_NOTE_MARKER = b"co_attach_file"
+STICKY_NOTE_RECT_KEY = b"skn_collapse_rect"
 
 # Page background templates. The builtin template id lives at a base-dependent offset in the
 # page header (see page_template(), ported from crates/sdocx/src/page.rs::page_template). Only
@@ -750,6 +787,7 @@ def parse_page(data: bytes) -> dict:
         "images": scan_images_from_objects(data, width, height, tree["layers"]),
         "drawings": scan_drawings_from_objects(data, width, height, tree["layers"]),
         "text_boxes": parse_text_boxes_from_objects(data, tree["layers"]),
+        "sticky_notes": scan_sticky_notes(data, width, height),
         "attempts": attempts,
     }
 
@@ -801,6 +839,22 @@ def _image_media_index(data: bytes, marker: int, limit: int) -> tuple[int, int, 
     return struct.unpack_from("<H", data, off)[0], off, 2
 
 
+def _image_rotation_deg(header: dict | None, blob: bytes) -> float:
+    """Rotation angle in degrees (clockwise-positive on screen, 0..360) for an image object.
+
+    See IMAGE_ANGLE_OFFSET/IMAGE_ANGLE_FIELD_FLAG above. Only trust the f32 when the header's
+    field_flags actually carries the "rotation present" bit — otherwise that offset just lands
+    in unrelated fixed fields (timestamp/resizable) and returning 0.0 is correct."""
+    if header is None or not (header["field_flags"] & IMAGE_ANGLE_FIELD_FLAG):
+        return 0.0
+    if IMAGE_ANGLE_OFFSET + 4 > len(blob):
+        return 0.0
+    angle = struct.unpack_from("<f", blob, IMAGE_ANGLE_OFFSET)[0]
+    if not math.isfinite(angle):
+        return 0.0
+    return angle % 360.0
+
+
 def scan_images_from_objects(data: bytes, width: int, height: int, layers: list[dict]) -> list[dict]:
     """Find imported-image placements inside parsed object blobs."""
     images: list[dict] = []
@@ -809,6 +863,7 @@ def scan_images_from_objects(data: bytes, width: int, height: int, layers: list[
             if obj["type"] != "image":
                 continue
             blob = data[obj["blob_off"] : obj["end"]]
+            angle_deg = _image_rotation_deg(obj["header"], blob)
             off = 0
             while True:
                 rel = blob.find(IMAGE_MARKER, off)
@@ -836,6 +891,7 @@ def scan_images_from_objects(data: bytes, width: int, height: int, layers: list[
                         "off": i,
                         "object_idx": obj["idx"],
                         "object_off": obj["off"],
+                        "angle_deg": angle_deg,
                     })
     return images
 
@@ -982,6 +1038,64 @@ def parse_text_boxes_from_objects(data: bytes, layers: list[dict]) -> list[dict]
                 "object_off": obj["off"],
             })
     return text_boxes
+
+
+def _read_len_prefixed_ascii(data: bytes, offset: int) -> tuple[str, int] | None:
+    """`<u32 length><ascii bytes>` at `offset`; returns `(text, end_offset)` or None."""
+    if offset + 4 > len(data):
+        return None
+    length = struct.unpack_from("<I", data, offset)[0]
+    start = offset + 4
+    end = start + length
+    if not (0 < length < 1000) or end > len(data):
+        return None
+    try:
+        return data[start:end].decode("ascii"), end
+    except UnicodeDecodeError:
+        return None
+
+
+def scan_sticky_notes(data: bytes, width: int, height: int) -> list[dict]:
+    """Find sticky-note (file-attachment) placements: `{media_index, bbox, off}`.
+
+    Whole-page marker scan (not object-tree based) — see STICKY_NOTE_MARKER's comment for why:
+    the layer's own declared object_count excludes these, so the normal tree walk never reaches
+    them (same situation as markerless arrows, see scan_arrows)."""
+    notes: list[dict] = []
+    off = 0
+    while True:
+        i = data.find(STICKY_NOTE_MARKER, off)
+        if i < 0:
+            break
+        off = i + 1
+        idx_off = i + len(STICKY_NOTE_MARKER)
+        if idx_off + 4 > len(data):
+            continue
+        media_index = struct.unpack_from("<I", data, idx_off)[0]
+
+        rect_key = data.find(STICKY_NOTE_RECT_KEY, idx_off, idx_off + 200)
+        if rect_key < 0:
+            continue
+        rect = _read_len_prefixed_ascii(data, rect_key + len(STICKY_NOTE_RECT_KEY))
+        if rect is None:
+            continue
+        text, _ = rect
+        parts = text.split(",")
+        if len(parts) != 4:
+            continue
+        try:
+            x0, y0, x1, y1 = (float(v) for v in parts)
+        except ValueError:
+            continue
+        bbox = (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+        if not (
+            all(math.isfinite(v) for v in bbox)
+            and -5 <= bbox[0] < bbox[2] <= width + 5
+            and -5 <= bbox[1] < bbox[3] <= height + 5
+        ):
+            continue
+        notes.append({"media_index": media_index, "bbox": bbox, "off": i})
+    return notes
 
 
 def _nearest_shape_color(data: bytes, off: int) -> tuple[int, int, int] | None:

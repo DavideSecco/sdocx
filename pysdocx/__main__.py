@@ -119,10 +119,12 @@ def _print_object_summary(page_results: list[dict]) -> None:
     total_objects = 0
     total_strokes = 0
     total_kept = 0
+    total_sticky_notes = 0
     for result in page_results:
         total_objects += result["object_count"]
         total_strokes += result["stroke_count"]
         total_kept += result["kept"]
+        total_sticky_notes += len(result["sticky_notes"])
         for layer in result["layers"]:
             for obj in _iter_cli_objects(layer["objects"]):
                 counts[(obj["raw_type"], obj["type"])] += 1
@@ -136,6 +138,8 @@ def _print_object_summary(page_results: list[dict]) -> None:
         for (hraw, htype, total_size, field_flags), header_count in sorted(header_counts.items()):
             if (raw_type, obj_type) == (hraw, htype):
                 print(f"      header total={total_size:<4} field=0x{field_flags:x} count={header_count}")
+    if total_sticky_notes:
+        print(f"  sticky_note_ref (outside declared object count) count={total_sticky_notes}")
 
 
 def cmd_objects(args: argparse.Namespace) -> None:
@@ -173,6 +177,12 @@ def cmd_objects(args: argparse.Namespace) -> None:
             )
             for obj in layer["objects"]:
                 _print_object(obj, 2, args.detail, media_by_object)
+        for note in result["sticky_notes"]:
+            print(
+                f"     sticky_note_ref media={note['media_index']} "
+                f"bbox={_fmt_bbox(note['bbox'])} off=0x{note['off']:x}  "
+                f"(found via whole-page scan — outside this page's declared object count)"
+            )
 
     _print_attachments(attachments)
 

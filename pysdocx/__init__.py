@@ -35,6 +35,7 @@ from pysdocx.page import (
     scan_images,
     scan_images_from_objects,
     scan_shapes,
+    scan_sticky_notes,
 )
 
 __all__ = [
@@ -72,6 +73,7 @@ __all__ = [
     "scan_images_from_objects",
     "scan_drawings",
     "scan_drawings_from_objects",
+    "scan_sticky_notes",
     "render_document",
     "render_page",
 ]

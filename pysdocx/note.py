@@ -10,8 +10,30 @@ whose start/end index into that text field. Confirmed on the benchmark (note.not
 red, body default→dark gray). This mirrors the per-page TLV logic in crates/sdocx/src/page.rs
 (tlv_color / collect_style_runs), applied to note.note instead of a page record.
 
-Not yet decoded here (approximated by the renderer): strikethrough ("cancellato") and the
-list/todolist paragraph markers, which are not emitted as 0x18-00 run markers.
+Highlight ("evidenziato") is tag 0x11 in the same `18 00`-prefixed family — same shape as color,
+its `enabled` u32 is the highlight's 0xAARRGGBB. Confirmed on
+samples/OnlyTextTypeWritten_260701_180427.sdocx: tag 0x11 start=95 end=133 enabled=0xffff3636 red
+over "evidendenziato di rosso il background".
+
+Strikethrough ("cancellato") is a DIFFERENT marker family: prefix `14 00 14 00` (not `18 00`),
+otherwise the same `pad | u32 start | u32 end | u32 value | u32 enabled` shape. Confirmed on the
+same sample: `14 00 14 00 | 00 00 | start=84 end=95 | value=1 enabled=1` exactly covers
+"cancellato\\n" (the only struck-through line), with enabled=0 on the following disabled run
+(95-171). This was found by an exhaustive scan of the file for any `pad==0` TLV-shaped record
+whose start/end are valid text offsets, grouped by (kind, tag) — `(0x14, 0x14)` was the only
+family besides the known `(0x18, tag)` bold/italic/underline/color/font/highlight ones.
+
+Still not decoded here (approximated by the renderer): the numbered/bulleted/todolist paragraph
+prefixes (bullet glyph, number, checkbox + checked state), and paragraph-level heading/alignment/
+indent levels. An exhaustive search (every 2-byte-aligned offset in note.note, every `(kind, tag)`
+pair, plus a raw byte search for the relevant char offsets as bare little-endian u32) found NO
+marker of any alignment/shape anchored at the numbered/bulleted/todo paragraph boundaries in
+samples/OnlyTextTypeWritten_260701_180427.sdocx (char offsets 191, 209, 244, 277, 283, 289 do not
+appear anywhere in note.note as a u32, ruling out a start/end run scheme entirely). The other
+container members (end_tag.bin, pageIdInfo.dat, the .page files) were also checked and hold only
+GUIDs/hashes/boilerplate or unrelated page objects (e.g. a rotated text-box element), not a
+paragraph-style table. This paragraph metadata is either encoded as a per-paragraph-index array
+that wasn't isolated, or lives somewhere not yet identified.
 """
 
 import struct
@@ -22,6 +44,10 @@ ITALIC_TAG = 0x06
 UNDERLINE_TAG = 0x07
 COLOR_TAG = 0x01
 FONT_TAG = 0x03
+HIGHLIGHT_TAG = 0x11
+
+# Strikethrough uses its own marker family: prefix `14 00 14 00` instead of `18 00 <tag> 00`.
+STRIKETHROUGH_MARKER = b"\x14\x00\x14\x00"
 
 # A run marker is: 18 00 <tag_lo> <tag_hi> | 00 00 | u32 start | u32 end | u32 value | u32 enabled
 RUN_START_OFF = 6
@@ -68,9 +94,8 @@ def _find_text_field(data: bytes) -> tuple[int, str] | None:
     return best_start, text
 
 
-def _style_runs(data: bytes, tag: int, text_len: int) -> list[tuple[int, int, int, int]]:
-    """All `(start, end, value, enabled)` run markers for `tag` whose range is within the text."""
-    marker = STYLE_MARKER_PREFIX + bytes([tag & 0xFF, tag >> 8])
+def _marker_runs(data: bytes, marker: bytes, text_len: int) -> list[tuple[int, int, int, int]]:
+    """All `(start, end, value, enabled)` TLV records right after `marker`, within the text."""
     runs = []
     off = data.find(marker)
     while off != -1:
@@ -85,13 +110,20 @@ def _style_runs(data: bytes, tag: int, text_len: int) -> list[tuple[int, int, in
     return runs
 
 
+def _style_runs(data: bytes, tag: int, text_len: int) -> list[tuple[int, int, int, int]]:
+    """All `(start, end, value, enabled)` run markers for `tag` whose range is within the text."""
+    marker = STYLE_MARKER_PREFIX + bytes([tag & 0xFF, tag >> 8])
+    return _marker_runs(data, marker, text_len)
+
+
 def parse_typed_text(note_bytes: bytes) -> dict | None:
     """Extract the typed rich text from `note.note`.
 
     Returns a dict with the body text and per-run styles mapped to body-text coordinates:
-    `{text, runs: [{start, end, bold, italic, underline}], colors: [{start, end, color}], font_size}`.
-    `text` has the header's leading newlines stripped; run/color offsets are relative to it.
-    Returns None if no text field is found.
+    `{text, runs: [{start, end, style}], colors: [{start, end, color}],
+    highlights: [{start, end, color}], font_size}`, where `style` is one of
+    "bold"/"italic"/"underline"/"strikethrough". `text` has the header's leading newlines
+    stripped; run/color/highlight offsets are relative to it. Returns None if no text field found.
     """
     field = _find_text_field(note_bytes)
     if field is None:
@@ -115,6 +147,19 @@ def parse_typed_text(note_bytes: bytes) -> dict | None:
                 rb = rebase(start, end)
                 if rb:
                     runs.append({"start": rb[0], "end": rb[1], "style": key})
+    strike_runs = _marker_runs(note_bytes, STRIKETHROUGH_MARKER, raw_len)
+    # Unlike `18 00 <tag> 00`, the 4-byte `14 00 14 00` prefix is short enough to collide with
+    # unrelated binary data elsewhere in the TLV block (confirmed on the benchmark note.note: a
+    # stray hit with enabled=30465/1998523392 — clearly not a boolean flag). Real strikethrough
+    # runs mirror bold/italic/underline: a clean enabled∈{0,1} "on" run immediately followed by an
+    # "off" run whose start equals the "on" run's end (e.g. (84,95,enabled=1),(95,171,enabled=0)
+    # on the confirmed sample) — require that exact pairing to reject isolated collisions.
+    strike_starts = {s for s, _e, _v, en in strike_runs if en in (0, 1)}
+    for start, end, _value, enabled in strike_runs:
+        if enabled == 1 and end in strike_starts:
+            rb = rebase(start, end)
+            if rb:
+                runs.append({"start": rb[0], "end": rb[1], "style": "strikethrough"})
 
     colors: list[dict] = []
     for start, end, value, enabled in _style_runs(note_bytes, COLOR_TAG, raw_len):
@@ -124,6 +169,14 @@ def parse_typed_text(note_bytes: bytes) -> dict | None:
         if rb is not None and (argb >> 24) == 0xFF:
             colors.append({"start": rb[0], "end": rb[1], "color": (r, g, b)})
 
+    highlights: list[dict] = []
+    for start, end, value, enabled in _style_runs(note_bytes, HIGHLIGHT_TAG, raw_len):
+        argb = enabled  # same shape as color: trailing u32 is the highlight's 0xAARRGGBB
+        r, g, b = (argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF
+        rb = rebase(start, end)
+        if rb is not None and (argb >> 24) == 0xFF:
+            highlights.append({"start": rb[0], "end": rb[1], "color": (r, g, b)})
+
     font_size = None
     font_runs = _style_runs(note_bytes, FONT_TAG, raw_len)
     if font_runs:
@@ -132,7 +185,13 @@ def parse_typed_text(note_bytes: bytes) -> dict | None:
         if candidate == candidate and 4.0 <= candidate <= 200.0:
             font_size = candidate
 
-    return {"text": body, "runs": runs, "colors": colors, "font_size": font_size}
+    return {
+        "text": body,
+        "runs": runs,
+        "colors": colors,
+        "highlights": highlights,
+        "font_size": font_size,
+    }
 
 
 # Table cells also live in note.note (not the page). Each cell is preceded by a 10-byte marker:
