@@ -110,7 +110,11 @@ def _find_text_field(data: bytes) -> tuple[int, str] | None:
             continue
         declared = struct.unpack_from("<I", data, start - 4)[0]
         if abs(declared - length) <= TEXT_FIELD_LEN_TOLERANCE:
-            text = data[start : start + length * 2].decode("utf-16-le", errors="replace")
+            # The header char count is authoritative: the printable run can spill one char past it
+            # onto the next field's bytes (e.g. a trailing u32 whose low byte decodes as '('), so
+            # decode `declared`, not the raw run length.
+            text_len = min(length, declared)
+            text = data[start : start + text_len * 2].decode("utf-16-le", errors="replace")
             return start, text
     return None
 
