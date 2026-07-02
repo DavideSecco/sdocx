@@ -161,7 +161,12 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
     # with the natural extent to keep the picture itself upright.
     for im in images:
         x0, y0, x1, y1 = im["bbox"]
-        pic = np.asarray(Image.open(io.BytesIO(im["data"])).convert("RGB"))
+        # RGBA, not RGB: when a rotation transform is applied below, matplotlib's image resampler
+        # has to sample outside the source array for the corners of the rotated bounding box (the
+        # parts of the axis-aligned bbox the rotated rectangle doesn't cover) — with no alpha
+        # channel those out-of-bounds samples render as opaque black. RGBA makes them transparent
+        # instead, so the page background shows through the corners as expected.
+        pic = np.asarray(Image.open(io.BytesIO(im["data"])).convert("RGBA"))
         artist = ax.imshow(pic, extent=(x0, x1, y0, y1), origin="lower", aspect="auto", zorder=1)
         angle_deg = im.get("angle_deg") or 0.0
         if angle_deg:
