@@ -406,11 +406,25 @@ def _parse_stroke_object(data: bytes, blob_off: int, blob: bytes, width: int, he
     shifted = parse_stroke(data, stroke_off, extra_len, "shifted")
     parsed = _select_layout(current, shifted)
 
-    # The point-count cap only guards the *recovered-points* fallback (no trustworthy header
-    # bbox, so a garbage decode could still produce a plausible-looking but huge point cloud).
-    # When the header bbox is both bbox-consistent AND page-scaled, a large point count is real
-    # evidence of a real stroke, not garbage — e.g. quiz.sdocx has one legitimate 23038-point
-    # stroke (dense scribbling on a long scrollable page) that this cap used to wrongly drop.
+    # HANDOFF NOTE (2026-07-02, Claude, on top of the tree-parser rewrite): this used to be
+    #   accepted = parsed is not None and parsed["n_points_field"] <= STROKE_MAX_POINTS and (...)
+    # i.e. the point-count cap applied unconditionally, to BOTH acceptance paths below. That
+    # dropped a real stroke: samples/quiz.sdocx has one legitimate object with 23038 points (dense
+    # scribbling on a 1812x15372 scrollable page) whose header bbox is fully trustworthy
+    # (fits_bbox=True AND _bbox_is_page_scaled=True) — decoded correctly, just large. The
+    # unconditional cap rejected it anyway, so that page came out 3227/3228 instead of 3228/3228.
+    #
+    # The fix: STROKE_MAX_POINTS now guards ONLY the second branch below (the within_page_bounds
+    # fallback, used when the header bbox can't be trusted and we fall back to the *decoded
+    # points* alone as evidence). That's the branch where a garbage/misaligned decode could still
+    # fabricate a plausible-looking-but-huge point cloud, so a sanity cap earns its keep there.
+    # When the header bbox itself is trustworthy (bbox-consistent AND page-scaled), a large point
+    # count is just evidence of a real, detailed stroke — not a decode failure — so it's no longer
+    # gated by STROKE_MAX_POINTS in the `trusted_bbox` branch.
+    #
+    # Verified with `python -m pysdocx stroke-table` across every file in samples/ (11 files):
+    # zero MISMATCH anywhere after this change (quiz.sdocx was the only failure before, now
+    # 3228/3228). Do NOT revert to the unconditional cap without re-checking quiz.sdocx first.
     trusted_bbox = parsed is not None and parsed["fits_bbox"] and _bbox_is_page_scaled(parsed["bbox"], width, height)
     accepted = parsed is not None and (
         trusted_bbox
