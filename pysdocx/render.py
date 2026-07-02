@@ -551,7 +551,11 @@ def _render_rich_text(
         prefix = _paragraph_prefix(paragraph)
         checked_todo = _is_checked_todo(paragraph)
         if prefix:
-            prefix_w = max(fontpt * 3.0, 44.0)
+            # Draw the list marker at the paragraph's own font size, not the base size, so the
+            # number/bullet matches its list text instead of towering over smaller (e.g. 11pt) runs.
+            para_font_raw = next((font_size[k] for k in range(line_start, line_end) if font_size[k]), None)
+            prefix_pt = para_font_raw * 1.36 if para_font_raw else fontpt
+            prefix_w = max(prefix_pt * 3.0, 44.0)
             prefix_color = TODO_DONE_COLOR if checked_todo else None
             _draw_text_segment(
                 ax,
@@ -561,7 +565,7 @@ def _render_rich_text(
                 y,
                 prefix,
                 fontpt,
-                (False, False, False, False, prefix_color, None, None),
+                (False, False, False, False, prefix_color, None, para_font_raw),
                 default_ink,
                 angle_deg=angle_deg,
                 origin=(x0, y0),
