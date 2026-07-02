@@ -23,17 +23,11 @@ same sample: `14 00 14 00 | 00 00 | start=84 end=95 | value=1 enabled=1` exactly
 whose start/end are valid text offsets, grouped by (kind, tag) — `(0x14, 0x14)` was the only
 family besides the known `(0x18, tag)` bold/italic/underline/color/font/highlight ones.
 
-Still not decoded here (approximated by the renderer): the numbered/bulleted/todolist paragraph
-prefixes (bullet glyph, number, checkbox + checked state), and paragraph-level heading/alignment/
-indent levels. An exhaustive search (every 2-byte-aligned offset in note.note, every `(kind, tag)`
-pair, plus a raw byte search for the relevant char offsets as bare little-endian u32) found NO
-marker of any alignment/shape anchored at the numbered/bulleted/todo paragraph boundaries in
-samples/OnlyTextTypeWritten_260701_180427.sdocx (char offsets 191, 209, 244, 277, 283, 289 do not
-appear anywhere in note.note as a u32, ruling out a start/end run scheme entirely). The other
-container members (end_tag.bin, pageIdInfo.dat, the .page files) were also checked and hold only
-GUIDs/hashes/boilerplate or unrelated page objects (e.g. a rotated text-box element), not a
-paragraph-style table. This paragraph metadata is either encoded as a per-paragraph-index array
-that wasn't isolated, or lives somewhere not yet identified.
+Paragraph metadata is stored separately from character runs and indexes paragraph numbers, NOT
+character offsets. Samsung uses `14 00 <tag> 00` records for alignment, indent, line spacing and
+heading/body level, plus a wider `1c 00 05 00` record for numbered/bulleted/todo prefixes and the
+todo checked state. Confirmed on samples/OnlyTextTypeWritten_260701_180427.sdocx: kind 4=numbered,
+kind 8=bullet, kind 2=todo; tag 0x03=alignment, tag 0x02=indent, tag 0x0a=heading/body style.
 """
 
 import struct
@@ -48,6 +42,8 @@ HIGHLIGHT_TAG = 0x11
 
 # Strikethrough uses its own marker family: prefix `14 00 14 00` instead of `18 00 <tag> 00`.
 STRIKETHROUGH_MARKER = b"\x14\x00\x14\x00"
+PARAGRAPH_MARKER_PREFIX = b"\x14\x00"
+LIST_MARKER = b"\x1c\x00\x05\x00\x00\x00"
 
 # A run marker is: 18 00 <tag_lo> <tag_hi> | 00 00 | u32 start | u32 end | u32 value | u32 enabled
 RUN_START_OFF = 6
@@ -55,6 +51,15 @@ RUN_END_OFF = 10
 RUN_VALUE_OFF = 14
 RUN_ENABLED_OFF = 18
 RUN_MARKER_LEN = 22
+LIST_MARKER_LEN = 30
+
+PARAGRAPH_INDENT_TAG = 0x02
+PARAGRAPH_ALIGN_TAG = 0x03
+PARAGRAPH_LINE_SPACING_TAG = 0x04
+PARAGRAPH_STYLE_TAG = 0x0A
+ALIGNMENTS = {0: "left", 1: "right", 2: "center"}
+PARAGRAPH_STYLES = {0: "heading1", 1: "heading2", 2: "heading3", 3: "body1"}
+LIST_TYPES = {2: "todo", 4: "numbered", 8: "bullet"}
 
 MIN_TEXT_FIELD_CHARS = 16
 
@@ -116,14 +121,84 @@ def _style_runs(data: bytes, tag: int, text_len: int) -> list[tuple[int, int, in
     return _marker_runs(data, marker, text_len)
 
 
+def _paragraph_metadata(note_bytes: bytes, paragraph_count: int) -> list[dict]:
+    """Decode paragraph-level records indexed by paragraph number, not character offset.
+
+    After the character-style TLV block, Samsung emits another TLV-like family whose start/end
+    ranges index `text.split("\\n")` paragraph numbers. These are `14 00 <tag> 00 | pad | u32
+    start | u32 end | u32 value | u32 enabled`; they carry alignment, indent and heading/body
+    levels. List/todo prefixes use a wider sibling record:
+    `1c 00 05 00 00 00 | u32 start | u32 end | u32 kind | u32 value | u32 reserved | u32 enabled`.
+    Confirmed on OnlyTextTypeWritten_260701_180427: kind 4=numbered with value 1/2/3, kind
+    8=bullet, kind 2=todo with value 0/1 unchecked/checked.
+    """
+    paragraphs = [
+        {
+            "alignment": "left",
+            "indent": 0,
+            "style": None,
+            "line_spacing": None,
+            "list": None,
+        }
+        for _ in range(paragraph_count)
+    ]
+
+    def apply_span(start: int, end: int, update) -> None:
+        if not (0 <= start < end <= paragraph_count):
+            return
+        for i in range(start, end):
+            update(paragraphs[i])
+
+    off = note_bytes.find(PARAGRAPH_MARKER_PREFIX)
+    while off != -1:
+        if off + RUN_MARKER_LEN <= len(note_bytes) and note_bytes[off + 4 : off + 6] == b"\x00\x00":
+            tag = struct.unpack_from("<H", note_bytes, off + 2)[0]
+            start = struct.unpack_from("<I", note_bytes, off + RUN_START_OFF)[0]
+            end = struct.unpack_from("<I", note_bytes, off + RUN_END_OFF)[0]
+            value = struct.unpack_from("<I", note_bytes, off + RUN_VALUE_OFF)[0]
+            enabled = struct.unpack_from("<I", note_bytes, off + RUN_ENABLED_OFF)[0]
+            if tag == PARAGRAPH_INDENT_TAG and enabled:
+                apply_span(start, end, lambda p, value=value: p.update(indent=value))
+            elif tag == PARAGRAPH_ALIGN_TAG and value in ALIGNMENTS:
+                apply_span(start, end, lambda p, value=value: p.update(alignment=ALIGNMENTS[value]))
+            elif tag == PARAGRAPH_LINE_SPACING_TAG:
+                spacing = struct.unpack("<f", struct.pack("<I", enabled))[0]
+                if spacing == spacing and 0.5 <= spacing <= 4.0:
+                    apply_span(start, end, lambda p, spacing=spacing: p.update(line_spacing=spacing))
+            elif tag == PARAGRAPH_STYLE_TAG and value in PARAGRAPH_STYLES:
+                apply_span(start, end, lambda p, value=value: p.update(style=PARAGRAPH_STYLES[value]))
+        off = note_bytes.find(PARAGRAPH_MARKER_PREFIX, off + 1)
+
+    off = note_bytes.find(LIST_MARKER)
+    while off != -1:
+        if off + LIST_MARKER_LEN <= len(note_bytes):
+            start, end, kind, value, _reserved, enabled = struct.unpack_from("<IIIIII", note_bytes, off + 6)
+            list_type = LIST_TYPES.get(kind)
+            if list_type is not None and enabled:
+                def update(p, list_type=list_type, value=value):
+                    item = {"type": list_type}
+                    if list_type == "numbered":
+                        item["number"] = value
+                    elif list_type == "todo":
+                        item["checked"] = bool(value)
+                    p["list"] = item
+
+                apply_span(start, end, update)
+        off = note_bytes.find(LIST_MARKER, off + 1)
+
+    return paragraphs
+
+
 def parse_typed_text(note_bytes: bytes) -> dict | None:
     """Extract the typed rich text from `note.note`.
 
     Returns a dict with the body text and per-run styles mapped to body-text coordinates:
     `{text, runs: [{start, end, style}], colors: [{start, end, color}],
-    highlights: [{start, end, color}], font_size}`, where `style` is one of
-    "bold"/"italic"/"underline"/"strikethrough". `text` has the header's leading newlines
-    stripped; run/color/highlight offsets are relative to it. Returns None if no text field found.
+    highlights: [{start, end, color}], font_size, paragraphs}`, where `style` is one of
+    "bold"/"italic"/"underline"/"strikethrough". `paragraphs` is aligned with
+    `text.split("\\n")` and carries list/alignment/indent/style metadata. `text` has the header's
+    leading newlines stripped; run/color/highlight offsets are relative to it. Returns None if no
+    text field found.
     """
     field = _find_text_field(note_bytes)
     if field is None:
@@ -133,6 +208,8 @@ def parse_typed_text(note_bytes: bytes) -> dict | None:
 
     lead = len(raw) - len(raw.lstrip(_LEADING_PAD))
     body = raw[lead:]
+    paragraph_lead = raw[:lead].count("\n")
+    paragraphs = _paragraph_metadata(note_bytes, len(raw.split("\n")))[paragraph_lead:]
 
     def rebase(start: int, end: int) -> tuple[int, int] | None:
         s, e = start - lead, end - lead
@@ -178,12 +255,17 @@ def parse_typed_text(note_bytes: bytes) -> dict | None:
             highlights.append({"start": rb[0], "end": rb[1], "color": (r, g, b)})
 
     font_size = None
+    font_sizes: list[dict] = []
     font_runs = _style_runs(note_bytes, FONT_TAG, raw_len)
     if font_runs:
-        raw_f = struct.pack("<I", font_runs[0][3])
-        candidate = struct.unpack("<f", raw_f)[0]
-        if candidate == candidate and 4.0 <= candidate <= 200.0:
-            font_size = candidate
+        for start, end, _value, enabled in font_runs:
+            raw_f = struct.pack("<I", enabled)
+            candidate = struct.unpack("<f", raw_f)[0]
+            rb = rebase(start, end)
+            if rb is not None and candidate == candidate and 4.0 <= candidate <= 200.0:
+                font_sizes.append({"start": rb[0], "end": rb[1], "font_size": candidate})
+                if font_size is None:
+                    font_size = candidate
 
     return {
         "text": body,
@@ -191,6 +273,8 @@ def parse_typed_text(note_bytes: bytes) -> dict | None:
         "colors": colors,
         "highlights": highlights,
         "font_size": font_size,
+        "font_sizes": font_sizes,
+        "paragraphs": paragraphs,
     }
 
 
