@@ -12,6 +12,21 @@ import re
 import struct
 
 from pysdocx.ink import decode_coordinates, decode_trailing
+from pysdocx.note import (
+    BOLD_TAG,
+    COLOR_TAG,
+    FONT_TAG,
+    HIGHLIGHT_TAG,
+    ITALIC_TAG,
+    RUN_ENABLED_OFF,
+    RUN_END_OFF,
+    RUN_MARKER_LEN,
+    RUN_START_OFF,
+    RUN_VALUE_OFF,
+    STRIKETHROUGH_MARKER,
+    STYLE_MARKER_PREFIX,
+    UNDERLINE_TAG,
+)
 
 OBJECT_ENTRY_LEN = 7  # raw_type(u8) + child_count(i16) + blob_size(u32)
 OBJECT_BASE_HEADER_LEN = 105
@@ -105,7 +120,8 @@ IMAGE_MEDIA_REF_MARKER = b"\x06\x00\x3e\x00\x00\x00\x02\x00"
 # to exactly -45.0 and 90.0, matching that file's "~45°/~90°" visual estimate exactly.
 IMAGE_ANGLE_OFFSET = OBJECT_BASE_HEADER_LEN  # == 105
 IMAGE_ANGLE_FIELD_FLAG = 0x1
-TEXT_BOX_TEXT_MARKER = b"\x06\x00\xbf\x00\x00\x00"
+TEXT_BOX_TEXT_PREFIX = b"\x06\x00"
+TEXT_BOX_TEXT_MARKER_LEN = 10  # 06 00 <u16 kind> 00 00 <u32 char_count>
 
 # Sticky-note (file-attachment) placements on a page are a property-bag object type that isn't
 # reachable via the normal layer-object-count-driven tree walk: on the sample where this was
@@ -292,26 +308,45 @@ def _text_score(text: str) -> tuple[int, int, int]:
     return (ascii_printable + letters + separators, ascii_printable, len(stripped))
 
 
-def _text_from_marker(blob: bytes) -> tuple[int, str] | None:
+def _decode_text_box_marker(blob: bytes, marker: int, char_len: int) -> tuple[int, str, int] | None:
+    text_off = marker + TEXT_BOX_TEXT_MARKER_LEN
+    end = text_off + char_len * 2
+    if not (0 < char_len < 10000) or end > len(blob):
+        return None
+    try:
+        raw_text = blob[text_off:end].decode("utf-16-le")
+    except UnicodeDecodeError:
+        return None
+    text = raw_text.rstrip("\x00\n")
+    if not text.strip():
+        return None
+    if _text_score(text)[0] <= 0:
+        return None
+    return text_off, text, char_len
+
+
+def _text_from_marker(blob: bytes) -> tuple[int, str, int] | None:
+    best: tuple[int, str, int] | None = None
+    best_score = (0, 0, 0)
     off = OBJECT_BASE_HEADER_LEN
     while True:
-        marker = blob.find(TEXT_BOX_TEXT_MARKER, off)
+        marker = blob.find(TEXT_BOX_TEXT_PREFIX, off)
         if marker < 0:
-            return None
-        len_off = marker + len(TEXT_BOX_TEXT_MARKER)
-        if len_off + 4 > len(blob):
-            return None
-        char_len = struct.unpack_from("<I", blob, len_off)[0]
-        text_off = len_off + 4
-        end = text_off + char_len * 2
-        if 0 < char_len < 10000 and end <= len(blob):
-            text = blob[text_off:end].decode("utf-16-le", errors="replace").rstrip("\x00\n")
-            if text.strip():
-                return text_off, text
+            return best
+        if marker + TEXT_BOX_TEXT_MARKER_LEN > len(blob):
+            return best
+        if blob[marker + 4 : marker + 6] == b"\x00\x00":
+            char_len = struct.unpack_from("<I", blob, marker + 6)[0]
+            parsed = _decode_text_box_marker(blob, marker, char_len)
+            if parsed is not None:
+                score = _text_score(parsed[1])
+                if score > best_score:
+                    best = parsed
+                    best_score = score
         off = marker + 1
 
 
-def _text_box_text(blob: bytes) -> tuple[int, str] | None:
+def _text_box_text(blob: bytes) -> tuple[int, str, int] | None:
     parsed = _text_from_marker(blob)
     if parsed is not None:
         return parsed
@@ -323,7 +358,117 @@ def _text_box_text(blob: bytes) -> tuple[int, str] | None:
     text = text.strip("\x00")
     if not text.strip():
         return None
-    return off, text.rstrip("\n")
+    return off, text.rstrip("\n"), len(text.rstrip("\n"))
+
+
+def _text_box_marker_runs(
+    blob: bytes, marker: bytes, text_len: int, start: int = OBJECT_BASE_HEADER_LEN
+) -> list[tuple[int, int, int, int]]:
+    """All local `(start, end, value, enabled)` TLV runs for a text-box object.
+
+    Text-box styling lives INSIDE the page object blob, immediately after the box text itself,
+    but uses the same TLV shape as note.note's typed text: `18 00 <tag> 00 | pad | u32 start |
+    u32 end | u32 value | u32 enabled`, with offsets local to the box's own text. Verified on
+    samples/OnlyTextTypeWritten_260701_180427.sdocx page a48f4f92: object 2 carries a font run
+    + default-color run over 0..82, plus bold 37..47 and italic 52..59 / 79..81 right after the
+    decoded UTF-16LE text payload.
+    """
+    runs = []
+    off = blob.find(marker, start)
+    while off != -1:
+        if off + RUN_MARKER_LEN <= len(blob) and blob[off + 4 : off + 6] == b"\x00\x00":
+            start_idx = struct.unpack_from("<I", blob, off + RUN_START_OFF)[0]
+            end_idx = struct.unpack_from("<I", blob, off + RUN_END_OFF)[0]
+            value = struct.unpack_from("<I", blob, off + RUN_VALUE_OFF)[0]
+            enabled = struct.unpack_from("<I", blob, off + RUN_ENABLED_OFF)[0]
+            if start_idx < end_idx <= text_len:
+                runs.append((start_idx, end_idx, value, enabled))
+        off = blob.find(marker, off + 1)
+    return runs
+
+
+def _text_box_style_runs(blob: bytes, tag: int, text_len: int, start: int) -> list[tuple[int, int, int, int]]:
+    marker = STYLE_MARKER_PREFIX + bytes([tag & 0xFF, tag >> 8])
+    return _text_box_marker_runs(blob, marker, text_len, start)
+
+
+def _text_box_rich_text(blob: bytes) -> dict | None:
+    parsed = _text_box_text(blob)
+    if parsed is None:
+        return None
+    text_off, text, raw_text_len = parsed
+    lead_trim = 0
+    text_len = len(text)
+    scan_start = text_off + raw_text_len * 2
+
+    def rebase(start: int, end: int) -> tuple[int, int] | None:
+        s, e = start - lead_trim, end - lead_trim
+        e = min(e, text_len)
+        if e <= 0 or s >= text_len or s >= e:
+            return None
+        return max(s, 0), e
+
+    runs: list[dict] = []
+    for tag, key in ((BOLD_TAG, "bold"), (ITALIC_TAG, "italic"), (UNDERLINE_TAG, "underline")):
+        for start, end, _value, enabled in _text_box_style_runs(blob, tag, raw_text_len, scan_start):
+            if enabled:
+                rb = rebase(start, end)
+                if rb is not None:
+                    runs.append({"start": rb[0], "end": rb[1], "style": key})
+
+    strike_runs = _text_box_marker_runs(blob, STRIKETHROUGH_MARKER, raw_text_len, scan_start)
+    strike_starts = {s for s, _e, _v, en in strike_runs if en in (0, 1)}
+    for start, end, _value, enabled in strike_runs:
+        if enabled == 1 and end in strike_starts:
+            rb = rebase(start, end)
+            if rb is not None:
+                runs.append({"start": rb[0], "end": rb[1], "style": "strikethrough"})
+
+    colors: list[dict] = []
+    for start, end, _value, enabled in _text_box_style_runs(blob, COLOR_TAG, raw_text_len, scan_start):
+        argb = enabled
+        if (argb >> 24) == 0xFF:
+            rb = rebase(start, end)
+            if rb is not None:
+                colors.append({
+                    "start": rb[0],
+                    "end": rb[1],
+                    "color": ((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF),
+                })
+
+    highlights: list[dict] = []
+    for start, end, _value, enabled in _text_box_style_runs(blob, HIGHLIGHT_TAG, raw_text_len, scan_start):
+        argb = enabled
+        if (argb >> 24) == 0xFF:
+            rb = rebase(start, end)
+            if rb is not None:
+                highlights.append({
+                    "start": rb[0],
+                    "end": rb[1],
+                    "color": ((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF),
+                })
+
+    font_size = None
+    font_sizes: list[dict] = []
+    font_runs = _text_box_style_runs(blob, FONT_TAG, raw_text_len, scan_start)
+    for start, end, _value, enabled in font_runs:
+        raw_f = struct.pack("<I", enabled)
+        candidate = struct.unpack("<f", raw_f)[0]
+        rb = rebase(start, end)
+        if rb is not None and candidate == candidate and 4.0 <= candidate <= 200.0:
+            font_sizes.append({"start": rb[0], "end": rb[1], "font_size": candidate})
+            if font_size is None:
+                font_size = candidate
+
+    return {
+        "text": text,
+        "text_off": text_off,
+        "runs": runs,
+        "colors": colors,
+        "highlights": highlights,
+        "font_size": font_size,
+        "font_sizes": font_sizes,
+    }
 
 
 def _read_utf16_string(data: bytes, offset: int) -> tuple[str, int] | None:
@@ -1020,20 +1165,29 @@ def scan_drawings_from_objects(
 
 
 def parse_text_boxes_from_objects(data: bytes, layers: list[dict]) -> list[dict]:
+    """Extract in-page text boxes with their local rich-text runs.
+
+    Unlike the document-wide typed text in note.note, these live directly in each page object
+    blob. The text itself uses the `06 00 <u16 kind> 00 00 <u32 char_count>` marker, while style
+    runs immediately after it reuse the same local TLV families as note.note (`18 00 <tag> 00`
+    and, if ever present, `14 00 14 00` for strikethrough). This is text/object styling only;
+    paragraph metadata such as numbered/bulleted/todo prefixes, checked-state and alignment lives
+    in note.note's paragraph-indexed records (see pysdocx.note), not in these page object blobs.
+    """
     text_boxes: list[dict] = []
     for layer in layers:
         for obj in _iter_objects(layer["objects"]):
             if obj["type"] != "text_box":
                 continue
             blob = data[obj["blob_off"] : obj["end"]]
-            parsed = _text_box_text(blob)
+            parsed = _text_box_rich_text(blob)
             if parsed is None:
                 continue
-            text_off, text = parsed
             text_boxes.append({
-                "text": text,
-                "text_off": obj["blob_off"] + text_off,
+                **parsed,
+                "text_off": obj["blob_off"] + parsed["text_off"],
                 "bbox": obj["bbox"],
+                "angle_deg": _image_rotation_deg(obj["header"], blob),
                 "object_idx": obj["idx"],
                 "object_off": obj["off"],
             })
