@@ -555,7 +555,12 @@ def _render_rich_text(
             # number/bullet matches its list text instead of towering over smaller (e.g. 11pt) runs.
             para_font_raw = next((font_size[k] for k in range(line_start, line_end) if font_size[k]), None)
             prefix_pt = para_font_raw * 1.36 if para_font_raw else fontpt
-            prefix_w = max(prefix_pt * 3.0, 44.0)
+            # Reserve a column sized to the marker's actual glyph width plus a font-proportional
+            # gap, so the text starts clear of the marker regardless of glyph (single digit vs
+            # bullet vs checkbox) instead of butting right against it.
+            prefix_corners = _measure_text(ax, renderer, inv, line_x0, y, prefix, prefix_pt, False, False)
+            prefix_text_w = prefix_corners[:, 0].max() - prefix_corners[:, 0].min()
+            prefix_w = max(prefix_text_w + prefix_pt * 0.9, prefix_pt * 2.4)
             prefix_color = TODO_DONE_COLOR if checked_todo else None
             _draw_text_segment(
                 ax,
@@ -676,12 +681,17 @@ def _render_rich_text(
             i = j
         gi += len(line) + 1
         y += rendered_line_h * line_dir
+    return y
 
 
-def render_typed_text(ax, parsed, bg_color, x0=64, y0=80, line_h=60, blank_h=34, fontpt=17,
+def render_typed_text(ax, parsed, bg_color, x0=64, y0=80, line_h=66, blank_h=48, fontpt=17,
                       default_ink=DEFAULT_INK):
-    """Draw parsed typed text with inline rich-text runs, wrapped to the page width."""
-    _render_rich_text(
+    """Draw parsed typed text with inline rich-text runs, wrapped to the page width.
+
+    Returns the y of the last baseline drawn, so the caller can grow the page to contain text
+    that runs past the nominal page height (Samsung stores this as one tall scrolling page).
+    """
+    return _render_rich_text(
         ax,
         parsed,
         x0=x0,
@@ -869,8 +879,16 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
         for table in page_tables:
             render_table(ax, table, text_color=default_ink)
         if shows_typed_text:
-            render_typed_text(ax, typed_text, page_bg, default_ink=default_ink)
+            bottom = render_typed_text(ax, typed_text, page_bg, default_ink=default_ink)
             typed_text_placed = True
+            # note.note typed text is one tall scrolling page and can run past the nominal page
+            # height; grow the axes (and the figure, so the text isn't squished) to contain it
+            # instead of letting the tail bleed past the axes onto the tick labels.
+            page_height = page_result["height"]
+            if bottom is not None and bottom + 80 > page_height:
+                new_height = bottom + 80
+                ax.set_ylim(new_height, 0)
+                fig.set_size_inches(figsize[0], figsize[1] * new_height / page_height)
         fig.tight_layout()
 
         if out_dir is not None:
