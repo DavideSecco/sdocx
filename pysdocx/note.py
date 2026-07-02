@@ -135,12 +135,14 @@ def parse_typed_text(note_bytes: bytes) -> dict | None:
     return {"text": body, "runs": runs, "colors": colors, "font_size": font_size}
 
 
-# Table cells also live in note.note (not the page). Each cell is preceded by this 10-byte marker,
-# immediately after which its UTF-16LE text begins; the cell's bottom-left corner in page coords is
-# the f64 pair at `marker - 16` (x) and `marker - 8` (y). Confirmed on benchmark page 73920cee's
-# 4x3 table ("Cell1,1"…"Cell4,3"): x in {72,557,1043}, y in {1448,1573,1699,1825}. `0x95` may be
-# table-specific — treat this as the format observed on the benchmark.
-TABLE_CELL_MARKER = b"\x06\x00\x95\x00\x00\x00\x07\x00\x00\x00"
+# Table cells also live in note.note (not the page). Each cell is preceded by a 10-byte marker:
+# `06 00 <u16 kind> 00 00 <u32 char_count>`, immediately after which its UTF-16LE text begins.
+# The cell's bottom-left corner in page coords is the f64 pair at `marker - 16` (x) and
+# `marker - 8` (y). Confirmed on benchmark page 73920cee's kind 0x95 cells ("Cell1,1"...)
+# and on Associationpages...'s kind 0x8d sparse table ("c11", "c13", "c21"...).
+TABLE_CELL_PREFIX = b"\x06\x00"
+TABLE_CELL_KINDS = frozenset({0x8D, 0x95, 0xCD})
+TABLE_CELL_MARKER_LEN = 10
 TABLE_ANCHOR_X_BACK = 16
 TABLE_ANCHOR_Y_BACK = 8
 
@@ -165,24 +167,42 @@ def parse_tables(note_bytes: bytes) -> list[dict]:
     column/row lines (Samsung tables use equal-sized cells). Returns [] if no table cells found.
     """
     cells = []
-    off = note_bytes.find(TABLE_CELL_MARKER)
+    off = note_bytes.find(TABLE_CELL_PREFIX)
     while off != -1:
-        text_start = off + len(TABLE_CELL_MARKER)
+        if off + TABLE_CELL_MARKER_LEN > len(note_bytes):
+            break
+        kind = struct.unpack_from("<H", note_bytes, off + 2)[0]
+        char_count = struct.unpack_from("<I", note_bytes, off + 6)[0]
+        if kind not in TABLE_CELL_KINDS or not (1 <= char_count <= 512):
+            off = note_bytes.find(TABLE_CELL_PREFIX, off + 1)
+            continue
+
+        text_start = off + TABLE_CELL_MARKER_LEN
+        text_end = text_start + char_count * 2
+        if text_end > len(note_bytes):
+            off = note_bytes.find(TABLE_CELL_PREFIX, off + 1)
+            continue
         end = text_start
         units = []
-        while end + 2 <= len(note_bytes):
+        while end + 2 <= text_end:
             unit = struct.unpack_from("<H", note_bytes, end)[0]
             if not (0x20 <= unit <= 0xD7FF):
                 break
             units.append(unit)
             end += 2
+        if not units:
+            off = note_bytes.find(TABLE_CELL_PREFIX, off + 1)
+            continue
+
         anchor = None
         if off - TABLE_ANCHOR_X_BACK >= 0:
             x = struct.unpack_from("<d", note_bytes, off - TABLE_ANCHOR_X_BACK)[0]
             y = struct.unpack_from("<d", note_bytes, off - TABLE_ANCHOR_Y_BACK)[0]
-            anchor = (x, y)
-        cells.append({"text": "".join(chr(u) for u in units), "anchor": anchor})
-        off = note_bytes.find(TABLE_CELL_MARKER, off + 1)
+            if 0 <= x <= 3000 and 0 <= y <= 4000:
+                anchor = (x, y)
+        if anchor is not None:
+            cells.append({"text": "".join(chr(u) for u in units), "anchor": anchor})
+        off = note_bytes.find(TABLE_CELL_PREFIX, off + 1)
 
     anchored = [c for c in cells if c["anchor"] is not None]
     if not anchored:
@@ -191,7 +211,7 @@ def parse_tables(note_bytes: bytes) -> list[dict]:
     xs = _cluster([c["anchor"][0] for c in anchored])
     ys = _cluster([c["anchor"][1] for c in anchored])
     cols, rows = len(xs), len(ys)
-    if cols < 1 or rows < 1 or rows * cols != len(cells):
+    if cols < 1 or rows < 1:
         # Grid didn't reconstruct cleanly — return the cells with their raw anchors only.
         return [{"rows": rows, "cols": cols, "bbox": None, "x_edges": xs, "y_edges": ys, "cells": cells}]
 
@@ -201,9 +221,10 @@ def parse_tables(note_bytes: bytes) -> list[dict]:
     # so the table top is one row-height above the first row's anchor.
     x_edges = [xs[0] + i * col_w for i in range(cols + 1)]
     y_edges = [ys[0] - row_h + i * row_h for i in range(rows + 1)]
-    for i, cell in enumerate(cells):
-        cell["row"] = i // cols
-        cell["col"] = i % cols
+    for cell in cells:
+        x, y = cell["anchor"]
+        cell["col"] = min(range(cols), key=lambda i: abs(xs[i] - x))
+        cell["row"] = min(range(rows), key=lambda i: abs(ys[i] - y))
     return [
         {
             "rows": rows,

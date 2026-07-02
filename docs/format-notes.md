@@ -117,27 +117,97 @@ Where `normalized_pressure = clamp(cumulative_pressure / 1400, 0, 1)`.
 
 ### Page file (`.page`)
 
-**Header:**
+The current parser treats `.page` as a real tree:
+
+```
+page header
+  layer list
+    object entry: raw_type + child_count + blob_size
+      common object header
+      type-specific payload
+      children, for container-like objects
+```
+
+This replaced the earlier "flat stroke record stream" model. In simple handwritten files the
+layer object count equals the number of strokes, so the old parser appeared to work. Mixed pages
+contain shapes/images/drawings/text-like objects interleaved with strokes; using object `blob_size`
+is the deterministic way to advance to the next record.
+
+**Page header:**
 
 | Offset | Type | Field |
 |--------|------|-------|
-| `0x00` | u32 | Base offset (`base`) |
+| `0x00` | u32 | Layer-list base offset (`base`) |
 | `0x16` | u32 | Page width |
 | `0x1A` | u32 | Page height |
 | `0x26` | u16 | UUID length (chars) |
 | `0x28` | UTF-16LE | Page UUID |
 | `0x80` | 4 x f64 | Content bounding box |
-| `base + 0x66` | u32 | Stroke count |
 
-**Stroke records** (starting at `base + 0xB5`, sequential):
+At `base`, the layer list starts with:
+
+| Offset from `base` | Type | Field |
+|--------------------|------|-------|
+| `0x00` | u16 | Layer count |
+| `0x02` | u16 | Current layer index |
+
+Each layer then carries flags, optional UUID/mtime fields, an object count, object entries, and a
+32-byte hash. In the common samples with `content_flags = 0x18`, the layer UUID and modified time
+are present before the object count.
+
+**Object entry:**
 
 | Part | Bytes | Format |
 |------|-------|--------|
-| Bounding box | 32 | 4 x f64 |
-| Metadata | 41 | byte 21: u32 data_len; byte 39: u16 n_points |
-| Start point | 16 | 2 x f64 |
-| Delta data | data_len | See below |
-| Inter-stroke | 71 | UUID + timestamp |
+| Raw object type | 1 | Build/version-dependent byte |
+| Child count | 2 | i16 |
+| Blob size | 4 | u32, exact number of bytes in the object blob |
+| Object blob | `blob_size` | Common object header + payload |
+
+**Common object header** (at the start of the object blob):
+
+| Field | Type / notes |
+|-------|--------------|
+| Total header size | u32 (`121` for normal strokes, `122` for many non-stroke objects) |
+| Data type | i16, observed `0` |
+| Variable data offset | u32, observed `105` in current samples |
+| Flag bytes | length byte + flags |
+| Field flags | length byte + flags |
+| Format version | u32, observed `4000` |
+| UUID | i16 byte length + UTF-8 bytes |
+| Modified time | i64 |
+| Bounding box | 4 x f64 |
+| Timestamp | u32 |
+| Resizable | u8/bool |
+| Attributes/payload | starts after the common fields; exact layout depends on object type |
+
+**Observed raw object types in our samples** (do not copy the external project's table blindly):
+
+| Raw | Classified as | Evidence |
+|-----|---------------|----------|
+| `1` | Stroke | Stroke payload at object bbox offset; field flags `0x6000` / variants |
+| `2` | Text box | `Associationpages...`, `OnlyTextTypeWritten...`; UTF-16 text payload with bbox in common header |
+| `3` | Imported image | `01 00 04 20` marker; newer samples carry the media index after `06 00 3e 00 00 00 02 00`, older samples also match a u16 fallback 6 bytes before marker |
+| `7` | Shape | Marker-based shape payloads in benchmark and shape samples |
+| `8` | Shape variant | Shape/line/arrow objects in shape samples |
+| `14` | Drawing | Benchmark freehand drawing; `05 00 00 00 <u32 media_index> <hash>` |
+
+The parser classifies objects primarily by payload markers, not by raw byte alone, because raw
+values vary between sample families.
+
+**Stroke object payload** (inside a raw type `1` object):
+
+The stored object bbox starts at blob offset `68`; the stroke decoder reads from there. The
+common header `total_size` determines `extra_len`:
+
+| Header total | Meaning |
+|--------------|---------|
+| `121` | Normal stroke, no extra attribute block |
+| `137` | 16-byte extra block |
+| `169` | 48-byte extra block, straight-line synthetic/highlighter cases |
+| `173` | 52-byte extra block |
+
+After `bbox + metadata + start point`, the stroke delta data follows.
 
 **Delta data layout:**
 
@@ -157,9 +227,11 @@ Where `normalized_pressure = clamp(cumulative_pressure / 1400, 0, 1)`.
 
 ### Base offset
 
-The first u32 (`base`) determines where stroke fields are located. Simple handwritten
-files have `base = 0xE3` (227). Files with embedded media (PDF, images) have a larger
-base to accommodate object descriptor records in the header.
+The first u32 (`base`) points to the layer list, not directly to stroke data. It varies with
+the page header shape (`0x90`, `0xE7`, `0x118`, `0x1C7`, ... in current samples). Older notes in
+this repo treated `base + 0x66` as a stroke count; for the common one-layer header this is
+actually where the layer object count lands. On all-stroke pages those counts happen to match,
+but mixed pages prove they are different concepts.
 
 ### Sign-magnitude encoding
 

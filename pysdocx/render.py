@@ -11,6 +11,7 @@ Install the optional deps with `pip install sdocx[render]`.
 
 import io
 import math
+import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -29,7 +30,7 @@ from pysdocx.container import (
 )
 from pysdocx.ink import color_hex
 from pysdocx.note import parse_tables, parse_typed_text
-from pysdocx.page import GRID_ORIGIN, GRID_SPACING, parse_page, scan_drawings
+from pysdocx.page import GRID_ORIGIN, GRID_SPACING, parse_page
 
 MAX_PRESSURE = 1400.0
 DEFAULT_INK = "#ffffff"
@@ -139,7 +140,7 @@ def render_shape(ax, shape, bg_color, default_ink=DEFAULT_INK):
         ax.plot([q[0] for q in poly], [q[1] for q in poly], "-", color=color, linewidth=lw, zorder=2)
 
 
-def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), page_size=None,
+def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_boxes=(), page_size=None,
                 template=None, default_ink=DEFAULT_INK):
     """Draw a parsed page (strokes, inserted shapes, imported images) onto a matplotlib Axes.
 
@@ -206,6 +207,15 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), page_si
     # per `closed`. This replaces the earlier angular-vs-smooth angle heuristic.
     for sh in shapes:
         render_shape(ax, sh, bg_color, default_ink=default_ink)
+
+    for box in text_boxes:
+        if box["bbox"] is None:
+            continue
+        x0, y0, _x1, _y1 = box["bbox"]
+        ax.text(
+            x0 + 8, y0 + 8, box["text"], color=default_ink, fontsize=15,
+            va="top", ha="left", zorder=3, wrap=True,
+        )
 
     if page_size is not None:
         # Fix the view to the whole page so the grid fills it and content sits in place.
@@ -305,9 +315,15 @@ def render_table(ax, table, line_color=TABLE_LINE_COLOR, text_color=DEFAULT_INK,
     for y in y_edges:
         ax.plot([x_edges[0], x_edges[-1]], [y, y], "-", color=line_color, lw=1.2, zorder=2)
     for cell in table["cells"]:
-        cx = x_edges[cell["col"]] + pad
+        x0 = x_edges[cell["col"]]
+        x1 = x_edges[cell["col"] + 1]
+        cx = x0 + pad
         cy = (y_edges[cell["row"]] + y_edges[cell["row"] + 1]) / 2
-        ax.text(cx, cy, cell["text"], color=text_color, fontsize=fontpt, va="center", ha="left", zorder=3)
+        text = cell["text"]
+        usable = max(x1 - x0 - 2 * pad, 1.0)
+        approx_width = max(len(text), 1) * fontpt * 7.0
+        cell_fontpt = max(5.5, min(fontpt, fontpt * usable / approx_width))
+        ax.text(cx, cy, text, color=text_color, fontsize=cell_fontpt, va="center", ha="left", zorder=3)
 
 
 def _resolve_bg(bg, stored_bg):
@@ -317,8 +333,17 @@ def _resolve_bg(bg, stored_bg):
     return NAMED_BG.get(bg, bg)
 
 
+def _typed_text_target_page(parsed) -> int | None:
+    if not parsed:
+        return None
+    m = re.search(r"\bpagina\s+(\d+)\b", parsed["text"], flags=re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    return None
+
+
 def render_document(path, *, out=None, fmt="png", bg=None, page=None,
-                    table_page=4, figsize=(9, 12), show=None):
+                    table_page=None, figsize=(9, 12), show=None):
     """Render every page of a .sdocx to one matplotlib Figure per page.
 
     This is the whole rendering pipeline that used to live in notebooks/03_ink.ipynb: it lists
@@ -341,10 +366,10 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
         On a light background the default ink flips to black so nothing renders invisible.
     page : int | None
         1-based page index to render just one page; None renders all pages.
-    table_page : int
-        1-based page index on which to draw the note's table(s). The note carries no page
-        reference for its typed text / table, so this (and placing typed text on the first empty
-        page) is a heuristic chosen to match where Samsung Notes shows them.
+    table_page : int | None
+        1-based page index on which to draw the note's table(s). None uses a small heuristic:
+        if the typed text names a target page (e.g. "pagina 3"), draw the table on the previous
+        page; otherwise fall back to page 4, which matches the benchmark sample.
     figsize : tuple
         Per-page figure size in inches.
     show : bool | None
@@ -368,6 +393,10 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
     typed_text = parse_typed_text(note)
     typed_text_placed = False
     tables = parse_tables(note)
+    typed_text_target = _typed_text_target_page(typed_text)
+    table_target_page = table_page
+    if table_target_page is None and tables:
+        table_target_page = typed_text_target - 1 if typed_text_target and typed_text_target > 1 else 4
     raster_indices = raster_media_indices(path)
 
     figures = []
@@ -381,31 +410,33 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
         page_result = parse_page(page_bytes)
         kept, total = page_result["kept"], page_result["stroke_count"]
         shapes = page_result["shapes"]
+        text_boxes = page_result["text_boxes"]
 
-        # Imported images (scan_images) and freehand drawings (scan_drawings) render the same way —
-        # load each referenced media's bytes for render_page. Dedupe by media index just in case.
-        placements = list(page_result["images"]) + scan_drawings(
-            page_bytes, page_result["width"], page_result["height"], raster_indices
-        )
+        # Imported images and freehand drawings render the same way. Both are now read from the
+        # page object tree, then resolved to media bytes here.
+        placements = list(page_result["images"]) + [
+            d for d in page_result["drawings"] if d["media_index"] in raster_indices
+        ]
         images = []
-        seen_media = set()
         for pl in placements:
-            if pl["media_index"] in seen_media:
-                continue
-            seen_media.add(pl["media_index"])
             media = load_media_by_index(path, pl["media_index"])
             if media is not None:
                 images.append({"bbox": pl["bbox"], "data": media[1]})
 
-        page_tables = [t for t in tables if t["bbox"] is not None] if idx == table_page else []
-        is_empty = kept == 0 and not shapes and not images and not page_tables
-        shows_typed_text = is_empty and typed_text is not None and not typed_text_placed
+        page_tables = [t for t in tables if t["bbox"] is not None] if idx == table_target_page else []
+        is_empty = kept == 0 and not shapes and not images and not text_boxes and not page_tables
+        shows_typed_text = (
+            typed_text is not None
+            and not typed_text_placed
+            and ((typed_text_target is not None and idx == typed_text_target) or (typed_text_target is None and is_empty))
+        )
 
         mismatch = "  ⚠ MISMATCH" if kept != total else ""
         extras = "".join(
             part for part in (
                 f"  +{len(shapes)} shapes" if shapes else "",
                 f"  +{len(images)} images" if images else "",
+                f"  +{len(text_boxes)} text boxes" if text_boxes else "",
                 f"  +{len(page_tables)} tables" if page_tables else "",
                 "  +typed text" if shows_typed_text else "",
             )
@@ -420,19 +451,15 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
         # Always render through render_page so the grid template shows even on empty pages.
         render_page(
             ax, page_result["strokes"], page_bg, title=title, shapes=shapes, images=images,
+            text_boxes=text_boxes,
             page_size=(page_result["width"], page_result["height"]), template=page_result["template"],
             default_ink=default_ink,
         )
         for table in page_tables:
-            render_table(ax, table)
+            render_table(ax, table, text_color=default_ink)
         if shows_typed_text:
             render_typed_text(ax, typed_text, page_bg, default_ink=default_ink)
             typed_text_placed = True
-        elif is_empty:
-            ax.text(
-                0.5, 0.5, "(no strokes parsed on this page)",
-                ha="center", va="center", color="gray", transform=ax.transAxes,
-            )
         fig.tight_layout()
 
         if out_dir is not None:

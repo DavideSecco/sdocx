@@ -1,10 +1,10 @@
-"""Parse a .page file's strokes.
+"""Parse a .page file's layer/object tree and strokes.
 
 Ported from crates/sdocx/src/page.rs (parse_page / parse_stroke) — the
 notebooks' original parse_strokes() only knew the base layout and not the
 extra_len attribute block or the StartPointMinusThree variant, which is why
-it desyncs on some benchmark pages. Keep this in sync with page.rs; it is the
-validated reference implementation.
+it desyncs on some benchmark pages. The Python reference now walks the stored
+layer/object tree first, then decodes only true stroke objects.
 """
 
 import math
@@ -13,9 +13,10 @@ import struct
 
 from pysdocx.ink import decode_coordinates, decode_trailing
 
-PRE_STROKE_RECORD_LEN = 71
-STROKE_HEADER_LEN = 89  # bbox(32) + meta(41) + start(16)
-EXTRA_LEN_BIAS = 0x79  # byte value at record+3 when no extras are present
+OBJECT_ENTRY_LEN = 7  # raw_type(u8) + child_count(i16) + blob_size(u32)
+OBJECT_BASE_HEADER_LEN = 105
+OBJECT_BBOX_OFFSET = 68
+STROKE_OBJECT_BASE_TOTAL_SIZE = 121
 
 # Inserted-shape objects (rect/ellipse/line/regular polygon) store their outline as
 # absolute f64 vertices, NOT delta-encoded paths, so the normal stroke parser can't read
@@ -83,6 +84,8 @@ SHAPE_OPEN_RATIO = 0.05
 IMAGE_MARKER = b"\x01\x00\x04\x20"
 IMAGE_MEDIA_INDEX_BACK = 6  # u16 media index this many bytes before the marker
 IMAGE_BBOX_FWD = 11  # 4 x f64 bbox this many bytes after the marker
+IMAGE_MEDIA_REF_MARKER = b"\x06\x00\x3e\x00\x00\x00\x02\x00"
+TEXT_BOX_TEXT_MARKER = b"\x06\x00\xbf\x00\x00\x00"
 
 # Page background templates. The builtin template id lives at a base-dependent offset in the
 # page header (see page_template(), ported from crates/sdocx/src/page.rs::page_template). Only
@@ -195,51 +198,385 @@ def looks_like_flat_synthetic_line(parsed: dict) -> bool:
     return decoded_len < FLAT_LINE_MAX_DECODED_FRACTION * bbox_width
 
 
-# Object records (imported images, freehand drawings, tables, sticky-memos) are interleaved with
-# strokes in the record stream but don't follow the stroke layout, so the stroke parser misreads
-# their length and jumps to a bogus offset — desyncing the stream and losing every following
-# stroke (e.g. the "PROMEMORIA ADESIVO"/"TABELLA" labels on benchmark page 73920cee, and the shape
-# caption on f5b90a84). When a record fails to parse as a stroke, we resync by scanning forward for
-# the next offset that parses as a *clean* stroke (bbox-consistent, on-page, sane point/byte
-# counts). This only ever triggers on pages that already desync — pages that parse cleanly (p1/p2,
-# the pen/highlighter samples) need zero resyncs and are byte-for-byte unchanged.
-STROKE_RESYNC_MAX_SCAN = 40000
-STROKE_RESYNC_MAX_POINTS = 4000
-STROKE_RESYNC_MIN_DATA_LEN = 8
-STROKE_RESYNC_MAX_DATA_LEN = 20000
+# Sanity cap for parsed stroke payloads. Object sizes now provide record boundaries, so this is
+# only a validity guard.
+STROKE_MAX_POINTS = 4000
+
+# Raw object bytes are build/version dependent and do not match the external RE project's table
+# on our Samsung Notes samples. Treat this as a conservative fallback only; _classify_page_object
+# prefers payload markers, which are what identify shape/image/drawing reliably in our corpus.
+RAW_OBJECT_TYPE_NAMES = {
+    1: "stroke",
+    2: "object_2",
+    3: "object_3",
+    4: "container",
+    7: "object_7",
+    8: "object_8",
+    11: "pdf",
+    13: "object_13",
+    14: "object_14",
+    15: "stroke_v2",
+    20: "table",
+    22: "object_22",
+    23: "object_23",
+}
 
 
-def _clean_stroke_at(data: bytes, record_off: int, width: int, height: int) -> dict | None:
-    """Parse the record at `record_off`; return it only if it's an unambiguously clean stroke."""
-    if record_off + PRE_STROKE_RECORD_LEN + STROKE_HEADER_LEN > len(data):
-        return None
-    extra_len_byte = data[record_off + 3] if record_off + 3 < len(data) else EXTRA_LEN_BIAS
-    extra_len = max(extra_len_byte - EXTRA_LEN_BIAS, 0)
-    off = record_off + PRE_STROKE_RECORD_LEN
-    parsed = _select_layout(
-        parse_stroke(data, off, extra_len, "current"),
-        parse_stroke(data, off, extra_len, "shifted"),
-    )
-    if (
-        parsed is not None
-        and parsed["fits_bbox"]
-        and within_page_bounds(parsed["points"], width, height)
-        and 2 <= parsed["n_points_field"] <= STROKE_RESYNC_MAX_POINTS
-        and STROKE_RESYNC_MIN_DATA_LEN < parsed["data_len"] < STROKE_RESYNC_MAX_DATA_LEN
-    ):
+def _printable_utf16_runs(data: bytes, start: int = 0, min_chars: int = 3) -> list[tuple[int, str]]:
+    runs: list[tuple[int, str]] = []
+    i = start
+    while i + 2 <= len(data):
+        unit = struct.unpack_from("<H", data, i)[0]
+        if unit == 0x0A or 0x20 <= unit <= 0xD7FF:
+            j = i
+            chars = []
+            while j + 2 <= len(data):
+                unit = struct.unpack_from("<H", data, j)[0]
+                if not (unit == 0x0A or 0x20 <= unit <= 0xD7FF):
+                    break
+                chars.append(chr(unit))
+                j += 2
+            text = "".join(chars)
+            if len(text) >= min_chars and any(ch.isalnum() for ch in text):
+                runs.append((i, text))
+            i = j + 2
+        else:
+            i += 2
+    return runs
+
+
+def _text_score(text: str) -> tuple[int, int, int]:
+    stripped = text.strip()
+    if not stripped:
+        return (0, 0, 0)
+    ascii_printable = sum(1 for ch in stripped if ch == "\n" or 0x20 <= ord(ch) <= 0x7E)
+    letters = sum(1 for ch in stripped if ch.isalpha())
+    separators = sum(1 for ch in stripped if ch.isspace() or ch in ".,;:!?'-_/()")
+    return (ascii_printable + letters + separators, ascii_printable, len(stripped))
+
+
+def _text_from_marker(blob: bytes) -> tuple[int, str] | None:
+    off = OBJECT_BASE_HEADER_LEN
+    while True:
+        marker = blob.find(TEXT_BOX_TEXT_MARKER, off)
+        if marker < 0:
+            return None
+        len_off = marker + len(TEXT_BOX_TEXT_MARKER)
+        if len_off + 4 > len(blob):
+            return None
+        char_len = struct.unpack_from("<I", blob, len_off)[0]
+        text_off = len_off + 4
+        end = text_off + char_len * 2
+        if 0 < char_len < 10000 and end <= len(blob):
+            text = blob[text_off:end].decode("utf-16-le", errors="replace").rstrip("\x00\n")
+            if text.strip():
+                return text_off, text
+        off = marker + 1
+
+
+def _text_box_text(blob: bytes) -> tuple[int, str] | None:
+    parsed = _text_from_marker(blob)
+    if parsed is not None:
         return parsed
-    return None
+
+    runs = _printable_utf16_runs(blob, OBJECT_BASE_HEADER_LEN, min_chars=3)
+    if not runs:
+        return None
+    off, text = max(runs, key=lambda item: _text_score(item[1]))
+    text = text.strip("\x00")
+    if not text.strip():
+        return None
+    return off, text.rstrip("\n")
 
 
-def _next_stroke_record_off(data: bytes, start: int, width: int, height: int) -> int | None:
-    """Scan forward from `start` for the next offset that parses as a clean stroke record."""
-    record_off = start
-    end = min(len(data), start + STROKE_RESYNC_MAX_SCAN)
-    while record_off <= end:
-        if _clean_stroke_at(data, record_off, width, height) is not None:
-            return record_off
-        record_off += 1
-    return None
+def _read_utf16_string(data: bytes, offset: int) -> tuple[str, int] | None:
+    if offset + 2 > len(data):
+        return None
+    char_len = struct.unpack_from("<h", data, offset)[0]
+    if char_len < 0:
+        return None
+    start = offset + 2
+    end = start + char_len * 2
+    if end > len(data):
+        return None
+    return data[start:end].decode("utf-16-le", errors="replace"), end
+
+
+def _read_utf8_string(data: bytes, offset: int) -> tuple[str, int] | None:
+    if offset + 2 > len(data):
+        return None
+    byte_len = struct.unpack_from("<h", data, offset)[0]
+    if byte_len < 0:
+        return None
+    start = offset + 2
+    end = start + byte_len
+    if end > len(data):
+        return None
+    return data[start:end].split(b"\x00", 1)[0].decode("utf-8", errors="replace"), end
+
+
+def _parse_object_header(blob: bytes) -> dict | None:
+    """Parse the common object header at the start of an object blob.
+
+    The layer stream gives reliable object boundaries: `raw_type, child_count, size, blob`.
+    The blob then starts with Samsung's common object header. In the current samples the bbox
+    starts at byte 68 and variable data at byte 105, but this reader still follows the flag
+    lengths so future variants are easier to spot in diagnostics.
+    """
+    if len(blob) < OBJECT_BASE_HEADER_LEN:
+        return None
+
+    try:
+        pos = 0
+        total_size = struct.unpack_from("<I", blob, pos)[0]
+        pos += 4
+        data_type = struct.unpack_from("<h", blob, pos)[0]
+        pos += 2
+        var_data_offset = struct.unpack_from("<I", blob, pos)[0]
+        pos += 4
+
+        flag_len = blob[pos]
+        pos += 1
+        flags = int.from_bytes(blob[pos : min(pos + flag_len, len(blob))], "little")
+        pos += flag_len
+
+        field_len = blob[pos]
+        pos += 1
+        field_flags = int.from_bytes(blob[pos : min(pos + field_len, len(blob))], "little")
+        pos += field_len
+
+        format_version = struct.unpack_from("<I", blob, pos)[0]
+        pos += 4
+        uuid_result = _read_utf8_string(blob, pos)
+        if uuid_result is None:
+            return None
+        uuid, pos = uuid_result
+
+        modified_time = struct.unpack_from("<q", blob, pos)[0]
+        pos += 8
+        bbox = struct.unpack_from("<4d", blob, pos)
+        pos += 32
+        timestamp = struct.unpack_from("<I", blob, pos)[0]
+        pos += 4
+        resizable = bool(blob[pos])
+        pos += 1
+
+        return {
+            "total_size": total_size,
+            "data_type": data_type,
+            "var_data_offset": var_data_offset,
+            "flag_len": flag_len,
+            "flags": flags,
+            "field_len": field_len,
+            "field_flags": field_flags,
+            "format_version": format_version,
+            "uuid": uuid,
+            "modified_time": modified_time,
+            "bbox": bbox,
+            "timestamp": timestamp,
+            "resizable": resizable,
+            "attributes_offset": pos,
+        }
+    except (IndexError, struct.error):
+        return None
+
+
+def _classify_page_object(raw_type: int, blob: bytes) -> str:
+    if raw_type == 1:
+        return "stroke"
+    if IMAGE_MARKER in blob:
+        return "image"
+    if raw_type == 2 and _text_box_text(blob) is not None:
+        return "text_box"
+    if SHAPE_TYPE_MARKER in blob or ARROW_SHAFT_MARKER in blob:
+        return "shape"
+    if DRAWING_MARKER in blob:
+        return "drawing"
+    return RAW_OBJECT_TYPE_NAMES.get(raw_type, f"type_{raw_type}")
+
+
+def _parse_stroke_object(data: bytes, blob_off: int, blob: bytes, width: int, height: int) -> tuple[dict | None, str]:
+    header = _parse_object_header(blob)
+    if header is None:
+        return None, "dropped_bad_object_header"
+
+    extra_len = max(header["total_size"] - STROKE_OBJECT_BASE_TOTAL_SIZE, 0)
+    stroke_off = blob_off + OBJECT_BBOX_OFFSET
+    current = parse_stroke(data, stroke_off, extra_len, "current")
+    shifted = parse_stroke(data, stroke_off, extra_len, "shifted")
+    parsed = _select_layout(current, shifted)
+
+    # The point-count cap only guards the *recovered-points* fallback (no trustworthy header
+    # bbox, so a garbage decode could still produce a plausible-looking but huge point cloud).
+    # When the header bbox is both bbox-consistent AND page-scaled, a large point count is real
+    # evidence of a real stroke, not garbage — e.g. quiz.sdocx has one legitimate 23038-point
+    # stroke (dense scribbling on a long scrollable page) that this cap used to wrongly drop.
+    trusted_bbox = parsed is not None and parsed["fits_bbox"] and _bbox_is_page_scaled(parsed["bbox"], width, height)
+    accepted = parsed is not None and (
+        trusted_bbox
+        or (parsed["n_points_field"] <= STROKE_MAX_POINTS and within_page_bounds(parsed["points"], width, height))
+    )
+    if not accepted:
+        return parsed, "dropped_invalid_stroke_payload"
+
+    if trusted_bbox:
+        if looks_like_flat_synthetic_line(parsed):
+            x0, y0, x1, y1 = parsed["bbox"]
+            parsed["points"] = [(x0, y0), (x1, y1)]
+            outcome = "kept_flat_line"
+        else:
+            outcome = "kept"
+    else:
+        parsed["bbox"] = bbox_of(parsed["points"])
+        outcome = "kept_recovered_bbox"
+
+    parsed["object_header"] = header
+    parsed["object_blob_off"] = blob_off
+    return parsed, outcome
+
+
+def _stroke_attempt(idx: int, parsed: dict, outcome: str, obj: dict) -> dict:
+    return {
+        "idx": idx,
+        "object_idx": obj["idx"],
+        "object_type": obj["raw_type"],
+        "object_off": obj["off"],
+        "extra_len": parsed["extra_len"],
+        "layout": parsed["layout"],
+        "n_points_field": parsed["n_points_field"],
+        "n_points_decoded": len(parsed["points"]),
+        "pen_width": parsed["pen_width"],
+        "tool_id": parsed["tool_id"],
+        "broad_pen": parsed["broad_pen"],
+        "color": parsed["color"],
+        "bbox": parsed["bbox"],
+        "n_coord_bytes": parsed["n_coord_bytes"],
+        "data_len": parsed["data_len"],
+        "outcome": outcome,
+    }
+
+
+def _parse_objects(data: bytes, pos: int, count: int, width: int, height: int, depth: int = 0) -> tuple[list[dict], int]:
+    objects: list[dict] = []
+    for idx in range(count):
+        if pos + OBJECT_ENTRY_LEN > len(data):
+            break
+        off = pos
+        raw_type = data[pos]
+        child_count = struct.unpack_from("<h", data, pos + 1)[0]
+        blob_size = struct.unpack_from("<I", data, pos + 3)[0]
+        blob_off = pos + OBJECT_ENTRY_LEN
+        blob_end = blob_off + blob_size
+        if blob_end > len(data):
+            break
+
+        blob = data[blob_off:blob_end]
+        header = _parse_object_header(blob)
+        obj = {
+            "idx": idx,
+            "off": off,
+            "blob_off": blob_off,
+            "end": blob_end,
+            "raw_type": raw_type,
+            "type": _classify_page_object(raw_type, blob),
+            "child_count": child_count,
+            "size": blob_size,
+            "header": header,
+            "bbox": header["bbox"] if header else None,
+            "children": [],
+        }
+        pos = blob_end
+        if child_count > 0 and depth < 16:
+            obj["children"], pos = _parse_objects(data, pos, child_count, width, height, depth + 1)
+        objects.append(obj)
+    return objects, pos
+
+
+def _iter_objects(objects: list[dict]):
+    for obj in objects:
+        yield obj
+        yield from _iter_objects(obj["children"])
+
+
+def parse_page_tree(data: bytes, width: int, height: int, base: int) -> dict:
+    """Parse the layer/object tree using stored object sizes instead of stroke resync."""
+    if base + 4 > len(data):
+        return {"layers": [], "object_count": 0}
+
+    pos = base
+    layer_count, current_layer_index = struct.unpack_from("<HH", data, pos)
+    pos += 4
+
+    layers: list[dict] = []
+    object_count = 0
+    for layer_idx in range(layer_count):
+        if pos + 4 > len(data):
+            break
+        layer_prefix = struct.unpack_from("<I", data, pos)[0]
+        pos += 4
+        layer_off = pos
+        if pos + 12 > len(data):
+            break
+        next_offset = struct.unpack_from("<I", data, pos)[0]
+        pos += 4
+        flag1, flag2, flag3, content_flags = struct.unpack_from("<BBBB", data, pos)
+        pos += 4
+        layer_flags = struct.unpack_from("<I", data, pos)[0]
+        pos += 4
+
+        layer_uuid = ""
+        modified_time = None
+        if content_flags & 0x01:
+            pos += 1
+        if content_flags & 0x02:
+            pos += 4
+        if content_flags & 0x04:
+            result = _read_utf16_string(data, pos)
+            if result is None:
+                break
+            _, pos = result
+        if content_flags & 0x08:
+            result = _read_utf16_string(data, pos)
+            if result is None:
+                break
+            layer_uuid, pos = result
+        if content_flags & 0x10:
+            if pos + 8 > len(data):
+                break
+            modified_time = struct.unpack_from("<q", data, pos)[0]
+            pos += 8
+        if content_flags & 0x20:
+            pos += 4
+
+        if pos + 4 > len(data):
+            break
+        layer_object_count = struct.unpack_from("<I", data, pos)[0]
+        pos += 4
+        objects, pos = _parse_objects(data, pos, layer_object_count, width, height)
+        object_count += sum(1 for _ in _iter_objects(objects))
+
+        layer_hash = None
+        if pos + 32 <= len(data):
+            layer_hash = data[pos : pos + 32].hex()
+            pos += 32
+
+        layers.append({
+            "idx": layer_idx,
+            "off": layer_off,
+            "prefix": layer_prefix,
+            "next_offset": next_offset,
+            "flags": (flag1, flag2, flag3),
+            "content_flags": content_flags,
+            "layer_flags": layer_flags,
+            "uuid": layer_uuid,
+            "modified_time": modified_time,
+            "object_count": layer_object_count,
+            "objects": objects,
+            "hash": layer_hash,
+            "current": layer_idx == current_layer_index,
+        })
+
+    return {"layers": layers, "object_count": object_count, "current_layer_index": current_layer_index}
 
 
 def parse_stroke(data: bytes, off: int, extra_len: int, layout: str) -> dict | None:
@@ -342,7 +679,13 @@ def page_template(data: bytes) -> dict | None:
 
 
 def parse_page(data: bytes) -> dict:
-    """Parse a .page file's header + strokes, returning per-stroke diagnostics for every attempt."""
+    """Parse a .page file's header + layer/object tree + strokes.
+
+    The layer stream stores deterministic object boundaries (`type, child_count, size, blob`).
+    Older code treated that same stream as a flat stroke list and resynced byte-by-byte whenever
+    it hit an interleaved object. We now walk the object tree first and decode only raw type-1
+    objects as strokes, so mixed pages don't lose handwriting between non-stroke records.
+    """
     if len(data) < 0xA0:
         raise ValueError("page file too short for header")
 
@@ -356,97 +699,25 @@ def parse_page(data: bytes) -> dict:
 
     content_bbox = struct.unpack_from("<4d", data, 0x80)
 
-    sc_off = base + 0x66
-    if sc_off + 4 > len(data):
-        raise ValueError("page file too short for stroke count")
-    stroke_count = struct.unpack_from("<I", data, sc_off)[0]
+    tree = parse_page_tree(data, width, height, base)
 
     strokes = []
     attempts = []
-    resyncs = 0
-    record_off = base + 0xB5 - PRE_STROKE_RECORD_LEN
-
+    stroke_count = 0
     idx = 0
-    guard = 0
-    max_iterations = stroke_count * 3 + 16  # allow room for resyncs; bounds the loop
-    while len(strokes) < stroke_count and guard < max_iterations:
-        guard += 1
-        extra_len_byte = data[record_off + 3] if record_off + 3 < len(data) else EXTRA_LEN_BIAS
-        extra_len = max(extra_len_byte - EXTRA_LEN_BIAS, 0)
-
-        off = record_off + PRE_STROKE_RECORD_LEN
-        if off + STROKE_HEADER_LEN + extra_len > len(data):
-            break
-
-        current = parse_stroke(data, off, extra_len, "current")
-        shifted = parse_stroke(data, off, extra_len, "shifted")
-        parsed = _select_layout(current, shifted)
-
-        # A misdecoded record can otherwise slip through in two ways: (a) a wildly implausible
-        # point count (seen: 4129 points, bbox spanning nearly the whole page), or (b) a garbage
-        # header bbox so large (seen: ~1e150) that it trivially "contains" any points, making
-        # fits_bbox vacuously True. Either way it's accepted as one bogus giant stroke, drawing a
-        # garbage scribble AND eating whatever real strokes (handwriting) were in that byte range.
-        # The resync validator (_clean_stroke_at) already caps the point count; mirror that cap
-        # here and additionally require the bbox itself to be page-scaled before trusting it, so
-        # such records fall through to resync instead of being accepted directly.
-        accepted = (
-            parsed is not None
-            and parsed["n_points_field"] <= STROKE_RESYNC_MAX_POINTS
-            and (
-                (parsed["fits_bbox"] and _bbox_is_page_scaled(parsed["bbox"], width, height))
-                or within_page_bounds(parsed["points"], width, height)
+    for layer in tree["layers"]:
+        for obj in _iter_objects(layer["objects"]):
+            if obj["raw_type"] != 1:
+                continue
+            stroke_count += 1
+            parsed, outcome = _parse_stroke_object(
+                data, obj["blob_off"], data[obj["blob_off"] : obj["end"]], width, height
             )
-        )
-        if not accepted:
-            # This record isn't a stroke (an interleaved object, or garbage from a prior desync).
-            # Resync onto the next clean stroke record instead of trusting its bogus length.
-            resync_off = _next_stroke_record_off(data, record_off + 1, width, height)
-            if resync_off is None:
-                break
-            record_off = resync_off
-            resyncs += 1
-            continue
-
-        record_off = parsed["next_record_off"]
-
-        # Trust the header bbox only if it's both bbox-consistent AND page-scaled — an accepted
-        # record whose bbox is vacuously "fits" (garbage-huge) but slipped in via the
-        # within_page_bounds fallback must still get its bbox recomputed from the real points.
-        trusted_bbox = parsed["fits_bbox"] and _bbox_is_page_scaled(parsed["bbox"], width, height)
-
-        outcome = "dropped"
-        if trusted_bbox:
-            if looks_like_flat_synthetic_line(parsed):
-                x0, y0, x1, y1 = parsed["bbox"]
-                parsed["points"] = [(x0, y0), (x1, y1)]
-                outcome = "kept_flat_line"
-            else:
-                outcome = "kept"
+            if parsed is None or not outcome.startswith("kept"):
+                continue
             strokes.append(parsed)
-        else:
-            parsed["bbox"] = bbox_of(parsed["points"])
-            strokes.append(parsed)
-            outcome = "kept_recovered_bbox"
-
-        attempts.append(
-            {
-                "idx": idx,
-                "extra_len": parsed["extra_len"],
-                "layout": parsed["layout"],
-                "n_points_field": parsed["n_points_field"],
-                "n_points_decoded": len(parsed["points"]),
-                "pen_width": parsed["pen_width"],
-                "tool_id": parsed["tool_id"],
-                "broad_pen": parsed["broad_pen"],
-                "color": parsed["color"],
-                "bbox": parsed["bbox"],
-                "n_coord_bytes": parsed["n_coord_bytes"],
-                "data_len": parsed["data_len"],
-                "outcome": outcome,
-            }
-        )
-        idx += 1
+            attempts.append(_stroke_attempt(idx, parsed, outcome, obj))
+            idx += 1
 
     return {
         "uuid": uuid,
@@ -455,13 +726,16 @@ def parse_page(data: bytes) -> dict:
         "height": height,
         "template": page_template(data),
         "content_bbox": content_bbox,
+        "layers": tree["layers"],
+        "object_count": tree["object_count"],
         "stroke_count": stroke_count,
         "attempted": len(attempts),
-        "resyncs": resyncs,
         "kept": len(strokes),
         "strokes": strokes,
-        "shapes": parse_shapes(data, width, height),
-        "images": scan_images(data, width, height),
+        "shapes": parse_shapes_from_objects(data, width, height, tree["layers"]),
+        "images": scan_images_from_objects(data, width, height, tree["layers"]),
+        "drawings": scan_drawings_from_objects(data, width, height, tree["layers"]),
+        "text_boxes": parse_text_boxes_from_objects(data, tree["layers"]),
         "attempts": attempts,
     }
 
@@ -483,7 +757,7 @@ def scan_images(data: bytes, width: int, height: int) -> list[dict]:
         off = i + 1
         if i - IMAGE_MEDIA_INDEX_BACK < 0 or i + IMAGE_BBOX_FWD + 32 > len(data):
             continue
-        media_index = struct.unpack_from("<H", data, i - IMAGE_MEDIA_INDEX_BACK)[0]
+        media_index, media_index_off, media_index_size = _image_media_index(data, i, len(data))
         bbox = struct.unpack_from("<4d", data, i + IMAGE_BBOX_FWD)
         x_min, y_min, x_max, y_max = bbox
         if (
@@ -493,7 +767,62 @@ def scan_images(data: bytes, width: int, height: int) -> list[dict]:
             and x_max - x_min > 20
             and y_max - y_min > 20
         ):
-            images.append({"media_index": media_index, "bbox": bbox, "off": i})
+            images.append({
+                "media_index": media_index,
+                "media_index_off": media_index_off,
+                "media_index_size": media_index_size,
+                "bbox": bbox,
+                "off": i,
+            })
+    return images
+
+
+def _image_media_index(data: bytes, marker: int, limit: int) -> tuple[int, int, int]:
+    search_end = min(limit, marker + 180)
+    ref = data.find(IMAGE_MEDIA_REF_MARKER, marker, search_end)
+    if ref >= 0 and ref + len(IMAGE_MEDIA_REF_MARKER) + 4 <= limit:
+        off = ref + len(IMAGE_MEDIA_REF_MARKER)
+        return struct.unpack_from("<I", data, off)[0], off, 4
+    off = marker - IMAGE_MEDIA_INDEX_BACK
+    return struct.unpack_from("<H", data, off)[0], off, 2
+
+
+def scan_images_from_objects(data: bytes, width: int, height: int, layers: list[dict]) -> list[dict]:
+    """Find imported-image placements inside parsed object blobs."""
+    images: list[dict] = []
+    for layer in layers:
+        for obj in _iter_objects(layer["objects"]):
+            if obj["type"] != "image":
+                continue
+            blob = data[obj["blob_off"] : obj["end"]]
+            off = 0
+            while True:
+                rel = blob.find(IMAGE_MARKER, off)
+                if rel < 0:
+                    break
+                off = rel + 1
+                i = obj["blob_off"] + rel
+                if i - IMAGE_MEDIA_INDEX_BACK < obj["blob_off"] or i + IMAGE_BBOX_FWD + 32 > obj["end"]:
+                    continue
+                media_index, media_index_off, media_index_size = _image_media_index(data, i, obj["end"])
+                bbox = struct.unpack_from("<4d", data, i + IMAGE_BBOX_FWD)
+                x_min, y_min, x_max, y_max = bbox
+                if (
+                    all(math.isfinite(v) for v in bbox)
+                    and 0 <= x_min < x_max <= width + 5
+                    and 0 <= y_min < y_max <= height + 5
+                    and x_max - x_min > 20
+                    and y_max - y_min > 20
+                ):
+                    images.append({
+                        "media_index": media_index,
+                        "media_index_off": media_index_off,
+                        "media_index_size": media_index_size,
+                        "bbox": bbox,
+                        "off": i,
+                        "object_idx": obj["idx"],
+                        "object_off": obj["off"],
+                    })
     return images
 
 
@@ -529,7 +858,8 @@ def scan_drawings(data: bytes, width: int, height: int, raster_indices: set[int]
         off = i + 1
         if i + 8 + DRAWING_HASH_LEN > len(data):
             continue
-        media_index = struct.unpack_from("<I", data, i + 4)[0]
+        media_index_off = i + 4
+        media_index = struct.unpack_from("<I", data, media_index_off)[0]
         if media_index not in raster_indices:
             continue
         if len(set(data[i + 8 : i + 8 + DRAWING_HASH_LEN])) < DRAWING_HASH_MIN_DISTINCT:
@@ -549,8 +879,95 @@ def scan_drawings(data: bytes, width: int, height: int, raster_indices: set[int]
             ):
                 bbox = (x_min, y_min, x_max, y_max)  # keep the last (closest) plausible bbox
         if bbox is not None:
-            drawings.append({"media_index": media_index, "bbox": bbox, "off": i})
+            drawings.append({
+                "media_index": media_index,
+                "media_index_off": media_index_off,
+                "media_index_size": 4,
+                "bbox": bbox,
+                "off": i,
+            })
     return drawings
+
+
+def _valid_drawing_bbox(bbox: tuple[float, float, float, float], width: int, height: int) -> bool:
+    x_min, y_min, x_max, y_max = bbox
+    return (
+        all(math.isfinite(v) for v in bbox)
+        and 1 <= x_min < x_max <= width * 1.1
+        and 1 <= y_min < y_max <= height * 1.1
+        and x_max - x_min > 60
+        and y_max - y_min > 60
+    )
+
+
+def scan_drawings_from_objects(
+    data: bytes,
+    width: int,
+    height: int,
+    layers: list[dict],
+    raster_indices: set[int] | None = None,
+) -> list[dict]:
+    """Find drawing placements inside parsed object blobs, using the object bbox as placement."""
+    drawings: list[dict] = []
+    for layer in layers:
+        for obj in _iter_objects(layer["objects"]):
+            if obj["type"] != "drawing":
+                continue
+            blob = data[obj["blob_off"] : obj["end"]]
+            rel = blob.find(DRAWING_MARKER)
+            if rel < 0:
+                continue
+            i = obj["blob_off"] + rel
+            if i + 8 + DRAWING_HASH_LEN > obj["end"]:
+                continue
+            media_index_off = i + 4
+            media_index = struct.unpack_from("<I", data, media_index_off)[0]
+            if raster_indices is not None and media_index not in raster_indices:
+                continue
+            if len(set(data[i + 8 : i + 8 + DRAWING_HASH_LEN])) < DRAWING_HASH_MIN_DISTINCT:
+                continue
+            bbox = obj["bbox"]
+            if bbox is None or not _valid_drawing_bbox(bbox, width, height):
+                bbox = None
+                for b in range(max(i - DRAWING_BBOX_BACK_MAX, obj["blob_off"]), i - DRAWING_BBOX_BACK_MIN):
+                    candidate = [_read_f64(data, b + k) for k in (0, 8, 16, 24)]
+                    if any(v is None for v in candidate):
+                        continue
+                    candidate_bbox = tuple(candidate)
+                    if _valid_drawing_bbox(candidate_bbox, width, height):
+                        bbox = candidate_bbox
+            if bbox is not None:
+                drawings.append({
+                    "media_index": media_index,
+                    "media_index_off": media_index_off,
+                    "media_index_size": 4,
+                    "bbox": bbox,
+                    "off": i,
+                    "object_idx": obj["idx"],
+                    "object_off": obj["off"],
+                })
+    return drawings
+
+
+def parse_text_boxes_from_objects(data: bytes, layers: list[dict]) -> list[dict]:
+    text_boxes: list[dict] = []
+    for layer in layers:
+        for obj in _iter_objects(layer["objects"]):
+            if obj["type"] != "text_box":
+                continue
+            blob = data[obj["blob_off"] : obj["end"]]
+            parsed = _text_box_text(blob)
+            if parsed is None:
+                continue
+            text_off, text = parsed
+            text_boxes.append({
+                "text": text,
+                "text_off": obj["blob_off"] + text_off,
+                "bbox": obj["bbox"],
+                "object_idx": obj["idx"],
+                "object_off": obj["off"],
+            })
+    return text_boxes
 
 
 def _nearest_shape_color(data: bytes, off: int) -> tuple[int, int, int] | None:
@@ -677,6 +1094,53 @@ def _shape_width(data: bytes, marker: int) -> float | None:
     return None
 
 
+def _parse_shape_marker(data: bytes, marker: int, width: int, height: int) -> dict | None:
+    if marker + 11 + 32 > len(data):
+        return None
+    type_code = struct.unpack_from("<I", data, marker + 7)[0]
+    bbox = struct.unpack_from("<4d", data, marker + 11)
+    x_min, y_min, x_max, y_max = bbox
+    if not (
+        all(math.isfinite(v) for v in bbox)
+        and -5 <= x_min < x_max <= width + 5
+        and -5 <= y_min < y_max <= height + 5
+    ):
+        return None
+
+    shape_type = SHAPE_TYPES.get(type_code, "polygon")
+    color = _shape_color_before_marker(data, marker)
+    pen_width = _shape_width(data, marker)
+
+    if type_code in DEGENERATE_OUTLINE_TYPES:
+        points = _read_vertex_list(data, marker, width, height)
+    else:
+        points = flatten_outline(decode_outline(data, marker + SHAPE_OUTLINE_OFFSET, width, height))
+        if len(points) < 3:  # not a usable outline — try the vertex list
+            points = _read_vertex_list(data, marker, width, height)
+    if not points:
+        return None
+
+    # 88 = angular open, 89 = angular closed (explicit); smooth (90) keeps the geometric test
+    # (a closed blob can have distant endpoints); everything else is a closed primitive.
+    if type_code == 88:
+        closed = False
+    elif type_code == 90:
+        closed = _shape_is_closed(points, bbox)
+    else:
+        closed = True
+
+    return {
+        "off": marker,
+        "points": points,
+        "color": color or (37, 37, 37),
+        "type_code": type_code,
+        "type": shape_type,
+        "bbox": (x_min, y_min, x_max, y_max),
+        "width": pen_width,
+        "closed": closed,
+    }
+
+
 def scan_shapes(data: bytes, width: int, height: int) -> list[dict]:
     """Back-compat wrapper: the shape point-lists as `{off, points, color}` (see parse_shapes).
 
@@ -707,50 +1171,9 @@ def parse_shapes(data: bytes, width: int, height: int) -> list[dict]:
         if marker < 0:
             break
         off = marker + 1
-        if marker + 11 + 32 > len(data):
-            continue
-        type_code = struct.unpack_from("<I", data, marker + 7)[0]
-        bbox = struct.unpack_from("<4d", data, marker + 11)
-        x_min, y_min, x_max, y_max = bbox
-        if not (
-            all(math.isfinite(v) for v in bbox)
-            and -5 <= x_min < x_max <= width + 5
-            and -5 <= y_min < y_max <= height + 5
-        ):
-            continue
-
-        shape_type = SHAPE_TYPES.get(type_code, "polygon")
-        color = _shape_color_before_marker(data, marker)
-        pen_width = _shape_width(data, marker)
-
-        if type_code in DEGENERATE_OUTLINE_TYPES:
-            points = _read_vertex_list(data, marker, width, height)
-        else:
-            points = flatten_outline(decode_outline(data, marker + SHAPE_OUTLINE_OFFSET, width, height))
-            if len(points) < 3:  # not a usable outline — try the vertex list
-                points = _read_vertex_list(data, marker, width, height)
-        if not points:
-            continue
-
-        # 88 = angular open, 89 = angular closed (explicit); smooth (90) keeps the geometric test
-        # (a closed blob can have distant endpoints); everything else is a closed primitive.
-        if type_code == 88:
-            closed = False
-        elif type_code == 90:
-            closed = _shape_is_closed(points, bbox)
-        else:
-            closed = True
-
-        shapes.append({
-            "off": marker,
-            "points": points,
-            "color": color or (37, 37, 37),
-            "type_code": type_code,
-            "type": shape_type,
-            "bbox": (x_min, y_min, x_max, y_max),
-            "width": pen_width,
-            "closed": closed,
-        })
+        shape = _parse_shape_marker(data, marker, width, height)
+        if shape is not None:
+            shapes.append(shape)
 
     shapes.extend(scan_arrows(data, width, height))
     return shapes
@@ -782,6 +1205,40 @@ ARROW_HEAD_END_OFFSET = 78
 UUID_RE = re.compile(rb"[0-9a-f]{8}-[0-9a-f]{4}-11f1-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
+def _parse_arrow_object(data: bytes, obj_start: int, obj_end: int, width: int, height: int) -> dict | None:
+    obj = data[obj_start:obj_end]
+    if SHAPE_TYPE_MARKER in obj:  # a marker-based shape (incl. hearts), not a line/arrow
+        return None
+    j = obj.find(ARROW_SHAFT_MARKER)
+    if j < 0:
+        return None
+    shaft_off = obj_start + j + len(ARROW_SHAFT_MARKER)
+    coords = [_read_f64(data, shaft_off + 8 * i) for i in range(4)]
+    if any(c is None for c in coords):
+        return None
+    x0, y0, x1, y1 = coords
+    if not (all(math.isfinite(c) for c in coords)
+            and 1 <= x0 <= width and 1 <= y0 <= height and 1 <= x1 <= width and 1 <= y1 <= height):
+        return None
+    points = [(x0, y0), (x1, y1)]
+    head_end = shaft_off + ARROW_HEAD_END_OFFSET < len(data) and data[shaft_off + ARROW_HEAD_END_OFFSET] == 1
+    head_start = shaft_off + ARROW_HEAD_START_OFFSET < len(data) and data[shaft_off + ARROW_HEAD_START_OFFSET] == 1
+    color = _nearest_shape_color(data, shaft_off + 32)  # line/arrow color follows the shaft
+    pen_width = _shape_width(data, shaft_off + 32)
+    return {
+        "off": obj_start + j,
+        "points": points,
+        "color": color or (37, 37, 37),
+        "type_code": None,
+        "type": "arrow",
+        "bbox": (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)),
+        "width": pen_width,
+        "head_start": head_start,
+        "head_end": head_end,
+        "closed": False,
+    }
+
+
 def scan_arrows(data: bytes, width: int, height: int) -> list[dict]:
     """Find line/arrow shapes: `{points: [(x0, y0), (x1, y1)], color, bbox, type: 'arrow', width,
     head_start, head_end}`.
@@ -793,36 +1250,39 @@ def scan_arrows(data: bytes, width: int, height: int) -> list[dict]:
     bounds = [m.start() for m in UUID_RE.finditer(data)]
     bounds.append(len(data))
     for k in range(len(bounds) - 1):
-        a, b = bounds[k], bounds[k + 1]
-        obj = data[a:b]
-        if SHAPE_TYPE_MARKER in obj:  # a marker-based shape (incl. hearts), not a line/arrow
-            continue
-        j = obj.find(ARROW_SHAFT_MARKER)
-        if j < 0:
-            continue
-        shaft_off = a + j + len(ARROW_SHAFT_MARKER)
-        coords = [_read_f64(data, shaft_off + 8 * i) for i in range(4)]
-        if any(c is None for c in coords):
-            continue
-        x0, y0, x1, y1 = coords
-        if not (all(math.isfinite(c) for c in coords)
-                and 1 <= x0 <= width and 1 <= y0 <= height and 1 <= x1 <= width and 1 <= y1 <= height):
-            continue
-        points = [(x0, y0), (x1, y1)]
-        head_end = shaft_off + ARROW_HEAD_END_OFFSET < len(data) and data[shaft_off + ARROW_HEAD_END_OFFSET] == 1
-        head_start = shaft_off + ARROW_HEAD_START_OFFSET < len(data) and data[shaft_off + ARROW_HEAD_START_OFFSET] == 1
-        color = _nearest_shape_color(data, shaft_off + 32)  # line/arrow color follows the shaft
-        pen_width = _shape_width(data, shaft_off + 32)
-        arrows.append({
-            "off": a + j,
-            "points": points,
-            "color": color or (37, 37, 37),
-            "type_code": None,
-            "type": "arrow",
-            "bbox": (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)),
-            "width": pen_width,
-            "head_start": head_start,
-            "head_end": head_end,
-            "closed": False,
-        })
+        arrow = _parse_arrow_object(data, bounds[k], bounds[k + 1], width, height)
+        if arrow is not None:
+            arrows.append(arrow)
     return arrows
+
+
+def parse_shapes_from_objects(data: bytes, width: int, height: int, layers: list[dict]) -> list[dict]:
+    """Parse shape/line objects from deterministic object blobs."""
+    shapes: list[dict] = []
+    for layer in layers:
+        for obj in _iter_objects(layer["objects"]):
+            if obj["type"] != "shape":
+                continue
+            blob = data[obj["blob_off"] : obj["end"]]
+            found_marker_shape = False
+            off = 0
+            while True:
+                rel = blob.find(SHAPE_TYPE_MARKER, off)
+                if rel < 0:
+                    break
+                off = rel + 1
+                shape = _parse_shape_marker(data, obj["blob_off"] + rel, width, height)
+                if shape is None:
+                    continue
+                shape["object_idx"] = obj["idx"]
+                shape["object_off"] = obj["off"]
+                shapes.append(shape)
+                found_marker_shape = True
+            if found_marker_shape:
+                continue
+            arrow = _parse_arrow_object(data, obj["blob_off"], obj["end"], width, height)
+            if arrow is not None:
+                arrow["object_idx"] = obj["idx"]
+                arrow["object_off"] = obj["off"]
+                shapes.append(arrow)
+    return shapes

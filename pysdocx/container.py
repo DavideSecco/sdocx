@@ -3,7 +3,7 @@
 import zipfile
 from pathlib import Path
 
-BG_COLOR_DEFAULT = "#252525"
+BG_COLOR_DEFAULT = "#ffffff"
 
 
 def list_pages(path: Path) -> list[str]:
