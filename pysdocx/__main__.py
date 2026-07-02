@@ -61,6 +61,17 @@ def cmd_stroke_table(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def cmd_render(args: argparse.Namespace) -> None:
+    # Imported lazily so `dump`/`stroke-table` don't pull in matplotlib/Pillow.
+    from pysdocx.render import render_document
+
+    out_dir = args.outdir or Path("outputs_render") / args.file.stem
+    render_document(args.file, out=out_dir, fmt=args.format, bg=args.bg, page=args.page, show=False)
+    stem = args.file.stem
+    pages = [args.page] if args.page else "all"
+    print(f"wrote {stem}-page-NN.{args.format} to {out_dir} (pages: {pages})")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m pysdocx")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -74,6 +85,16 @@ def main() -> None:
     p_table.add_argument("--page", help="filter to .page files whose name contains this substring")
     p_table.add_argument("--detail", action="store_true", help="print one row per attempted stroke")
     p_table.set_defaults(func=cmd_stroke_table)
+
+    p_render = sub.add_parser("render", help="render each page to an image (one file per page)")
+    p_render.add_argument("file", type=Path)
+    p_render.add_argument(
+        "outdir", type=Path, nargs="?", help="output directory (default: outputs_render/<file stem>/)"
+    )
+    p_render.add_argument("--format", default="png", choices=("png", "svg"), help="output image format")
+    p_render.add_argument("--page", type=int, help="render only this 1-based page index")
+    p_render.add_argument("--bg", choices=("dark", "white"), help="page background (default: the file's stored color)")
+    p_render.set_defaults(func=cmd_render)
 
     args = parser.parse_args()
     args.func(args)

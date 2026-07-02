@@ -20,8 +20,12 @@ from pysdocx.ink import color_hex, decode_coordinates, decode_sign_mag, decode_t
 from pysdocx.page import (
     GRID_ORIGIN,
     GRID_SPACING,
+    decode_outline,
+    flatten_outline,
     page_template,
     parse_page,
+    parse_shapes,
+    scan_arrows,
     scan_drawings,
     scan_images,
     scan_shapes,
@@ -50,6 +54,25 @@ __all__ = [
     "GRID_SPACING",
     "GRID_ORIGIN",
     "scan_shapes",
+    "parse_shapes",
+    "scan_arrows",
+    "decode_outline",
+    "flatten_outline",
     "scan_images",
     "scan_drawings",
+    "render_document",
+    "render_page",
 ]
+
+# Rendering pulls in matplotlib/numpy/Pillow; import it lazily so `import pysdocx`
+# (parser-only use) stays lightweight. Access `pysdocx.render_document` / `render_page`
+# to trigger the import, or import from `pysdocx.render` directly.
+_RENDER_EXPORTS = {"render_document", "render_page"}
+
+
+def __getattr__(name):
+    if name in _RENDER_EXPORTS:
+        from pysdocx import render
+
+        return getattr(render, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

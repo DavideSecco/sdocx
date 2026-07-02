@@ -113,3 +113,9 @@ crates/sdocx-wasm/viewer/
 
 # JetBrains IDEs
 .idea/
+
+
+samples/*
+
+# CLI render output (python -m pysdocx render), regenerate on demand
+outputs_render/

@@ -8,6 +8,7 @@ validated reference implementation.
 """
 
 import math
+import re
 import struct
 
 from pysdocx.ink import decode_coordinates, decode_trailing
@@ -24,6 +25,54 @@ EXTRA_LEN_BIAS = 0x79  # byte value at record+3 when no extras are present
 SHAPE_MIN_VERTICES = 2
 SHAPE_MAX_VERTICES = 64
 SHAPE_COLOR_WINDOW = 80
+
+# Every marker-based shape carries its true outline as a serialized vector path in the object
+# trailer, right after `01 04 04 01 00 00 00 <u32 type_code> <bbox 4×f64> <12-byte header>`
+# (i.e. at marker+55). The path is a sequence of segments `<u8 tag><tag_pts × (f64 x, f64 y)>`
+# with a ONE-BYTE tag: 1=MoveTo (1 pt), 2=LineTo (1 pt), 4=CubicBezierTo (3 pts). Earlier
+# attempts assumed 4-byte tags with 8-aligned doubles and couldn't align it (the "3-byte
+# padding" mystery) — the tags are single bytes, which shifts every double. Decoding this gives
+# each shape's REAL (rotated / degree-of-freedom-deformed) vertices, so triangle/rect/hexagon/
+# rhombus/trapezoid/pentagon/star/cross/heart and freeform all render from their true outline
+# instead of a canonical primitive. Verified on OnlyShapesblack_new p8, OnlyShapesblack_173146
+# and benchmark p3. Only ellipse (1) and rounded-rect (64) have a degenerate path (a lone
+# MoveTo); they keep the vertex-list approach (ellipse_from_points / oriented_corners).
+SHAPE_TYPE_MARKER = b"\x01\x04\x04\x01\x00\x00\x00"
+SHAPE_WIDTH_MARKER = b"\x0c\x00\x00\x00"
+SHAPE_TRAILER_WINDOW = 220
+SHAPE_OUTLINE_OFFSET = 55  # marker(7) + type_code(4) + bbox(32) + header(12)
+SHAPE_COLOR_BACK_WINDOW = 160  # BGRA color sits just before the marker (after the vertex list)
+OUTLINE_SEG_POINTS = {1: 1, 2: 1, 4: 3}  # MoveTo, LineTo, CubicBezierTo
+BEZIER_PER_SEG = 16  # flattening resolution for cubic segments
+SHAPE_TYPES = {
+    1: "ellipse",
+    2: "triangle",
+    4: "rectangle",
+    6: "hexagon",
+    8: "rhombus",
+    9: "trapezoid",
+    11: "pentagon",
+    13: "star",
+    17: "cross",
+    23: "heart",  # NOT arrow — the top-row code-23 objects are hearts (bbox y 82-299 on p8)
+    64: "rounded_rect",
+    88: "freeform",  # angular, open
+    89: "freeform",  # angular, closed
+    90: "freeform_smooth",
+}
+
+# Types whose stored outline path is degenerate (lone MoveTo) — render from the vertex list.
+DEGENERATE_OUTLINE_TYPES = frozenset({1, 64})
+
+# A smooth freeform (code 90) shape whose first and last points are far apart (relative to its
+# diagonal) was drawn open (arc / spiral) rather than closed; no explicit flag was found near the
+# type marker, so we test geometrically. With the real outline path (not the old vertex list), a
+# genuinely closed path closes EXACTLY (ratio == 0.0, verified on benchmark p3's blue/red blobs
+# and p8's closed smooth shapes), while every open curve — including a spiral, whose end can land
+# close to its own earlier coils — measures >= 0.356. So the threshold only needs to separate
+# "the path closes on itself" from "it doesn't"; 0.6 was tuned for the old geometry and let the
+# spiral (0.356) through as closed.
+SHAPE_OPEN_RATIO = 0.05
 
 # Imported-image placement records carry the 4-byte marker `01 00 04 20`, with the media
 # index as a u16 6 bytes before it and the placement bbox (4 x f64) 11 bytes after it.
@@ -98,6 +147,19 @@ def within_page_bounds(points: list[tuple[float, float]], width: int, height: in
         math.isfinite(x) and math.isfinite(y) and -mx <= x <= width + mx and -my <= y <= height + my
         for x, y in points
     )
+
+
+def _bbox_is_page_scaled(bbox: tuple[float, float, float, float], width: int, height: int) -> bool:
+    """The stroke-header bbox itself is a plausible page-sized rectangle (generous 2x margin).
+
+    `points_fit_bbox` only checks that points fall inside the given bbox, so a misdecoded record
+    whose header bbox is astronomically large (seen: ~1e150) trivially "contains" any points —
+    it's accepted as fits_bbox=True even though the bbox is garbage. This closes that loophole."""
+    if not all(math.isfinite(v) for v in bbox):
+        return False
+    x_min, y_min, x_max, y_max = bbox
+    mx, my = width * 2, height * 2
+    return -mx <= x_min <= x_max <= width + mx and -my <= y_min <= y_max <= height + my
 
 
 def bbox_of(points: list[tuple[float, float]]) -> tuple[float, float, float, float]:
@@ -320,8 +382,21 @@ def parse_page(data: bytes) -> dict:
         shifted = parse_stroke(data, off, extra_len, "shifted")
         parsed = _select_layout(current, shifted)
 
-        accepted = parsed is not None and (
-            parsed["fits_bbox"] or within_page_bounds(parsed["points"], width, height)
+        # A misdecoded record can otherwise slip through in two ways: (a) a wildly implausible
+        # point count (seen: 4129 points, bbox spanning nearly the whole page), or (b) a garbage
+        # header bbox so large (seen: ~1e150) that it trivially "contains" any points, making
+        # fits_bbox vacuously True. Either way it's accepted as one bogus giant stroke, drawing a
+        # garbage scribble AND eating whatever real strokes (handwriting) were in that byte range.
+        # The resync validator (_clean_stroke_at) already caps the point count; mirror that cap
+        # here and additionally require the bbox itself to be page-scaled before trusting it, so
+        # such records fall through to resync instead of being accepted directly.
+        accepted = (
+            parsed is not None
+            and parsed["n_points_field"] <= STROKE_RESYNC_MAX_POINTS
+            and (
+                (parsed["fits_bbox"] and _bbox_is_page_scaled(parsed["bbox"], width, height))
+                or within_page_bounds(parsed["points"], width, height)
+            )
         )
         if not accepted:
             # This record isn't a stroke (an interleaved object, or garbage from a prior desync).
@@ -335,8 +410,13 @@ def parse_page(data: bytes) -> dict:
 
         record_off = parsed["next_record_off"]
 
+        # Trust the header bbox only if it's both bbox-consistent AND page-scaled — an accepted
+        # record whose bbox is vacuously "fits" (garbage-huge) but slipped in via the
+        # within_page_bounds fallback must still get its bbox recomputed from the real points.
+        trusted_bbox = parsed["fits_bbox"] and _bbox_is_page_scaled(parsed["bbox"], width, height)
+
         outcome = "dropped"
-        if parsed["fits_bbox"]:
+        if trusted_bbox:
             if looks_like_flat_synthetic_line(parsed):
                 x0, y0, x1, y1 = parsed["bbox"]
                 parsed["points"] = [(x0, y0), (x1, y1)]
@@ -380,7 +460,7 @@ def parse_page(data: bytes) -> dict:
         "resyncs": resyncs,
         "kept": len(strokes),
         "strokes": strokes,
-        "shapes": scan_shapes(data, width, height),
+        "shapes": parse_shapes(data, width, height),
         "images": scan_images(data, width, height),
         "attempts": attempts,
     }
@@ -474,8 +554,15 @@ def scan_drawings(data: bytes, width: int, height: int, raster_indices: set[int]
 
 
 def _nearest_shape_color(data: bytes, off: int) -> tuple[int, int, int] | None:
-    """Find a BGRA color (alpha 0xFF) right after a shape's vertices, within a small window."""
+    """Find a BGRA color (alpha 0xFF) right after a shape's vertices, within a small window.
+
+    Keeps the LAST match in the window, not the first: when a color channel is exactly 0xFF
+    (e.g. pure red `36 36 ff ff`), the zero-padding byte right before the true marker forms a
+    spurious one-byte-early match (`00 36 36 ff` reads as the wrong color `#363600`). The real
+    marker always follows immediately after, so the latest match in the window is the right one
+    (mirrors `_shape_color_before_marker`'s backward "closest wins" rule)."""
     end = min(off + SHAPE_COLOR_WINDOW, len(data) - 4)
+    best = None
     for i in range(off, end):
         if (
             data[i + 3] == 0xFF
@@ -483,49 +570,259 @@ def _nearest_shape_color(data: bytes, off: int) -> tuple[int, int, int] | None:
             and data[i - 1] == 0x00
             and (data[i], data[i + 1], data[i + 2]) != (0xFF, 0xFF, 0xFF)
         ):
-            return (data[i + 2], data[i + 1], data[i])  # BGRA -> (r, g, b)
+            best = (data[i + 2], data[i + 1], data[i])  # BGRA -> (r, g, b)
+    return best
+
+
+def _shape_color_before_marker(data: bytes, marker: int) -> tuple[int, int, int] | None:
+    """The shape's stroke color (BGRA, alpha 0xFF) sits just before the type marker, right after
+    the vertex list. Scanning forward past the marker would pick up a different (default) color,
+    so we scan backward and keep the occurrence closest to the marker. Verified on benchmark p3
+    (2×#252525, #0028b8, #d41111, 2×#1a693a — matches ground truth)."""
+    best = None
+    for i in range(max(marker - SHAPE_COLOR_BACK_WINDOW, 1), marker - 3):
+        if (
+            data[i + 3] == 0xFF
+            and data[i - 1] == 0x00
+            and (data[i], data[i + 1], data[i + 2]) != (0xFF, 0xFF, 0xFF)
+        ):
+            best = (data[i + 2], data[i + 1], data[i])  # BGRA -> (r, g, b); keep the last (closest)
+    return best
+
+
+def decode_outline(data: bytes, off: int, width: int, height: int, max_points: int = 4000) -> list:
+    """Decode the serialized vector path at `off` into `[(tag, [(x, y), ...]), ...]`.
+
+    Segments are `<u8 tag><OUTLINE_SEG_POINTS[tag] × (f64 x, f64 y)>` with 1-byte tags
+    (1=MoveTo, 2=LineTo, 4=CubicBezierTo). Stops at the first byte that isn't a known tag or a
+    point that falls off-page (the natural end of the path)."""
+    segments: list = []
+    n_points = 0
+    o = off
+    while n_points < max_points and o < len(data):
+        tag = data[o]
+        npt = OUTLINE_SEG_POINTS.get(tag)
+        if npt is None or o + 1 + npt * 16 > len(data):
+            break
+        seg: list[tuple[float, float]] = []
+        for k in range(npt):
+            x = struct.unpack_from("<d", data, o + 1 + k * 16)[0]
+            y = struct.unpack_from("<d", data, o + 1 + k * 16 + 8)[0]
+            if not (math.isfinite(x) and math.isfinite(y) and -50 <= x <= width + 50 and -50 <= y <= height + 50):
+                return segments
+            seg.append((x, y))
+        segments.append((tag, seg))
+        n_points += npt
+        o += 1 + npt * 16
+    return segments
+
+
+def _cubic(p0, p1, p2, p3, per_seg):
+    """Sample a cubic Bezier at `per_seg` points (endpoint excluded; the next segment adds it)."""
+    out = []
+    for i in range(per_seg):
+        t = i / per_seg
+        mt = 1 - t
+        a, b, c, d = mt**3, 3 * mt**2 * t, 3 * mt * t**2, t**3
+        out.append((a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0],
+                    a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]))
+    return out
+
+
+def flatten_outline(segments, per_seg: int = BEZIER_PER_SEG) -> list:
+    """Flatten decode_outline segments into a plain point list ready to draw: LineTo points are
+    appended directly, CubicBezierTo segments are sampled with the previous point as the anchor."""
+    points: list[tuple[float, float]] = []
+    for tag, seg in segments:
+        if tag == 4 and points:
+            points.extend(_cubic(points[-1], seg[0], seg[1], seg[2], per_seg))
+            points.append(seg[2])
+        else:  # MoveTo / LineTo (or a leading cubic with no anchor yet)
+            points.extend(seg)
+    return points
+
+
+def _read_vertex_list(data: bytes, marker: int, width: int, height: int) -> list | None:
+    """Read the `<u32 count><count × (f64 x, f64 y)>` vertex list that precedes the type marker.
+
+    Used only for ellipse (8 boundary points) and rounded-rect (4 edge-midpoints), whose outline
+    path is degenerate. Scans backward for the nearest count-prefixed run of on-page doubles."""
+    best = None
+    for off in range(max(marker - 1200, 0), marker - 4):
+        count = struct.unpack_from("<I", data, off)[0]
+        if not (SHAPE_MIN_VERTICES <= count <= SHAPE_MAX_VERTICES) or off + 4 + count * 16 > marker:
+            continue
+        points: list[tuple[float, float]] = []
+        ok = True
+        for k in range(count):
+            x = struct.unpack_from("<d", data, off + 4 + k * 16)[0]
+            y = struct.unpack_from("<d", data, off + 4 + k * 16 + 8)[0]
+            if not (math.isfinite(x) and math.isfinite(y) and -50 <= x <= width + 50 and -50 <= y <= height + 50):
+                ok = False
+                break
+            points.append((x, y))
+        if ok and len({(round(x, 1), round(y, 1)) for x, y in points}) >= 3:
+            best = points  # keep the last (closest to the marker)
+    return best
+
+
+def _shape_width(data: bytes, marker: int) -> float | None:
+    """Pen line width: the f32 after the `0c 00 00 00` marker in the shape trailer."""
+    trailer = data[marker : marker + SHAPE_TRAILER_WINDOW]
+    k = trailer.find(SHAPE_WIDTH_MARKER)
+    if 0 <= k and marker + k + 4 + 4 <= len(data):
+        candidate = struct.unpack_from("<f", data, marker + k + len(SHAPE_WIDTH_MARKER))[0]
+        if candidate == candidate and 0.1 <= candidate <= 200.0:
+            return candidate
     return None
 
 
 def scan_shapes(data: bytes, width: int, height: int) -> list[dict]:
-    """Find inserted-shape objects: `[u32 count][count x (f64 x, f64 y)]` + a BGRA color.
+    """Back-compat wrapper: the shape point-lists as `{off, points, color}` (see parse_shapes).
 
-    Returns a list of `{points: [(x, y), ...], color: (r, g, b), off: int}`. Transform
-    matrices and degenerate artifacts are rejected by requiring a color, a non-degenerate
-    on-page bounding box away from the origin, and at least 3 distinct vertices — verified
-    to yield zero false positives across all sample files (only benchmark page f5b90a84
-    produces shapes).
+    Kept for the public API; parse_shapes is now anchored on the type marker (more robust and it
+    also finds hearts, whose 2-point bbox list the old vertex-list scan rejected)."""
+    return [
+        {"off": s["off"], "points": s["points"], "color": s["color"]}
+        for s in parse_shapes(data, width, height)
+        if s["type"] != "arrow"
+    ]
+
+
+def parse_shapes(data: bytes, width: int, height: int) -> list[dict]:
+    """Marker-anchored inserted shapes with their true outline, type, bbox, color and pen width.
+
+    Anchored on the `01 04 04 01 00 00 00` type marker, which reliably locates every shape
+    (including hearts). For each: `type_code`/`type` (SHAPE_TYPES), `bbox` (4×f64 at marker+11),
+    `color` (scanned backward, `_shape_color_before_marker`), `width`, and `points` = the real
+    flattened outline path (decode_outline/flatten_outline). Ellipse and rounded-rect have a
+    degenerate path, so they fall back to the vertex list for ellipse_from_points/oriented_corners.
+    Arrows (markerless) are appended by scan_arrows. Each entry:
+    `{off, points, color, type_code, type, bbox, width, closed}`.
     """
     shapes: list[dict] = []
     off = 0
-    n = len(data)
-    while off + 4 <= n:
-        count = struct.unpack_from("<I", data, off)[0]
-        if SHAPE_MIN_VERTICES <= count <= SHAPE_MAX_VERTICES and off + 4 + count * 16 <= n:
-            points: list[tuple[float, float]] = []
-            ok = True
-            for k in range(count):
-                x = struct.unpack_from("<d", data, off + 4 + k * 16)[0]
-                y = struct.unpack_from("<d", data, off + 4 + k * 16 + 8)[0]
-                if not (math.isfinite(x) and math.isfinite(y) and -50 <= x <= width + 50 and -50 <= y <= height + 50):
-                    ok = False
-                    break
-                points.append((x, y))
-            if ok:
-                xs = [p[0] for p in points]
-                ys = [p[1] for p in points]
-                distinct = len({(round(x, 1), round(y, 1)) for x, y in points})
-                color = _nearest_shape_color(data, off + 4 + count * 16)
-                if (
-                    color is not None
-                    and distinct >= 3
-                    and max(xs) - min(xs) > 20
-                    and max(ys) - min(ys) > 20
-                    and min(xs) > 5
-                    and min(ys) > 5
-                ):
-                    shapes.append({"off": off, "points": points, "color": color})
-                    off += 4 + count * 16
-                    continue
-        off += 1
+    while True:
+        marker = data.find(SHAPE_TYPE_MARKER, off)
+        if marker < 0:
+            break
+        off = marker + 1
+        if marker + 11 + 32 > len(data):
+            continue
+        type_code = struct.unpack_from("<I", data, marker + 7)[0]
+        bbox = struct.unpack_from("<4d", data, marker + 11)
+        x_min, y_min, x_max, y_max = bbox
+        if not (
+            all(math.isfinite(v) for v in bbox)
+            and -5 <= x_min < x_max <= width + 5
+            and -5 <= y_min < y_max <= height + 5
+        ):
+            continue
+
+        shape_type = SHAPE_TYPES.get(type_code, "polygon")
+        color = _shape_color_before_marker(data, marker)
+        pen_width = _shape_width(data, marker)
+
+        if type_code in DEGENERATE_OUTLINE_TYPES:
+            points = _read_vertex_list(data, marker, width, height)
+        else:
+            points = flatten_outline(decode_outline(data, marker + SHAPE_OUTLINE_OFFSET, width, height))
+            if len(points) < 3:  # not a usable outline — try the vertex list
+                points = _read_vertex_list(data, marker, width, height)
+        if not points:
+            continue
+
+        # 88 = angular open, 89 = angular closed (explicit); smooth (90) keeps the geometric test
+        # (a closed blob can have distant endpoints); everything else is a closed primitive.
+        if type_code == 88:
+            closed = False
+        elif type_code == 90:
+            closed = _shape_is_closed(points, bbox)
+        else:
+            closed = True
+
+        shapes.append({
+            "off": marker,
+            "points": points,
+            "color": color or (37, 37, 37),
+            "type_code": type_code,
+            "type": shape_type,
+            "bbox": (x_min, y_min, x_max, y_max),
+            "width": pen_width,
+            "closed": closed,
+        })
+
+    shapes.extend(scan_arrows(data, width, height))
     return shapes
+
+
+def _shape_is_closed(points, bbox) -> bool:
+    """Whether a shape's path is closed: its first and last points are near each other relative to
+    the bbox diagonal. Canonical primitives read as closed; only open freeform curves come out False."""
+    x0, y0, x1, y1 = bbox
+    diagonal = math.hypot(x1 - x0, y1 - y0) or 1.0
+    first, last = points[0], points[-1]
+    return math.hypot(first[0] - last[0], first[1] - last[1]) / diagonal < SHAPE_OPEN_RATIO
+
+
+# The line/arrow tool is a distinct, markerless object (no `01 04 04 01` type code): a 2-point
+# shaft (start -> end) right after the sub-header `01 00 01 0c 02 00 00 00`, plus two arrowhead
+# flags a fixed distance past the shaft points — head_end at shaft+76, head_start at shaft+78.
+# A plain line has neither, a single arrow has head_end, a double arrow has both. (The old code
+# mistook the code-23 HEART marker for arrows; hearts are now decoded as shapes.) We enumerate
+# uuid-delimited objects and keep the markerless ones carrying the shaft. Confirmed on
+# OnlyShapesblack_new p8 (3 single + 2 double arrows) and OnlyShapesblack_173146 p1 (3 plain
+# lines); 0 on benchmark p3/p4 (their only arrow is inside the freehand DISEGNO raster).
+ARROW_SHAFT_MARKER = b"\x01\x00\x01\x0c\x02\x00\x00\x00"
+# Bytes relative to the first shaft coordinate. head_start=1 puts an arrowhead at the start point
+# (points[0]); head_end=1 at the end point (points[-1]). A single arrow sets head_start only (its
+# head is at points[0], verified against the GT on p8); a double arrow sets both; a line neither.
+ARROW_HEAD_START_OFFSET = 76
+ARROW_HEAD_END_OFFSET = 78
+UUID_RE = re.compile(rb"[0-9a-f]{8}-[0-9a-f]{4}-11f1-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
+def scan_arrows(data: bytes, width: int, height: int) -> list[dict]:
+    """Find line/arrow shapes: `{points: [(x0, y0), (x1, y1)], color, bbox, type: 'arrow', width,
+    head_start, head_end}`.
+
+    `points` is start->end (the real shaft). `head_end`/`head_start` say whether to draw an
+    arrowhead at P1 / P0 — a plain line has neither, a single arrow has `head_end`, a double
+    arrow has both."""
+    arrows: list[dict] = []
+    bounds = [m.start() for m in UUID_RE.finditer(data)]
+    bounds.append(len(data))
+    for k in range(len(bounds) - 1):
+        a, b = bounds[k], bounds[k + 1]
+        obj = data[a:b]
+        if SHAPE_TYPE_MARKER in obj:  # a marker-based shape (incl. hearts), not a line/arrow
+            continue
+        j = obj.find(ARROW_SHAFT_MARKER)
+        if j < 0:
+            continue
+        shaft_off = a + j + len(ARROW_SHAFT_MARKER)
+        coords = [_read_f64(data, shaft_off + 8 * i) for i in range(4)]
+        if any(c is None for c in coords):
+            continue
+        x0, y0, x1, y1 = coords
+        if not (all(math.isfinite(c) for c in coords)
+                and 1 <= x0 <= width and 1 <= y0 <= height and 1 <= x1 <= width and 1 <= y1 <= height):
+            continue
+        points = [(x0, y0), (x1, y1)]
+        head_end = shaft_off + ARROW_HEAD_END_OFFSET < len(data) and data[shaft_off + ARROW_HEAD_END_OFFSET] == 1
+        head_start = shaft_off + ARROW_HEAD_START_OFFSET < len(data) and data[shaft_off + ARROW_HEAD_START_OFFSET] == 1
+        color = _nearest_shape_color(data, shaft_off + 32)  # line/arrow color follows the shaft
+        pen_width = _shape_width(data, shaft_off + 32)
+        arrows.append({
+            "off": a + j,
+            "points": points,
+            "color": color or (37, 37, 37),
+            "type_code": None,
+            "type": "arrow",
+            "bbox": (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)),
+            "width": pen_width,
+            "head_start": head_start,
+            "head_end": head_end,
+            "closed": False,
+        })
+    return arrows
