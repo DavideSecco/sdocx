@@ -141,17 +141,18 @@ STICKY_NOTE_MARKER = b"co_attach_file"
 STICKY_NOTE_RECT_KEY = b"skn_collapse_rect"
 
 # Page background templates. The builtin template id lives at a base-dependent offset in the
-# page header (see page_template(), ported from crates/sdocx/src/page.rs::page_template). Only
-# id 5 = squared grid ("quadretti") is confirmed from the benchmark ground truth (all 6 pages
-# are id 5); other ids (lined/plain/etc.) stay "plain" until we have samples to map them.
-GRID_TEMPLATE_IDS = frozenset({5})
+# page header (see page_template(), ported from crates/sdocx/src/page.rs::page_template). Both
+# id 5 (benchmark, all 6 pages) and id 4 (OnlyTextTypeWritten_squared) are confirmed squared
+# grids from the ground truth; other ids (lined/plain/etc.) stay "plain" until we map them.
+GRID_TEMPLATE_IDS = frozenset({4, 5})
 
-# Grid cell size in page coordinates (page is 1600x2262). Measured from the ground-truth photos
-# in samples/allsamsungnotes_gt/: the photos share the page aspect ratio exactly (no crop), and
-# the grid spacing is a consistent 58px in the 905px-wide images -> 58 * 1600/905 ≈ 102.5, the
-# same vertically and horizontally, across p1/p3/p5. Not found encoded near the template id in
-# the header, so we use this fixed measured value.
+# Grid cell size in page coordinates (page is 1600x2262). The pitch is NOT stored in the .page
+# file (searched the header, and the squared page is only ~340 bytes) — it is a property of the
+# template id itself, so we map each measured id to its pitch. Both measured from the 905px-wide
+# GT photos which span the page width with no crop: id 5 = 58px -> 58*1600/905 ≈ 102.5; id 4 =
+# 41px -> 41*1600/905 ≈ 72.5, same vertically and horizontally. Unknown grid ids fall back to 102.5.
 GRID_SPACING = 102.5
+GRID_SPACING_BY_ID = {5: 102.5, 4: 72.5}
 
 # Grid origin (page coords of the first vertical/horizontal line). Measured from the GT photos:
 # vertical lines start flush at x=0 (0,103,206,...) but horizontal lines start ~44px down
@@ -871,7 +872,10 @@ def page_template(data: bytes) -> dict | None:
     if template_id is None or not is_builtin_template_id(template_id):
         return None
     kind = "grid" if template_id in GRID_TEMPLATE_IDS else "plain"
-    return {"id": template_id, "kind": kind, "source": source}
+    result = {"id": template_id, "kind": kind, "source": source}
+    if kind == "grid":
+        result["spacing"] = GRID_SPACING_BY_ID.get(template_id, GRID_SPACING)
+    return result
 
 
 def parse_page(data: bytes) -> dict:
