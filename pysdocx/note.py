@@ -56,6 +56,12 @@ LIST_MARKER_LEN = 30
 PARAGRAPH_INDENT_TAG = 0x02
 PARAGRAPH_ALIGN_TAG = 0x03
 PARAGRAPH_LINE_SPACING_TAG = 0x04
+# Paragraph space-before / space-after (float, in the `value` field — note line-spacing puts its
+# float in `enabled` instead). Present only on styled paragraphs (body1/heading*); this is what
+# makes headings breathe in Samsung Notes and was previously ignored, so headings rendered ~2.2x
+# too tight vs the ground truth.
+PARAGRAPH_SPACE_BEFORE_TAG = 0x08
+PARAGRAPH_SPACE_AFTER_TAG = 0x09
 PARAGRAPH_STYLE_TAG = 0x0A
 ALIGNMENTS = {0: "left", 1: "right", 2: "center"}
 PARAGRAPH_STYLES = {0: "heading1", 1: "heading2", 2: "heading3", 3: "body1"}
@@ -158,10 +164,17 @@ def _paragraph_metadata(note_bytes: bytes, paragraph_count: int) -> list[dict]:
             "indent": 0,
             "style": None,
             "line_spacing": None,
+            "space_before": 0.0,
+            "space_after": 0.0,
             "list": None,
         }
         for _ in range(paragraph_count)
     ]
+
+    def apply_space_float(tag_value: int, key: str, start: int, end: int) -> None:
+        space = struct.unpack("<f", struct.pack("<I", tag_value))[0]
+        if space == space and 0.0 <= space <= 200.0:  # finite, plausible
+            apply_span(start, end, lambda p, space=space: p.update({key: space}))
 
     def apply_span(start: int, end: int, update) -> None:
         if not (0 <= start < end <= paragraph_count):
@@ -185,6 +198,10 @@ def _paragraph_metadata(note_bytes: bytes, paragraph_count: int) -> list[dict]:
                 spacing = struct.unpack("<f", struct.pack("<I", enabled))[0]
                 if spacing == spacing and 0.5 <= spacing <= 4.0:
                     apply_span(start, end, lambda p, spacing=spacing: p.update(line_spacing=spacing))
+            elif tag == PARAGRAPH_SPACE_BEFORE_TAG:
+                apply_space_float(value, "space_before", start, end)
+            elif tag == PARAGRAPH_SPACE_AFTER_TAG:
+                apply_space_float(value, "space_after", start, end)
             elif tag == PARAGRAPH_STYLE_TAG and value in PARAGRAPH_STYLES:
                 apply_span(start, end, lambda p, value=value: p.update(style=PARAGRAPH_STYLES[value]))
         off = note_bytes.find(PARAGRAPH_MARKER_PREFIX, off + 1)
