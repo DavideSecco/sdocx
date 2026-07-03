@@ -39,6 +39,26 @@ TEXT_DEFAULT_COLOR = (37, 37, 37)  # body default; ≈ the dark page bg, so we c
 TODO_DONE_COLOR = (150, 150, 150)
 TABLE_LINE_COLOR = "#8a8f9a"
 
+# Page-coordinate units per unit of decoded paragraph space-before/after (note.py tags 0x08/0x09).
+# ⚠ HEURISTIC: the space values are decoded from the file, but this scale factor is calibrated
+# against the squared ground truth (OnlyTextTypeWritten_squared): body1→heading3 = 207 page units,
+# heading2→heading1 = 222, both matched within ~3% at 4.9. Re-verify if a new sample disagrees.
+PARA_SPACE_UNIT = 4.9
+
+# Typed-text layout geometry (page coordinates). x0/y0 = top-left text anchor; line_h = body line
+# pitch (matches the GT grid at 11pt); fontpt = base point size.
+TYPED_TEXT_X0 = 64
+TYPED_TEXT_Y0 = 80
+TYPED_TEXT_FONTPT = 17
+TYPED_TEXT_LINE_H = 66
+# ⚠ HEURISTIC: an empty paragraph's height. Text lines match the grid at line_h=66, but blank
+# paragraphs measure taller in the GT; 75 lands the known anchors (Testo normale top≈74, heading3
+# top≈1944 on OnlyTextTypeWritten_squared) and is what makes heading2 fall to page 2. Re-verify if
+# a new sample disagrees.
+TYPED_TEXT_BLANK_H = 75
+# Keep a whole line off the very bottom edge before pushing it to the next page.
+TYPED_TEXT_PAGE_PAD = 40
+
 # Named backgrounds accepted by render_document/CLI (`--bg dark|white`).
 BG_DARK = "#252525"
 BG_WHITE = "#ffffff"
@@ -193,7 +213,7 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
 
     # Squared-paper background goes above the flat fill but below images/strokes.
     if page_size is not None and template is not None and template["kind"] == "grid":
-        draw_grid(ax, page_size[0], page_size[1])
+        draw_grid(ax, page_size[0], page_size[1], spacing=template.get("spacing", GRID_SPACING))
 
     # Imported images go underneath everything else. The axis is y-inverted at
     # the end (page coords have y increasing downward), so use origin="lower"
@@ -523,6 +543,7 @@ def _render_rich_text(
     default_ink,
     angle_deg=0.0,
     line_dir=1.0,
+    sink=None,
 ):
     """Shared rich-text renderer for note.note typed text and in-page text boxes.
 
@@ -530,6 +551,10 @@ def _render_rich_text(
     line) and only the final artists are rotated. This keeps wrapping/measurement identical across
     note.note text and text-box text, and is also why vertical boxes need an explicit anchor/line
     direction policy in `_text_box_layout` instead of relying on matplotlib's default text bbox.
+
+    When `sink` is a list, segments are measured and recorded as `(x, y, seg, style, line_h)`
+    tuples instead of drawn — this is the layout pass used to paginate note.note typed text across
+    real .page files (see `_paginate_segments`). With `sink=None` it draws directly (text boxes).
     """
     fig = ax.figure
     fig.canvas.draw()
@@ -538,12 +563,27 @@ def _render_rich_text(
     bold, italic, underline, strike, color, highlight, font_size = _char_styles(parsed)
     paragraphs = parsed.get("paragraphs") or []
 
+    def emit(x, y, seg, style, line_h_cur):
+        if sink is None:
+            return _draw_text_segment(
+                ax, renderer, inv, x, y, seg, fontpt, style, default_ink,
+                angle_deg=angle_deg, origin=(x0, y0),
+            )
+        corners = _measure_text(ax, renderer, inv, x, y, seg, _style_fontpt(style, fontpt), style[0], style[1])
+        sink.append((x, y, seg, style, line_h_cur))
+        return corners[:, 0].max() - corners[:, 0].min()
+
     gi = 0
     y = y0
     for para_idx, line in enumerate(parsed["text"].split("\n")):
         paragraph = paragraphs[para_idx] if para_idx < len(paragraphs) else None
         line_start = gi
         line_end = gi + len(line)
+        # Styled paragraphs (body1/heading*) carry decoded space-before/after; add space-before
+        # ahead of the line and space-after once it's laid out, so headings breathe like the GT.
+        space_before = ((paragraph or {}).get("space_before") or 0.0) * PARA_SPACE_UNIT
+        space_after = ((paragraph or {}).get("space_after") or 0.0) * PARA_SPACE_UNIT
+        y += space_before * line_dir
         rendered_line_h = _line_advance(line_h, paragraph, _line_fontpt(font_size, line_start, line_end, fontpt), fontpt)
         indent = (paragraph or {}).get("indent") or 0
         line_x0 = x0 + indent * 70
@@ -562,18 +602,12 @@ def _render_rich_text(
             prefix_text_w = prefix_corners[:, 0].max() - prefix_corners[:, 0].min()
             prefix_w = max(prefix_text_w + prefix_pt * 0.9, prefix_pt * 2.4)
             prefix_color = TODO_DONE_COLOR if checked_todo else None
-            _draw_text_segment(
-                ax,
-                renderer,
-                inv,
+            emit(
                 line_x0,
                 y,
                 prefix,
-                fontpt,
                 (False, False, False, False, prefix_color, None, para_font_raw),
-                default_ink,
-                angle_deg=angle_deg,
-                origin=(x0, y0),
+                rendered_line_h,
             )
             line_x0 += prefix_w
             line_max_width = max(line_max_width - prefix_w, fontpt * 4)
@@ -589,7 +623,7 @@ def _render_rich_text(
         max_x = line_x0 + line_max_width
         if not line:
             gi += 1
-            y += _blank_advance(blank_h, paragraph) * line_dir
+            y += (_blank_advance(blank_h, paragraph) + space_after) * line_dir
             continue
         x = line_x0
         i = 0
@@ -635,19 +669,7 @@ def _render_rich_text(
                 )
                 width = corners[:, 0].max() - corners[:, 0].min()
                 if x + width <= max_x:
-                    x += _draw_text_segment(
-                        ax,
-                        renderer,
-                        inv,
-                        x,
-                        y,
-                        seg,
-                        fontpt,
-                        style,
-                        default_ink,
-                        angle_deg=angle_deg,
-                        origin=(x0, y0),
-                    )
+                    x += emit(x, y, seg, style, rendered_line_h)
                     seg = ""
                     continue
                 fit_len = _fit_segment_prefix(
@@ -662,46 +684,93 @@ def _render_rich_text(
                     x = line_x0
                     y += rendered_line_h * line_dir
                     continue
-                x += _draw_text_segment(
-                    ax,
-                    renderer,
-                    inv,
-                    x,
-                    y,
-                    head,
-                    fontpt,
-                    style,
-                    default_ink,
-                    angle_deg=angle_deg,
-                    origin=(x0, y0),
-                )
+                x += emit(x, y, head, style, rendered_line_h)
                 if seg:
                     x = line_x0
                     y += rendered_line_h * line_dir
             i = j
         gi += len(line) + 1
-        y += rendered_line_h * line_dir
+        y += (rendered_line_h + space_after) * line_dir
     return y
 
 
-def render_typed_text(ax, parsed, bg_color, x0=64, y0=80, line_h=66, blank_h=48, fontpt=17,
+def render_typed_text(ax, parsed, bg_color, x0=TYPED_TEXT_X0, y0=TYPED_TEXT_Y0,
+                      line_h=TYPED_TEXT_LINE_H, blank_h=TYPED_TEXT_BLANK_H, fontpt=TYPED_TEXT_FONTPT,
                       default_ink=DEFAULT_INK):
-    """Draw parsed typed text with inline rich-text runs, wrapped to the page width.
+    """Draw all parsed typed text on one axes (no pagination). Returns the last baseline y.
 
-    Returns the y of the last baseline drawn, so the caller can grow the page to contain text
-    that runs past the nominal page height (Samsung stores this as one tall scrolling page).
+    render_document uses the paginated path (paginate_typed_text/draw_typed_page) instead; this
+    is kept for single-axes callers (e.g. notebooks) that want the whole flow in one place.
     """
     return _render_rich_text(
-        ax,
-        parsed,
-        x0=x0,
-        y0=y0,
-        max_width=max(ax.get_xlim()) - x0,
-        line_h=line_h,
-        blank_h=blank_h,
-        fontpt=fontpt,
-        default_ink=default_ink,
+        ax, parsed, x0=x0, y0=y0, max_width=max(ax.get_xlim()) - x0,
+        line_h=line_h, blank_h=blank_h, fontpt=fontpt, default_ink=default_ink,
     )
+
+
+def _paginate_segments(sink, y0, page_height, bottom_pad=TYPED_TEXT_PAGE_PAD):
+    """Group recorded segments into visual lines and split them across page-height bands.
+
+    Samsung paginates typed text by whole lines: a line whose bottom would cross the page height
+    is pushed entirely to the top of the next page (leaving whitespace below on the current one),
+    it is never clipped mid-line. Returns a list of pages, each a list of `{"y", "segs"}` visual
+    lines with `y` already rebased to the page (first line of every page sits at `y0`).
+    """
+    lines: list[dict] = []
+    by_y: dict[float, dict] = {}
+    for x, y, seg, style, line_h in sink:
+        key = round(y, 2)
+        ln = by_y.get(key)
+        if ln is None:
+            ln = {"y": y, "advance": line_h, "segs": []}
+            by_y[key] = ln
+            lines.append(ln)
+        ln["segs"].append((x, seg, style))
+        ln["advance"] = max(ln["advance"], line_h)
+    lines.sort(key=lambda ln: ln["y"])
+
+    pages: list[list[dict]] = []
+    current: list[dict] = []
+    base = 0.0
+    for ln in lines:
+        y_page = ln["y"] - base
+        if current and y_page + ln["advance"] > page_height - bottom_pad:
+            pages.append(current)
+            current = []
+            base = ln["y"] - y0
+            y_page = y0
+        current.append({"y": y_page, "segs": ln["segs"]})
+    if current:
+        pages.append(current)
+    return pages
+
+
+def paginate_typed_text(parsed, width, height, figsize, default_ink=DEFAULT_INK):
+    """Lay the typed text out once on a scratch page-sized axes and split it into page slots."""
+    fig, ax = plt.subplots(figsize=figsize)
+    try:
+        ax.set_xlim(0, width)
+        ax.set_ylim(height, 0)
+        sink: list = []
+        _render_rich_text(
+            ax, parsed, x0=TYPED_TEXT_X0, y0=TYPED_TEXT_Y0, max_width=width - TYPED_TEXT_X0,
+            line_h=TYPED_TEXT_LINE_H, blank_h=TYPED_TEXT_BLANK_H, fontpt=TYPED_TEXT_FONTPT,
+            default_ink=default_ink, sink=sink,
+        )
+    finally:
+        plt.close(fig)
+    return _paginate_segments(sink, TYPED_TEXT_Y0, height)
+
+
+def draw_typed_page(ax, page_lines, fontpt=TYPED_TEXT_FONTPT, default_ink=DEFAULT_INK):
+    """Draw one paginated slot (from paginate_typed_text) onto a page's axes."""
+    fig = ax.figure
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    inv = ax.transData.inverted()
+    for ln in page_lines:
+        for x, seg, style in ln["segs"]:
+            _draw_text_segment(ax, renderer, inv, x, ln["y"], seg, fontpt, style, default_ink)
 
 
 def render_table(ax, table, line_color=TABLE_LINE_COLOR, text_color=DEFAULT_INK, fontpt=15, pad=18):
@@ -808,6 +877,8 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
     note = load_note(path) or b""
     typed_text = parse_typed_text(note)
     typed_text_placed = False
+    typed_pages = None  # paginated typed-text slots, computed lazily on the anchor page
+    typed_anchor_idx = None
     tables = parse_tables(note)
     typed_text_target = _typed_text_target_page(typed_text)
     table_target_page = table_page
@@ -879,16 +950,18 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
         for table in page_tables:
             render_table(ax, table, text_color=default_ink)
         if shows_typed_text:
-            bottom = render_typed_text(ax, typed_text, page_bg, default_ink=default_ink)
+            # note.note typed text is a document-level flow: lay it out once, then paginate it
+            # across this page and the following .page files by page height (whole lines bumped to
+            # the next page, matching Samsung), instead of stretching one page to hold all of it.
+            typed_pages = paginate_typed_text(
+                typed_text, page_result["width"], page_result["height"], figsize, default_ink=default_ink
+            )
+            typed_anchor_idx = idx
             typed_text_placed = True
-            # note.note typed text is one tall scrolling page and can run past the nominal page
-            # height; grow the axes (and the figure, so the text isn't squished) to contain it
-            # instead of letting the tail bleed past the axes onto the tick labels.
-            page_height = page_result["height"]
-            if bottom is not None and bottom + 80 > page_height:
-                new_height = bottom + 80
-                ax.set_ylim(new_height, 0)
-                fig.set_size_inches(figsize[0], figsize[1] * new_height / page_height)
+        if typed_pages is not None and typed_anchor_idx is not None:
+            slot = idx - typed_anchor_idx
+            if 0 <= slot < len(typed_pages):
+                draw_typed_page(ax, typed_pages[slot], default_ink=default_ink)
         fig.tight_layout()
 
         if out_dir is not None:
