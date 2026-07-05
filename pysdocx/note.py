@@ -547,13 +547,30 @@ def _decode_pen_style_tail(blob: bytes) -> dict | None:
     enabled = struct.unpack_from("<I", blob, 8)[0]
     if not (0.0 <= width <= 40.0 and (argb >> 24) == 0xFF and enabled == 1):
         return None
+    param = None
+    param_end = 12
+    if len(blob) >= 18:
+        char_len = struct.unpack_from("<H", blob, 12)[0]
+        text_start = 14
+        text_end = text_start + char_len * 2
+        if 1 <= char_len <= 24 and text_end <= len(blob):
+            try:
+                candidate = blob[text_start:text_end].decode("utf-16-le")
+            except UnicodeDecodeError:
+                candidate = ""
+            if candidate and any(ch.isdigit() for ch in candidate) and all(
+                ch.isdigit() or ch == ";" for ch in candidate
+            ):
+                param = candidate
+                param_end = text_end
     return {
         "width": width,
         "argb": f"0x{argb:08x}",
         "enabled": enabled,
+        "param": param,
         "raw_u32": [
             struct.unpack_from("<I", blob, pos)[0]
-            for pos in range(12, len(blob), 4)
+            for pos in range(param_end, len(blob), 4)
             if pos + 4 <= len(blob)
         ],
         "raw_hex": blob.hex(),

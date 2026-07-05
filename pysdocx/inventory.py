@@ -248,6 +248,7 @@ def build_inventory(targets: list[Path]) -> dict:
     note_tail_hash_prefixes = Counter()
     note_preload_paths = Counter()
     note_preload_param_hints = Counter()
+    note_style_tail_params = Counter()
     note_voice_post_u32 = Counter()
     note_tail_gap_prefixes = Counter()
     note_tail_coverage_rows = []
@@ -303,6 +304,8 @@ def build_inventory(targets: list[Path]) -> dict:
                 note_preload_paths[record.get("path", "")] += 1
                 if record.get("param_hint"):
                     note_preload_param_hints[record["param_hint"]] += 1
+            elif record["kind"] == "pen_style_tail" and record.get("param"):
+                note_style_tail_params[record["param"]] += 1
             elif record["kind"] == "voice_clip":
                 note_voice_post_u32[tuple(record.get("post_u32", ()))] += 1
 
@@ -451,6 +454,7 @@ def build_inventory(targets: list[Path]) -> dict:
             ],
             "preload_paths": dict(sorted(note_preload_paths.items())),
             "preload_param_hints": dict(sorted(note_preload_param_hints.items())),
+            "pen_style_tail_params": dict(sorted(note_style_tail_params.items())),
             "voice_post_u32": [
                 {"post_u32": list(post_u32), "count": count}
                 for post_u32, count in sorted(note_voice_post_u32.items())

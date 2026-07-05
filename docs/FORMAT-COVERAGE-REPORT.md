@@ -338,6 +338,7 @@ Decoded/used:
 - `pen_preload_path` is decoded as `u16 char_len + UTF-16LE path` (38 paths across the corpus)
 - `pen_preload_prelude` / `pen_preload_prelude_raw` classify the small bounded blocks before paths
 - `pen_style_tail` classifies recurring pen-style blocks with a leading f32 width + ARGB color
+  and an optional digit/semicolon parameter string
 - preload `param_hint` strings are recorded conservatively when adjacent (`8;`, `14;`, `18;0;100;`)
 - localized voice labels are accepted as `Voice N` or `Voce N`
 - inventory reports known/unknown tail-byte coverage
@@ -353,7 +354,7 @@ What is still missing:
 
 - exact semantics of the raw fields around preload paths
 - exact meaning of preload parameter hints
-- exact meaning of `pen_style_tail.raw_u32`
+- exact meaning of `pen_style_tail.param` and `pen_style_tail.raw_u32`
 - exact meaning of the 4-byte trailing values after some hash blocks
 - exact semantics of `voice_clip.post_u32`
 

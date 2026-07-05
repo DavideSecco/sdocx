@@ -499,6 +499,10 @@ def cmd_inventory(args: argparse.Namespace) -> None:
         print("note preload param hints:")
         for hint, count in sorted(report["note_tail_profiles"]["preload_param_hints"].items()):
             print(f"  {hint!r:<16} count={count}")
+    if report["note_tail_profiles"].get("pen_style_tail_params"):
+        print("note pen style tail params:")
+        for hint, count in sorted(report["note_tail_profiles"]["pen_style_tail_params"].items()):
+            print(f"  {hint!r:<16} count={count}")
     if report["note_tail_profiles"].get("voice_post_u32"):
         print("note voice post_u32:")
         for row in report["note_tail_profiles"]["voice_post_u32"]:

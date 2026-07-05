@@ -35,6 +35,7 @@ class InventoryRegressionTest(unittest.TestCase):
         self.assertEqual(tail["kinds"]["voice_clip"], 2)
         self.assertEqual(coverage["known_bytes"], 5938)
         self.assertEqual(coverage["unknown_bytes"], 0)
+        self.assertEqual(tail["pen_style_tail_params"], {"5;": 1, "8;": 2})
         self.assertEqual(
             tail["page_id_info_relations"],
             {"page_id_head_exact": 10, "page_id_head_shifted_u32_2": 3},

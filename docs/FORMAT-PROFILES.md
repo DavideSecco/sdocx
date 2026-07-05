@@ -132,7 +132,7 @@ Current tail-record kinds seen by the parser:
 | `pen_preload_path` | 38 | Length-prefixed pen preload/config resource path strings |
 | `pen_preload_prelude` | 24 | Small parameter prelude before a preload path |
 | `pen_preload_prelude_raw` | 13 | Small raw prelude before a preload path |
-| `pen_style_tail` | 10 | Recurring pen-style tail block (`f32`, ARGB, raw fields) |
+| `pen_style_tail` | 10 | Recurring pen-style tail block (`f32`, ARGB, optional param, raw fields) |
 | `tail_hash_block` | 13 | Opaque 32-byte hash-like block after the tail sentinel |
 | `tail_post_hash_u32` | 3 | 4-byte value after shifted pageIdInfo hash blocks |
 | `voice_clip` | 2 | Voice label/duration records (`Voice N` / `Voce N`) |
@@ -146,7 +146,8 @@ hints observed in this corpus: `8;` (6), `14;` (1), `18;0;100;` (1).
 
 This is still partial semantic structure, but the byte coverage is now complete for the current
 corpus: `5938/5938` tail bytes (`100%`) are assigned to bounded records. Some records intentionally
-remain raw/partial because their exact field meanings are not settled.
+remain raw/partial because their exact field meanings are not settled. Current `pen_style_tail`
+optional params are `8;` (2) and `5;` (1).
 
 ### pageIdInfo relation
 
