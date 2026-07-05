@@ -30,6 +30,7 @@ todo checked state. Confirmed on samples/OnlyTextTypeWritten_260701_180427.sdocx
 kind 8=bullet, kind 2=todo; tag 0x03=alignment, tag 0x02=indent, tag 0x0a=heading/body style.
 """
 
+import re
 import struct
 
 STYLE_MARKER_PREFIX = b"\x18\x00"
@@ -336,6 +337,337 @@ TABLE_ANCHOR_Y_BACK = 8
 # the color+font runs, no bold run. The window below (200 bytes) comfortably covers all of a
 # cell's runs without reaching into the next cell's (observed span for a 3-run cell: ~100 bytes).
 CELL_STYLE_WINDOW = 200
+VOICE_LABEL_RE = re.compile(r"^Voice \d+$")
+VOICE_DURATION_RE = re.compile(r"^\d{2}:\d{2}:\d{2}$")
+PRELOAD_PATH_MARKER = "com.samsung.android.sdk.pen.pen.preload."
+TAIL_SENTINEL = b"\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00"
+TAIL_HASH_DISTINCT_MIN = 20
+TAIL_HASH_MAX_ZERO_BYTES = 4
+
+
+def _read_i32(data: bytes, offset: int) -> int | None:
+    if offset + 4 > len(data):
+        return None
+    return struct.unpack_from("<i", data, offset)[0]
+
+
+def _read_i64(data: bytes, offset: int) -> int | None:
+    if offset + 8 > len(data):
+        return None
+    return struct.unpack_from("<q", data, offset)[0]
+
+
+def _read_short_utf16(data: bytes, offset: int) -> tuple[str, int] | None:
+    if offset + 2 > len(data):
+        return None
+    char_len = struct.unpack_from("<h", data, offset)[0]
+    offset += 2
+    if char_len < 0:
+        return None
+    end = offset + char_len * 2
+    if end > len(data):
+        return None
+    return data[offset:end].decode("utf-16-le", errors="replace"), end
+
+
+def _extract_title_from_blob(data: bytes) -> str:
+    """Extract the title text from the note-level title object blob.
+
+    The outer note metadata is structurally decoded, but the inner title-object schema is still
+    only partially understood. In all current samples the actual title appears as
+    `u32 char_len + UTF-16LE text` somewhere inside that blob.
+    """
+    if len(data) < 12:
+        return ""
+    for i in range(0, max(0, len(data) - 10)):
+        char_len = struct.unpack_from("<i", data, i)[0]
+        if not (1 <= char_len <= 200):
+            continue
+        start = i + 4
+        end = start + char_len * 2
+        if end > len(data):
+            continue
+        text = data[start:end].decode("utf-16-le", errors="replace")
+        if text and all(ch == "\n" or 0x20 <= ord(ch) <= 0xD7FF for ch in text):
+            return text
+    return ""
+
+
+def _read_u16_len_prefixed_utf16(data: bytes, offset: int) -> tuple[str, int] | None:
+    if offset + 2 > len(data):
+        return None
+    char_len = struct.unpack_from("<H", data, offset)[0]
+    if not (1 <= char_len <= 128):
+        return None
+    start = offset + 2
+    end = start + char_len * 2
+    if end > len(data):
+        return None
+    return data[start:end].decode("utf-16-le", errors="replace"), end
+
+
+def _scan_voice_clip_metadata(note_bytes: bytes) -> list[dict]:
+    """Infer voice-clip descriptors from adjacent length-prefixed UTF-16 strings."""
+    clips: list[dict] = []
+    off = 0
+    while off + 8 <= len(note_bytes):
+        first = _read_u16_len_prefixed_utf16(note_bytes, off)
+        if first is None:
+            off += 2
+            continue
+        label, after_label = first
+        if not VOICE_LABEL_RE.fullmatch(label):
+            off += 2
+            continue
+        second = _read_u16_len_prefixed_utf16(note_bytes, after_label)
+        if second is None:
+            off += 2
+            continue
+        duration, after_duration = second
+        if VOICE_DURATION_RE.fullmatch(duration):
+            clips.append({
+                "label": label,
+                "duration": duration,
+                "label_off": off,
+                "duration_off": after_label,
+                "end": after_duration,
+            })
+            off = after_duration
+        else:
+            off += 2
+    return clips
+
+
+def _scan_preload_param_hint(note_bytes: bytes, path_field_start: int) -> str | None:
+    """Return the nearest digit/semicolon parameter string before a preload path field."""
+    best = None
+    search_start = max(0, path_field_start - 64)
+    for off in range(search_start, path_field_start, 2):
+        parsed = _read_u16_len_prefixed_utf16(note_bytes, off)
+        if parsed is None:
+            continue
+        candidate, end = parsed
+        if not candidate or not any(ch.isdigit() for ch in candidate):
+            continue
+        if not all(ch.isdigit() or ch == ";" for ch in candidate):
+            continue
+        if end <= path_field_start and note_bytes[end:path_field_start].strip(b"\x00") == b"":
+            best = (end, candidate)
+    return best[1] if best else None
+
+
+def _scan_pen_preload_paths(note_bytes: bytes, start: int) -> list[dict]:
+    """Pen-preload resource paths repeatedly appear in note.note tail blocks.
+
+    The path itself is a length-prefixed UTF-16 field. The surrounding record schema is still
+    partial, but the path and the nearby digit/semicolon parameter hint are stable tail markers.
+    """
+    records: list[dict] = []
+    marker = PRELOAD_PATH_MARKER.encode("utf-16-le")
+    off = start
+    while True:
+        hit = note_bytes.find(marker, off)
+        if hit < 0:
+            break
+        off = hit + 2
+        field_start = hit - 2
+        parsed = _read_u16_len_prefixed_utf16(note_bytes, field_start)
+        if parsed is None:
+            continue
+        text, text_end = parsed
+        if not text.startswith(PRELOAD_PATH_MARKER):
+            continue
+        param_hint = _scan_preload_param_hint(note_bytes, field_start)
+        records.append({
+            "kind": "pen_preload_path",
+            "off": field_start,
+            "end": text_end,
+            "path": text,
+            "param_hint": param_hint,
+        })
+    return records
+
+
+def _tail_hash_blocks(note_bytes: bytes, start: int) -> list[dict]:
+    """Opaque 32-byte hash-like tail blocks seen in the current v5400 family."""
+    records: list[dict] = []
+    off = start
+    end = len(note_bytes)
+    while off + 40 <= end:
+        a = struct.unpack_from("<I", note_bytes, off)[0]
+        b = struct.unpack_from("<I", note_bytes, off + 4)[0]
+        blob = note_bytes[off + 8 : off + 40]
+        if (
+            a <= 4
+            and b <= 4
+            and (a or b)
+            and len(set(blob)) >= TAIL_HASH_DISTINCT_MIN
+            and blob.count(0) <= TAIL_HASH_MAX_ZERO_BYTES
+        ):
+            records.append({
+                "kind": "tail_hash_block",
+                "off": off,
+                "end": off + 40,
+                "prefix_u32": [a, b],
+                "hash32": blob.hex(),
+            })
+            off += 40
+        else:
+            off += 2
+    return records
+
+
+def scan_note_tail_records(note_bytes: bytes, offset_to_data: int) -> list[dict]:
+    """Conservative classification of note.note tail records after the top-level metadata."""
+    if not (0 <= offset_to_data < len(note_bytes)):
+        return []
+
+    tail = note_bytes[offset_to_data:]
+    records: list[dict] = []
+    cursor = offset_to_data
+    if tail.startswith(TAIL_SENTINEL):
+        records.append({
+            "kind": "tail_sentinel",
+            "off": offset_to_data,
+            "end": offset_to_data + len(TAIL_SENTINEL),
+            "signature": TAIL_SENTINEL.hex(),
+        })
+        cursor += len(TAIL_SENTINEL)
+
+    for clip in _scan_voice_clip_metadata(note_bytes[cursor:]):
+        clip_off = cursor + clip["label_off"]
+        clip_end = cursor + clip["end"]
+        post_u32 = []
+        post_start = clip_end
+        for i in range(0, 24, 4):
+            if post_start + i + 4 > len(note_bytes):
+                break
+            post_u32.append(struct.unpack_from("<I", note_bytes, post_start + i)[0])
+        records.append({
+            "kind": "voice_clip",
+            "off": clip_off,
+            "end": clip_end,
+            "label": clip["label"],
+            "duration": clip["duration"],
+            "post_u32": post_u32,
+        })
+
+    records.extend(_scan_pen_preload_paths(note_bytes, cursor))
+    records.extend(_tail_hash_blocks(note_bytes, cursor))
+    records.sort(key=lambda r: (r["off"], r["end"], r["kind"]))
+    deduped: list[dict] = []
+    seen = set()
+    for record in records:
+        key = (record["kind"], record["off"], record["end"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(record)
+    return deduped
+
+
+def annotate_note_tail_with_page_id_info(note_meta: dict | None, page_id_info: bytes | None) -> dict | None:
+    """Attach pageIdInfo-derived relations to parsed note tail records.
+
+    Current corpus result:
+    - `[2, 2] + hash32` blocks match the first 32 bytes of `pageIdInfo.dat` exactly.
+    - `[0, 2] + hash32` blocks store `u32(2)` plus the first 28 bytes of that same pageIdInfo head.
+    """
+    if note_meta is None or page_id_info is None:
+        return note_meta
+    if len(page_id_info) < 32:
+        return note_meta
+
+    page_id_head = page_id_info[:32]
+    annotated = dict(note_meta)
+    records = []
+    for record in note_meta.get("tail_records", ()):
+        rec = dict(record)
+        if rec.get("kind") == "tail_hash_block":
+            blob = bytes.fromhex(rec["hash32"])
+            exact = blob == page_id_head
+            shifted = (
+                len(blob) == 32
+                and blob[:4] == struct.pack("<I", 2)
+                and blob[4:] == page_id_head[:28]
+            )
+            rec["page_id_info_relation"] = {
+                "matches_page_id_head_exact": exact,
+                "matches_page_id_head_shifted_with_u32_2": shifted,
+            }
+        records.append(rec)
+    annotated["tail_records"] = records
+    return annotated
+
+
+def parse_note_metadata(note_bytes: bytes) -> dict | None:
+    """Parse note.note's top-level metadata block plus conservative extra metadata."""
+    if len(note_bytes) < 64:
+        return None
+
+    try:
+        pos = 0
+        offset_to_data = _read_i32(note_bytes, pos)
+        pos += 4
+        pos += 1
+        flags = _read_i32(note_bytes, pos)
+        pos += 4
+        pos += 1
+        meta_flags = _read_i32(note_bytes, pos)
+        pos += 4
+        format_version = _read_i32(note_bytes, pos)
+        pos += 4
+        note_id_result = _read_short_utf16(note_bytes, pos)
+        if note_id_result is None:
+            return None
+        note_id, pos = note_id_result
+        file_revision = _read_i32(note_bytes, pos)
+        pos += 4
+        created_time = _read_i64(note_bytes, pos)
+        pos += 8
+        modified_time = _read_i64(note_bytes, pos)
+        pos += 8
+        width = _read_i32(note_bytes, pos)
+        pos += 4
+        height = _read_i32(note_bytes, pos)
+        pos += 4
+        page_h_padding = _read_i32(note_bytes, pos)
+        pos += 4
+        page_v_padding = _read_i32(note_bytes, pos)
+        pos += 4
+        min_format_version = _read_i32(note_bytes, pos)
+        pos += 4
+        title_size = _read_i32(note_bytes, pos)
+        pos += 4
+
+        title = ""
+        title_off = pos
+        if title_size is not None and 0 < title_size <= len(note_bytes) - pos:
+            title = _extract_title_from_blob(note_bytes[pos : pos + title_size])
+
+        tail_records = scan_note_tail_records(note_bytes, offset_to_data)
+        return {
+            "offset_to_data": offset_to_data,
+            "flags": flags,
+            "meta_flags": meta_flags,
+            "format_version": format_version,
+            "note_id": note_id,
+            "file_revision": file_revision,
+            "created_time": created_time,
+            "modified_time": modified_time,
+            "width": width,
+            "height": height,
+            "page_h_padding": page_h_padding,
+            "page_v_padding": page_v_padding,
+            "min_format_version": min_format_version,
+            "title_size": title_size,
+            "title_off": title_off,
+            "title": title,
+            "voice_clips": _scan_voice_clip_metadata(note_bytes),
+            "tail_records": tail_records,
+        }
+    except (IndexError, struct.error, UnicodeDecodeError):
+        return None
 
 
 def _cell_style(note_bytes: bytes, cell_end: int, char_count: int) -> dict:

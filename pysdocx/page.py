@@ -120,6 +120,34 @@ IMAGE_MEDIA_REF_MARKER = b"\x06\x00\x3e\x00\x00\x00\x02\x00"
 # to exactly -45.0 and 90.0, matching that file's "~45°/~90°" visual estimate exactly.
 IMAGE_ANGLE_OFFSET = OBJECT_BASE_HEADER_LEN  # == 105
 IMAGE_ANGLE_FIELD_FLAG = 0x1
+
+# Decoded common-header `field_flags` bits. Every distinct field_flags value in the current 13-sample
+# corpus reconstructs its `total_size` from a purely additive model over these bits (baseline 121 for
+# stroke/text_box, 122 for the media/shape family), with zero counterexamples:
+#   FIELD_FLAG_ANGLE     0x1     +4 bytes   rotation-angle f32 at offset 105 (see IMAGE_ANGLE_* above)
+#   FIELD_FLAG_EXTRA_KEY 0x20    +32 bytes  a named attribute block; its key is literally the ASCII string
+#                                           "extra_key_stroke_shape" (a u16-length-prefixed string after a
+#                                           constant `02 01 00` head), i.e. this stroke is a shape's ink.
+#                                           Confirmed identical on 40/40 objects that set the bit.
+#   FIELD_FLAG_HDR_EXT   0x40000 +16 bytes  a header extension: [u32 counter][u32 seq][u32 page_width]
+#                                           [u32 page_height] — the trailing width/height match the page
+#                                           header on 1690/1690 objects; `seq`/`counter`
+#                                           semantics NOT settled (seq near-constant per note; counter not
+#                                           a unique id) — see _decode_header_ext + OBJECT-HEADER-RE-NOTES.
+# FIELD_FLAG_MEDIA_FAMILY (0x8000) is a family discriminator, not a size contributor: it is set on every
+# image/shape/drawing object and on no stroke/text_box object across the corpus. FIELD_FLAG_BASE_PRESENT
+# bits (0x2000|0x4000) are set on every object seen so far, so they read as "record present" base bits.
+# The +16 and +32 blocks are stored in `total_size`-bit order (extra_key before hdr_ext), so when BOTH
+# 0x20 and 0x40000 are set the hdr_ext sits 32 bytes after the extra_key block.
+FIELD_FLAG_ANGLE = 0x1
+FIELD_FLAG_EXTRA_KEY = 0x20
+FIELD_FLAG_MEDIA_FAMILY = 0x8000
+FIELD_FLAG_HDR_EXT = 0x40000
+FIELD_FLAG_BASE_PRESENT = 0x2000 | 0x4000
+HDR_EXT_LEN = 16
+EXTRA_KEY_BLOCK_LEN = 32
+EXTRA_KEY_MARKER = b"extra_key"
+EXTRA_KEY_STROKE_SHAPE = b"extra_key_stroke_shape"
 TEXT_BOX_TEXT_PREFIX = b"\x06\x00"
 TEXT_BOX_TEXT_MARKER_LEN = 10  # 06 00 <u16 kind> 00 00 <u32 char_count>
 
@@ -139,6 +167,8 @@ TEXT_BOX_TEXT_MARKER_LEN = 10  # 06 00 <u16 kind> 00 00 <u32 char_count>
 # ~(1320,1870)-(1400,1950) (bottom-right corner) — both anchored to this same page.
 STICKY_NOTE_MARKER = b"co_attach_file"
 STICKY_NOTE_RECT_KEY = b"skn_collapse_rect"
+ATTACHMENT_PROPERTY_BAG_MAX_SCAN = 512
+ATTACHMENT_PROPERTY_BAG_MAX_KEYS = 16
 
 # Page background templates. The builtin template id lives at a base-dependent offset in the
 # page header (see page_template(), ported from crates/sdocx/src/page.rs::page_template). Both
@@ -498,6 +528,71 @@ def _read_utf8_string(data: bytes, offset: int) -> tuple[str, int] | None:
     return data[start:end].split(b"\x00", 1)[0].decode("utf-8", errors="replace"), end
 
 
+def _decode_header_ext(blob: bytes, field_flags: int) -> dict | None:
+    """Decode the 16-byte header extension gated by FIELD_FLAG_HDR_EXT (0x40000).
+
+    Layout `[u32 counter][u32 seq][u32 page_width][u32 page_height]`. The trailing width/height match
+    the page header on every object that carries the block (1690/1690 in the corpus), which is what
+    validates the decode. `seq` and `counter` semantics are NOT settled: `seq` is a small value (~415072..
+    415139) that is near-constant WITHIN a note (e.g. 579 objects spanning a spread of 1) and only bumps
+    occasionally, so it reads as a save-time/session/app-global counter, NOT a per-object counter; `counter`
+    repeats within a file (e.g. 200 objects, 152 unique), so it is NOT a unique per-object id. Both are
+    exposed raw pending a firmer characterization (see docs/OBJECT-HEADER-RE-NOTES.md). If an extra_key
+    block (0x20) is present, it is stored first and shifts this extension by 32 bytes.
+    """
+    if not (field_flags & FIELD_FLAG_HDR_EXT):
+        return None
+    start = OBJECT_BASE_HEADER_LEN + (4 if field_flags & FIELD_FLAG_ANGLE else 0)
+    if field_flags & FIELD_FLAG_EXTRA_KEY:
+        start += EXTRA_KEY_BLOCK_LEN
+    if start + HDR_EXT_LEN > len(blob):
+        return None
+    counter, seq, page_width, page_height = struct.unpack_from("<4I", blob, start)
+    return {
+        "off": start,
+        "counter": counter,
+        "seq": seq,
+        "page_width": page_width,
+        "page_height": page_height,
+    }
+
+
+def _decode_extra_key_block(blob: bytes, field_flags: int) -> dict | None:
+    """Decode the 32-byte named attribute block gated by FIELD_FLAG_EXTRA_KEY (0x20).
+
+    Confirmed on all 40 objects that set the bit: the block starts at the common attributes
+    offset, after the optional rotation f32, and contains `02 01 00`, a u16 byte length, the
+    NUL-terminated ASCII key `extra_key_stroke_shape`, and a trailing u32 that is always 1 in
+    the current corpus. The trailing value is exposed raw because flag-vs-count semantics are
+    still unresolved.
+    """
+    if not (field_flags & FIELD_FLAG_EXTRA_KEY):
+        return None
+    start = OBJECT_BASE_HEADER_LEN + (4 if field_flags & FIELD_FLAG_ANGLE else 0)
+    if start + EXTRA_KEY_BLOCK_LEN > len(blob):
+        return None
+
+    head = blob[start : start + 3]
+    key_len = struct.unpack_from("<H", blob, start + 3)[0]
+    key_start = start + 5
+    key_end = key_start + key_len
+    trailing_off = start + 28
+    if key_end > len(blob) or trailing_off + 4 > len(blob):
+        return None
+
+    raw_key = blob[key_start:key_end]
+    key = raw_key.rstrip(b"\x00").decode("ascii", errors="replace")
+    trailing = struct.unpack_from("<I", blob, trailing_off)[0]
+    return {
+        "off": start,
+        "head": head.hex(),
+        "head_ok": head == b"\x02\x01\x00",
+        "key_len": key_len,
+        "key": key,
+        "trailing": trailing,
+    }
+
+
 def _parse_object_header(blob: bytes) -> dict | None:
     """Parse the common object header at the start of an object blob.
 
@@ -559,9 +654,62 @@ def _parse_object_header(blob: bytes) -> dict | None:
             "timestamp": timestamp,
             "resizable": resizable,
             "attributes_offset": pos,
+            "ext_block": _decode_header_ext(blob, field_flags),
+            "extra_key_block": _decode_extra_key_block(blob, field_flags),
         }
     except (IndexError, struct.error):
         return None
+
+
+# field_flags bits mapped to a decoded feature name; see the FIELD_FLAG_* comment block above for the
+# corpus evidence behind each. Any bit NOT listed here is surfaced as an explicit unknown so we never
+# silently imply we understand it.
+_FIELD_FLAG_FEATURES = (
+    (FIELD_FLAG_ANGLE, "rotation_angle_f32_at_105"),
+    (FIELD_FLAG_EXTRA_KEY, "extra_key_stroke_shape"),
+    (FIELD_FLAG_MEDIA_FAMILY, "media_shape_family"),
+    (FIELD_FLAG_HDR_EXT, "header_ext_16b"),
+)
+_FIELD_FLAG_KNOWN_MASK = FIELD_FLAG_BASE_PRESENT
+for _bit, _name in _FIELD_FLAG_FEATURES:
+    _FIELD_FLAG_KNOWN_MASK |= _bit
+
+
+def _object_header_profile(raw_type: int, obj_type: str, header: dict | None) -> dict | None:
+    """Summarize the common object-header variant, separating decoded facts from guesses.
+
+    The `(total_size, field_flags)` signature is stable across the current sample corpus, and every
+    field_flags bit observed there now has a decoded meaning (see `_FIELD_FLAG_FEATURES` and the
+    FIELD_FLAG_* constants). Any bit we have NOT explained is still surfaced in `unknown_bits`, so a
+    new corpus that sets a novel bit shows up immediately instead of being silently absorbed.
+    """
+    if header is None:
+        return None
+
+    field_flags = header["field_flags"]
+    known_features = [name for bit, name in _FIELD_FLAG_FEATURES if field_flags & bit]
+    if field_flags & FIELD_FLAG_BASE_PRESENT:
+        known_features.append("base_present_bits")
+    unknown_bits = [
+        f"0x{1 << i:x}"
+        for i in range(field_flags.bit_length())
+        if (field_flags & (1 << i)) and not (_FIELD_FLAG_KNOWN_MASK & (1 << i))
+    ]
+
+    family = "base"
+    if header["total_size"] > STROKE_OBJECT_BASE_TOTAL_SIZE or (field_flags & FIELD_FLAG_HDR_EXT):
+        family = "extended"
+    if field_flags & FIELD_FLAG_ANGLE:
+        family += "_rotated"
+
+    return {
+        "signature": f"{header['total_size']}/0x{field_flags:x}",
+        "family": family,
+        "raw_type": raw_type,
+        "object_type": obj_type,
+        "known_features": known_features,
+        "unknown_bits": unknown_bits,
+    }
 
 
 def _classify_page_object(raw_type: int, blob: bytes) -> str:
@@ -682,6 +830,7 @@ def _parse_objects(data: bytes, pos: int, count: int, width: int, height: int, d
             "bbox": header["bbox"] if header else None,
             "children": [],
         }
+        obj["header_profile"] = _object_header_profile(raw_type, obj["type"], header)
         pos = blob_end
         if child_count > 0 and depth < 16:
             obj["children"], pos = _parse_objects(data, pos, child_count, width, height, depth + 1)
@@ -936,6 +1085,7 @@ def parse_page(data: bytes) -> dict:
         "images": scan_images_from_objects(data, width, height, tree["layers"]),
         "drawings": scan_drawings_from_objects(data, width, height, tree["layers"]),
         "text_boxes": parse_text_boxes_from_objects(data, tree["layers"]),
+        "attachment_placements": scan_attachment_placements(data, width, height),
         "sticky_notes": scan_sticky_notes(data, width, height),
         "attempts": attempts,
     }
@@ -1192,10 +1342,50 @@ def parse_text_boxes_from_objects(data: bytes, layers: list[dict]) -> list[dict]
                 "text_off": obj["blob_off"] + parsed["text_off"],
                 "bbox": obj["bbox"],
                 "angle_deg": _image_rotation_deg(obj["header"], blob),
+                "frame_midpoints": _text_box_frame_midpoints(obj, blob),
                 "object_idx": obj["idx"],
                 "object_off": obj["off"],
             })
     return text_boxes
+
+
+def _text_box_frame_midpoints(obj: dict, blob: bytes) -> list[tuple[float, float]] | None:
+    """Candidate 4 edge-midpoints of a rotated text-box frame.
+
+    On the `_squared` sample's rotated text boxes (16° and 90°), the object payload region right
+    after the common header contains 4 `(x, y)` pairs as little-endian f64 values starting at
+    `header["total_size"] + 0x12`. Their centroid matches the decoded bbox center exactly, and
+    their radii match `bbox_h/2` and `bbox_w/2`, which strongly suggests these are the frame's
+    stored edge-midpoints. The plain horizontal box lacks this longer rotated-object payload.
+
+    This is still reverse-engineered structure, not yet a fully-explained semantic field, so we
+    expose it only when the geometry is self-consistent with the decoded bbox.
+    """
+    header = obj.get("header")
+    bbox = obj.get("bbox")
+    if header is None or bbox is None or header["total_size"] + 0x12 + 8 * 8 > len(blob):
+        return None
+    if not (header.get("field_flags", 0) & IMAGE_ANGLE_FIELD_FLAG):
+        return None
+
+    start = header["total_size"] + 0x12
+    pts = []
+    for i in range(4):
+        x = struct.unpack_from("<d", blob, start + i * 16)[0]
+        y = struct.unpack_from("<d", blob, start + i * 16 + 8)[0]
+        pts.append((x, y))
+    if not all(math.isfinite(v) for pt in pts for v in pt):
+        return None
+
+    x0, y0, x1, y1 = bbox
+    cx = sum(x for x, _y in pts) / 4.0
+    cy = sum(y for _x, y in pts) / 4.0
+    bbox_cx = (x0 + x1) / 2.0
+    bbox_cy = (y0 + y1) / 2.0
+    if abs(cx - bbox_cx) > 1.0 or abs(cy - bbox_cy) > 1.0:
+        return None
+
+    return pts
 
 
 def _read_len_prefixed_ascii(data: bytes, offset: int) -> tuple[str, int] | None:
@@ -1213,6 +1403,107 @@ def _read_len_prefixed_ascii(data: bytes, offset: int) -> tuple[str, int] | None
         return None
 
 
+def _parse_attachment_bbox(text: str, width: int, height: int) -> tuple[float, float, float, float] | None:
+    parts = text.split(",")
+    if len(parts) != 4:
+        return None
+    try:
+        x0, y0, x1, y1 = (float(v) for v in parts)
+    except ValueError:
+        return None
+    bbox = (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+    if not (
+        all(math.isfinite(v) for v in bbox)
+        and -5 <= bbox[0] < bbox[2] <= width + 5
+        and -5 <= bbox[1] < bbox[3] <= height + 5
+    ):
+        return None
+    return bbox
+
+
+def _scan_attachment_property_bag(data: bytes, marker_off: int, width: int, height: int) -> dict | None:
+    """Decode one whole-page attachment property bag anchored by `co_attach_file`.
+
+    These records are still discovered by marker because they live outside the declared page
+    object count, but once found we parse them as a structured sequence of keys/values instead of
+    only extracting the sticky-note rectangle.
+    """
+    if marker_off < 4 or struct.unpack_from("<I", data, marker_off - 4)[0] != len(STICKY_NOTE_MARKER):
+        return None
+
+    bag_off = marker_off - 4
+    pos = bag_off
+    end_limit = min(len(data), bag_off + ATTACHMENT_PROPERTY_BAG_MAX_SCAN)
+    keys: list[str] = []
+    properties: dict[str, object] = {}
+    media_index = None
+    attach_type_tag = None
+    bbox = None
+
+    for _ in range(ATTACHMENT_PROPERTY_BAG_MAX_KEYS):
+        result = _read_len_prefixed_ascii(data, pos)
+        if result is None:
+            break
+        key, pos = result
+        if not re.fullmatch(r"[A-Za-z0-9_]{2,64}", key):
+            break
+        keys.append(key)
+
+        if key == STICKY_NOTE_MARKER.decode("ascii"):
+            if pos + 8 > end_limit:
+                return None
+            media_index = struct.unpack_from("<I", data, pos)[0]
+            attach_type_tag = struct.unpack_from("<I", data, pos + 4)[0]
+            properties[key] = {"media_index": media_index, "type_tag": attach_type_tag}
+            pos += 8
+        else:
+            value = _read_len_prefixed_ascii(data, pos)
+            if value is None:
+                break
+            text, pos = value
+            properties[key] = text
+            if key == STICKY_NOTE_RECT_KEY.decode("ascii"):
+                bbox = _parse_attachment_bbox(text, width, height)
+
+        if pos + 4 > end_limit:
+            break
+
+    if media_index is None:
+        return None
+
+    kind = "sticky_note" if any(key.startswith("skn_") for key in keys) else "attachment"
+    return {
+        "kind": kind,
+        "media_index": media_index,
+        "type_tag": attach_type_tag,
+        "bbox": bbox,
+        "keys": keys,
+        "properties": properties,
+        "bag_off": bag_off,
+        "off": marker_off,
+        "end": pos,
+    }
+
+
+def scan_attachment_placements(data: bytes, width: int, height: int) -> list[dict]:
+    """Find page-level attachment property bags outside the declared object tree.
+
+    Confirmed today for sticky-note placements. Audio remains only a document-level attachment plus
+    note.note metadata in the current corpus, so lack of an audio placement here is expected.
+    """
+    placements: list[dict] = []
+    off = 0
+    while True:
+        i = data.find(STICKY_NOTE_MARKER, off)
+        if i < 0:
+            break
+        off = i + 1
+        placement = _scan_attachment_property_bag(data, i, width, height)
+        if placement is not None:
+            placements.append(placement)
+    return placements
+
+
 def scan_sticky_notes(data: bytes, width: int, height: int) -> list[dict]:
     """Find sticky-note (file-attachment) placements: `{media_index, bbox, off}`.
 
@@ -1220,39 +1511,14 @@ def scan_sticky_notes(data: bytes, width: int, height: int) -> list[dict]:
     the layer's own declared object_count excludes these, so the normal tree walk never reaches
     them (same situation as markerless arrows, see scan_arrows)."""
     notes: list[dict] = []
-    off = 0
-    while True:
-        i = data.find(STICKY_NOTE_MARKER, off)
-        if i < 0:
-            break
-        off = i + 1
-        idx_off = i + len(STICKY_NOTE_MARKER)
-        if idx_off + 4 > len(data):
+    for placement in scan_attachment_placements(data, width, height):
+        if placement["kind"] != "sticky_note" or placement["bbox"] is None:
             continue
-        media_index = struct.unpack_from("<I", data, idx_off)[0]
-
-        rect_key = data.find(STICKY_NOTE_RECT_KEY, idx_off, idx_off + 200)
-        if rect_key < 0:
-            continue
-        rect = _read_len_prefixed_ascii(data, rect_key + len(STICKY_NOTE_RECT_KEY))
-        if rect is None:
-            continue
-        text, _ = rect
-        parts = text.split(",")
-        if len(parts) != 4:
-            continue
-        try:
-            x0, y0, x1, y1 = (float(v) for v in parts)
-        except ValueError:
-            continue
-        bbox = (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
-        if not (
-            all(math.isfinite(v) for v in bbox)
-            and -5 <= bbox[0] < bbox[2] <= width + 5
-            and -5 <= bbox[1] < bbox[3] <= height + 5
-        ):
-            continue
-        notes.append({"media_index": media_index, "bbox": bbox, "off": i})
+        notes.append({
+            "media_index": placement["media_index"],
+            "bbox": placement["bbox"],
+            "off": placement["off"],
+        })
     return notes
 
 

@@ -123,6 +123,14 @@ def load_note(path: Path) -> bytes | None:
         return z.read("note.note")
 
 
+def load_page_id_info(path: Path) -> bytes | None:
+    """Read `pageIdInfo.dat`, or None if absent."""
+    with zipfile.ZipFile(path) as z:
+        if "pageIdInfo.dat" not in z.namelist():
+            return None
+        return z.read("pageIdInfo.dat")
+
+
 def bg_color_from_note(note: bytes) -> str:
     """Scan note.note bytes for the background-color TLV record: [18 00] [00 00 01 00 00 00] [R][G][B][FF]."""
     for i in range(len(note) - 12):
