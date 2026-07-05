@@ -321,7 +321,8 @@ def _print_note_metadata(note_meta: dict | None) -> None:
         elif kind == "voice_clip":
             print(
                 f"  tail_record voice_clip off=0x{record['off']:x} "
-                f"label={record['label']!r} duration={record['duration']!r} post_u32={record['post_u32']}"
+                f"label={record['label']!r} duration={record['duration']!r} "
+                f"post_u32={record['post_u32']} post_u64_pairs={record.get('post_u64_pairs', [])}"
             )
         elif kind == "pen_preload_path":
             print(
@@ -335,6 +336,32 @@ def _print_note_metadata(note_meta: dict | None) -> None:
                 f"prefix={record['prefix_u32']} hash32={record['hash32'][:16]}... "
                 f"pageIdInfo={relation}"
             )
+        elif kind == "pen_preload_prelude":
+            print(
+                f"  tail_record preload_prelude off=0x{record['off']:x} "
+                f"param={record.get('param')!r} prefix={record.get('prefix_u32', [])} "
+                f"trailing={record.get('trailing_u32', [])}"
+            )
+        elif kind == "pen_preload_prelude_raw":
+            print(
+                f"  tail_record preload_prelude_raw off=0x{record['off']:x} "
+                f"raw_u32={record.get('raw_u32', [])}"
+            )
+        elif kind == "pen_style_tail":
+            print(
+                f"  tail_record pen_style_tail off=0x{record['off']:x} "
+                f"width={record.get('width', 0.0):.3f} argb={record.get('argb')} "
+                f"param={record.get('param')!r} raw_u32={record.get('raw_u32', [])}"
+            )
+        elif kind == "voice_clip_header":
+            print(f"  tail_record voice_clip_header off=0x{record['off']:x} raw_u32={record.get('raw_u32', [])}")
+        elif kind == "voice_clip_post":
+            print(
+                f"  tail_record voice_clip_post off=0x{record['off']:x} "
+                f"raw_u32={record.get('raw_u32', [])} raw_u64_pairs={record.get('raw_u64_pairs', [])}"
+            )
+        elif kind == "tail_post_hash_u32":
+            print(f"  tail_record tail_post_hash_u32 off=0x{record['off']:x} value=0x{record['value']:08x}")
 
 
 def _print_text_box_debug(page_idx: int, result: dict, layout_debug: list[dict] | None = None) -> None:
@@ -499,14 +526,41 @@ def cmd_inventory(args: argparse.Namespace) -> None:
         print("note preload param hints:")
         for hint, count in sorted(report["note_tail_profiles"]["preload_param_hints"].items()):
             print(f"  {hint!r:<16} count={count}")
+    if report["note_tail_profiles"].get("preload_prelude_params"):
+        print("note preload prelude params:")
+        for hint, count in sorted(report["note_tail_profiles"]["preload_prelude_params"].items()):
+            print(f"  {hint!r:<16} count={count}")
+    if report["note_tail_profiles"].get("preload_prelude_shapes"):
+        print("note preload prelude raw shapes:")
+        for row in report["note_tail_profiles"]["preload_prelude_shapes"][:12]:
+            print(f"  prefix={row['prefix_u32']} trailing={row['trailing_u32']} count={row['count']}")
+    if report["note_tail_profiles"].get("preload_prelude_raw_shapes"):
+        print("note preload prelude undecoded raw shapes:")
+        for row in report["note_tail_profiles"]["preload_prelude_raw_shapes"][:12]:
+            print(f"  raw_u32={row['raw_u32']} count={row['count']}")
     if report["note_tail_profiles"].get("pen_style_tail_params"):
         print("note pen style tail params:")
         for hint, count in sorted(report["note_tail_profiles"]["pen_style_tail_params"].items()):
             print(f"  {hint!r:<16} count={count}")
+    if report["note_tail_profiles"].get("pen_style_tail_shapes"):
+        print("note pen style tail raw shapes:")
+        for row in report["note_tail_profiles"]["pen_style_tail_shapes"]:
+            print(
+                f"  width={row['width']:<6} argb={row['argb']} param={row['param']!r} "
+                f"raw_u32={row['raw_u32']} count={row['count']}"
+            )
     if report["note_tail_profiles"].get("voice_post_u32"):
         print("note voice post_u32:")
         for row in report["note_tail_profiles"]["voice_post_u32"]:
             print(f"  {row['post_u32']} count={row['count']}")
+    if report["note_tail_profiles"].get("voice_post_u64_pairs"):
+        print("note voice post_u64 pairs:")
+        for row in report["note_tail_profiles"]["voice_post_u64_pairs"]:
+            print(f"  {row['post_u64_pairs']} count={row['count']}")
+    if report["note_tail_profiles"].get("voice_post_record_u64_pairs"):
+        print("note voice post-record u64 pairs:")
+        for row in report["note_tail_profiles"]["voice_post_record_u64_pairs"]:
+            print(f"  {row['raw_u64_pairs']} count={row['count']}")
     tail_cov = report["note_tail_profiles"].get("coverage") or {}
     tail_known = tail_cov.get("known_bytes", 0)
     tail_unknown = tail_cov.get("unknown_bytes", 0)

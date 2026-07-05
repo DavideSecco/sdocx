@@ -35,7 +35,27 @@ class InventoryRegressionTest(unittest.TestCase):
         self.assertEqual(tail["kinds"]["voice_clip"], 2)
         self.assertEqual(coverage["known_bytes"], 5938)
         self.assertEqual(coverage["unknown_bytes"], 0)
+        self.assertEqual(
+            tail["preload_prelude_params"],
+            {
+                "10;": 2,
+                "13;": 3,
+                "14;": 3,
+                "18;0;100;": 4,
+                "4;": 2,
+                "5;": 2,
+                "7;": 1,
+                "8;": 7,
+            },
+        )
         self.assertEqual(tail["pen_style_tail_params"], {"5;": 1, "8;": 2})
+        self.assertEqual(
+            tail["voice_post_u64_pairs"],
+            [
+                {"post_u64_pairs": [1782811623648, 4294967298, 1782811624460528], "count": 1},
+                {"post_u64_pairs": [1782923525248, 4294967298, 1782923525405332], "count": 1},
+            ],
+        )
         self.assertEqual(
             tail["page_id_info_relations"],
             {"page_id_head_exact": 10, "page_id_head_shifted_u32_2": 3},

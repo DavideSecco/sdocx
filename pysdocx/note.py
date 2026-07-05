@@ -406,6 +406,11 @@ def _read_u16_len_prefixed_utf16(data: bytes, offset: int) -> tuple[str, int] | 
     return data[start:end].decode("utf-16-le", errors="replace"), end
 
 
+def _u32_pairs_as_u64(values: list[int]) -> list[int]:
+    """Expose raw u32 tails as little-endian u64 pairs for RE diagnostics."""
+    return [values[i] | (values[i + 1] << 32) for i in range(0, len(values) - 1, 2)]
+
+
 def _scan_voice_clip_metadata(note_bytes: bytes) -> list[dict]:
     """Infer voice-clip descriptors from adjacent length-prefixed UTF-16 strings."""
     clips: list[dict] = []
@@ -641,15 +646,17 @@ def _scan_tail_gap_records(note_bytes: bytes, start: int, records: list[dict]) -
             continue
 
         if prev_kind == "voice_clip":
+            raw_u32 = [
+                struct.unpack_from("<I", blob, pos)[0]
+                for pos in range(0, len(blob), 4)
+                if pos + 4 <= len(blob)
+            ]
             extra.append({
                 "kind": "voice_clip_post",
                 "off": gap_start,
                 "end": gap_end,
-                "raw_u32": [
-                    struct.unpack_from("<I", blob, pos)[0]
-                    for pos in range(0, len(blob), 4)
-                    if pos + 4 <= len(blob)
-                ],
+                "raw_u32": raw_u32,
+                "raw_u64_pairs": _u32_pairs_as_u64(raw_u32),
                 "raw_hex": blob.hex(),
             })
             continue
@@ -724,6 +731,7 @@ def scan_note_tail_records(note_bytes: bytes, offset_to_data: int) -> list[dict]
             "label": clip["label"],
             "duration": clip["duration"],
             "post_u32": post_u32,
+            "post_u64_pairs": _u32_pairs_as_u64(post_u32),
         })
 
     records.extend(_scan_pen_preload_paths(note_bytes, cursor))

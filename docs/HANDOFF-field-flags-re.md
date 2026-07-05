@@ -227,3 +227,22 @@ Codex continued §7.2 and landed a conservative `note.note` tail inventory:
 - Remaining honest unknowns: full preload surrounding record semantics, param-hint semantics,
   `pen_style_tail.raw_u32`, trailing post-hash 4-byte values on some notes, and
   `voice_clip.post_u32` semantics.
+
+## 9. Follow-up raw-tail RE diagnostics
+
+Another conservative pass made the opaque tail fields more inspectable without promoting unstable
+semantics:
+
+- `voice_clip.post_u32` and `voice_clip_post.raw_u32` now also expose little-endian `u64` pairs. This is
+  intentionally a derived diagnostic, not a decoded timestamp field. On the two audio samples, the third
+  pair is near the note-level create/modified times, but two examples are not enough to name it.
+- `inventory` now reports `preload_prelude_params`, decoded preload prelude raw shapes
+  (`prefix_u32`/`trailing_u32`), undecoded prelude raw shapes, `pen_style_tail` raw shapes, and audio
+  post-record `u64` pair distributions.
+- Corpus distribution for decoded prelude params:
+  `8;` x7, `18;0;100;` x4, `13;` x3, `14;` x3, `10;` x2, `5;` x2, `4;` x2, `7;` x1.
+- Negative result: preload prelude `prefix_u32`/`trailing_u32` values do not map one-to-one to pen tool
+  names in this corpus. Keep them as structural/raw diagnostics until new samples isolate their meaning.
+- Shifted `tail_post_hash_u32` values still look like the final four bytes after the shifted
+  `pageIdInfo.dat` relation (`value` bytes match `note.note[-4:]` in the three shifted samples), not a
+  standalone checksum. No semantic promotion.

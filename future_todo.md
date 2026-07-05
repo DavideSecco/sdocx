@@ -45,6 +45,8 @@
   - Current corpus-level family inventory for object headers, note.note profiles, and attachment bags.
 - `python -m pysdocx inventory [paths...] [--json]`
   - Regenerates the machine-readable coverage/profile inventory from the current sample corpus.
+  - Also surfaces conservative raw-tail RE diagnostics for preload preludes, pen-style tail blocks, and
+    voice post `u32`/derived `u64` pairs.
 
 ## Reverse-Engineering Backlog
 
@@ -71,6 +73,9 @@
   - horizontal text boxes
   - mildly rotated text boxes
 - If time is limited, prefer diagnostics/object-level RE over more visual tuning of the rotated box.
+- Treat `note.note` tail prelude/style/audio raw fields as structurally bounded but semantically
+  unresolved. Current corpus shows useful distributions, but not enough isolated variation to promote
+  the remaining raw fields to stable names.
 
 ## Future Sample Campaign
 

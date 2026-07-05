@@ -1,9 +1,9 @@
 # Format Coverage Report
 
-Snapshot for the current `pysdocx` parser/renderer state on branch baseline:
+Snapshot for the current `pysdocx` parser/renderer state on branch `feat/web-viewer`:
 
 ```text
-febc3cd feat(pysdocx): heading spacing and typed-text pagination
+d98881a feat(pysdocx): expose pen style tail params
 ```
 
 This report answers a specific question:
@@ -99,6 +99,8 @@ Status:
   - loaded deterministically
   - typed rich text, tables, top-level metadata, and part of the tail records decoded
   - `tail_hash_block` now linked structurally to the `pageIdInfo.dat` head
+  - current tail record boundaries are structurally covered on the sample corpus; raw prelude/style/audio
+    tail fields are surfaced as inventory diagnostics where their semantics are not yet stable
 - `.page`: `Structural`, partially `Semantic`
   - parsed as layer/object tree
 - `media/*`: `Structural`, partially `Semantic`
@@ -109,6 +111,7 @@ What is still missing:
 
 - no full semantic decode of `end_tag.bin`
 - no full semantic decode of `mediaInfo.dat` as a first-class parser surface
+- no full semantic decode of the raw `note.note` tail fields around pen preload/style/audio metadata
 
 ### 2. Page Header
 

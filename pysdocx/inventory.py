@@ -248,8 +248,14 @@ def build_inventory(targets: list[Path]) -> dict:
     note_tail_hash_prefixes = Counter()
     note_preload_paths = Counter()
     note_preload_param_hints = Counter()
+    note_preload_prelude_params = Counter()
+    note_preload_prelude_shapes = Counter()
+    note_preload_prelude_raw_shapes = Counter()
     note_style_tail_params = Counter()
+    note_style_tail_shapes = Counter()
     note_voice_post_u32 = Counter()
+    note_voice_post_u64_pairs = Counter()
+    note_voice_post_record_u64_pairs = Counter()
     note_tail_gap_prefixes = Counter()
     note_tail_coverage_rows = []
     header_ext_total = 0
@@ -304,10 +310,30 @@ def build_inventory(targets: list[Path]) -> dict:
                 note_preload_paths[record.get("path", "")] += 1
                 if record.get("param_hint"):
                     note_preload_param_hints[record["param_hint"]] += 1
-            elif record["kind"] == "pen_style_tail" and record.get("param"):
-                note_style_tail_params[record["param"]] += 1
+            elif record["kind"] == "pen_preload_prelude":
+                if record.get("param"):
+                    note_preload_prelude_params[record["param"]] += 1
+                note_preload_prelude_shapes[
+                    (tuple(record.get("prefix_u32", ())), tuple(record.get("trailing_u32", ())))
+                ] += 1
+            elif record["kind"] == "pen_preload_prelude_raw":
+                note_preload_prelude_raw_shapes[tuple(record.get("raw_u32", ()))] += 1
+            elif record["kind"] == "pen_style_tail":
+                if record.get("param"):
+                    note_style_tail_params[record["param"]] += 1
+                note_style_tail_shapes[
+                    (
+                        round(record.get("width", -1.0), 3),
+                        record.get("argb"),
+                        record.get("param"),
+                        tuple(record.get("raw_u32", ())),
+                    )
+                ] += 1
             elif record["kind"] == "voice_clip":
                 note_voice_post_u32[tuple(record.get("post_u32", ()))] += 1
+                note_voice_post_u64_pairs[tuple(record.get("post_u64_pairs", ()))] += 1
+            elif record["kind"] == "voice_clip_post":
+                note_voice_post_record_u64_pairs[tuple(record.get("raw_u64_pairs", ()))] += 1
 
         page_count = 0
         object_count = 0
@@ -454,10 +480,40 @@ def build_inventory(targets: list[Path]) -> dict:
             ],
             "preload_paths": dict(sorted(note_preload_paths.items())),
             "preload_param_hints": dict(sorted(note_preload_param_hints.items())),
+            "preload_prelude_params": dict(sorted(note_preload_prelude_params.items())),
+            "preload_prelude_shapes": [
+                {"prefix_u32": list(prefix), "trailing_u32": list(trailing), "count": count}
+                for (prefix, trailing), count in sorted(note_preload_prelude_shapes.items())
+            ],
+            "preload_prelude_raw_shapes": [
+                {"raw_u32": list(raw_u32), "count": count}
+                for raw_u32, count in sorted(note_preload_prelude_raw_shapes.items())
+            ],
             "pen_style_tail_params": dict(sorted(note_style_tail_params.items())),
+            "pen_style_tail_shapes": [
+                {
+                    "width": width,
+                    "argb": argb,
+                    "param": param,
+                    "raw_u32": list(raw_u32),
+                    "count": count,
+                }
+                for (width, argb, param, raw_u32), count in sorted(
+                    note_style_tail_shapes.items(),
+                    key=lambda item: (item[0][0], item[0][1] or "", item[0][2] or "", item[0][3]),
+                )
+            ],
             "voice_post_u32": [
                 {"post_u32": list(post_u32), "count": count}
                 for post_u32, count in sorted(note_voice_post_u32.items())
+            ],
+            "voice_post_u64_pairs": [
+                {"post_u64_pairs": list(post_u64_pairs), "count": count}
+                for post_u64_pairs, count in sorted(note_voice_post_u64_pairs.items())
+            ],
+            "voice_post_record_u64_pairs": [
+                {"raw_u64_pairs": list(raw_u64_pairs), "count": count}
+                for raw_u64_pairs, count in sorted(note_voice_post_record_u64_pairs.items())
             ],
             "coverage": {
                 "known_bytes": sum(row["known_bytes"] for row in note_tail_coverage_rows),
