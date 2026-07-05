@@ -6,7 +6,7 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from pysdocx.container import list_attachments, list_pages, load_note, load_page, load_page_id_info
+from pysdocx.container import list_attachments, list_media_info, list_pages, load_note, load_page, load_page_id_info
 from pysdocx.dump import dump_container
 from pysdocx.ink import color_hex
 from pysdocx.inventory import build_inventory
@@ -488,6 +488,36 @@ def cmd_render(args: argparse.Namespace) -> None:
     print(f"wrote {stem}-page-NN.{args.format} to {out_dir} (pages: {pages})")
 
 
+def cmd_media_info(args: argparse.Namespace) -> None:
+    media = list_media_info(args.file, verify_hash=args.verify_hash)
+    if media is None:
+        print("mediaInfo: none")
+        return
+    print(
+        f"mediaInfo magic=0x{media['magic']:x} count={media['count']} "
+        f"eof={media['eof']!r} valid_eof={media['valid_eof']}"
+    )
+    for record in media["records"]:
+        sha = record["sha256"]
+        sha_part = sha if args.full_hash else sha[:16] + "..."
+        hash_part = ""
+        if args.verify_hash:
+            hash_part = f" sha256_matches={record.get('sha256_matches')}"
+        print(
+            f"  [{record['media_index']:>2}] off=0x{record['off']:x} size={record['payload_size']:<3} "
+            f"exists={record['exists']} index_name={record['index_matches_name']} "
+            f"zip_size={record.get('zip_size')} tail_tag={record.get('tail_tag')} "
+            f"time_candidate={record.get('time_candidate')} marker={record.get('tail_marker')} "
+            f"sha256={sha_part}{hash_part} name={record['name']!r}"
+        )
+        if args.raw_tail:
+            print(f"       raw_tail={record['raw_tail']}")
+    if media.get("unlisted_media"):
+        print("unlisted media:")
+        for name in media["unlisted_media"]:
+            print(f"  {name}")
+
+
 def cmd_inventory(args: argparse.Namespace) -> None:
     targets = args.paths or [Path("samples")]
     report = build_inventory(targets)
@@ -596,6 +626,20 @@ def cmd_inventory(args: argparse.Namespace) -> None:
     print("attachment bag keys:")
     for key, count in sorted(report["attachment_profiles"]["keys"].items()):
         print(f"  {key:<20} count={count}")
+    media = report.get("media_info_profiles") or {}
+    print(
+        f"mediaInfo: records={media.get('records', 0)} parsed_files={media.get('parsed_files', 0)} "
+        f"sha_mismatches={media.get('sha_mismatches', 0)} missing_media={media.get('missing_media', 0)} "
+        f"unlisted_media={media.get('unlisted_media', 0)} bad_eof={media.get('bad_eof', 0)}"
+    )
+    if media.get("magic"):
+        print("mediaInfo magic:")
+        for key, count in sorted(media["magic"].items()):
+            print(f"  {key:<8} count={count}")
+    if media.get("tail_tags"):
+        print("mediaInfo tail tags:")
+        for key, count in sorted(media["tail_tags"].items()):
+            print(f"  {key:<8} count={count}")
 
 
 def main() -> None:
@@ -645,6 +689,13 @@ def main() -> None:
     p_render.add_argument("--table-page", type=int, help="force note-level table rendering onto this page")
     p_render.add_argument("--bg", choices=("dark", "white"), help="page background (default: the file's stored color)")
     p_render.set_defaults(func=cmd_render)
+
+    p_media = sub.add_parser("media-info", help="print media/mediaInfo.dat manifest diagnostics")
+    p_media.add_argument("file", type=Path)
+    p_media.add_argument("--verify-hash", action="store_true", help="hash media files and compare SHA-256")
+    p_media.add_argument("--full-hash", action="store_true", help="print full SHA-256 values")
+    p_media.add_argument("--raw-tail", action="store_true", help="print the raw tail bytes for each manifest record")
+    p_media.set_defaults(func=cmd_media_info)
 
     p_inventory = sub.add_parser("inventory", help="summarize corpus-level format coverage/profiles")
     p_inventory.add_argument("paths", type=Path, nargs="*", help="files or directories to scan (default: samples/)")

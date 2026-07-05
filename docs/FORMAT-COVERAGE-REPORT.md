@@ -103,15 +103,18 @@ Status:
     tail fields are surfaced as inventory diagnostics where their semantics are not yet stable
 - `.page`: `Structural`, partially `Semantic`
   - parsed as layer/object tree
+- `media/mediaInfo.dat`: `Structural + Semantic`
+  - manifest header/count, record boundaries, media index, filename, SHA-256, and `EOFX` decoded
+  - current corpus: 60/60 manifest records point to existing media files and SHA-256 verification passes
 - `media/*`: `Structural`, partially `Semantic`
-  - attachments enumerated, raster media recognized
+  - attachments enumerated, raster media recognized, manifest metadata attached where present
 - `end_tag.bin`: `Known but effectively unused`
 
 What is still missing:
 
 - no full semantic decode of `end_tag.bin`
-- no full semantic decode of `mediaInfo.dat` as a first-class parser surface
 - no full semantic decode of the raw `note.note` tail fields around pen preload/style/audio metadata
+- no semantic decode of the 11-byte raw per-record tail inside `mediaInfo.dat`
 
 ### 2. Page Header
 
@@ -382,7 +385,6 @@ What is still missing:
 ### Largely Ignored / Not Yet First-Class
 
 - `end_tag.bin` semantics
-- full `mediaInfo.dat` semantics
 - most object-header flag meanings
 - most layer/content flag meanings
 - attachment/page linkage for all non-image attachment families
@@ -391,6 +393,7 @@ What is still missing:
 
 ### Partially Used But Not Fully Explained
 
+- `mediaInfo.dat` per-record raw tail fields
 - shape payload variants
 - drawing payload details
 - text-box inner layout model

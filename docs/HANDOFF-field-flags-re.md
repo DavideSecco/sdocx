@@ -246,3 +246,30 @@ semantics:
 - Shifted `tail_post_hash_u32` values still look like the final four bytes after the shifted
   `pageIdInfo.dat` relation (`value` bytes match `note.note[-4:]` in the three shifted samples), not a
   standalone checksum. No semantic promotion.
+
+## 10. Follow-up mediaInfo.dat manifest decode
+
+`media/mediaInfo.dat` is now parsed as a first-class manifest:
+
+```text
+u32 magic
+u16 record_count
+record_count * [
+  u32 payload_size   # bytes after this size field
+  u32 media_index
+  u16 filename_chars
+  UTF-16LE filename  # includes the "<index>@..." prefix used under media/
+  64 ASCII bytes     # SHA-256 hex digest of media/<filename>
+  raw_tail           # 11 bytes on the current corpus
+]
+"EOFX"
+```
+
+Corpus facts:
+
+- 13/13 files have `media/mediaInfo.dat`.
+- 60/60 manifest records point to existing ZIP members and SHA-256 verification passes.
+- Magic values: `0x1518` on 12 files, `0x1452` on `handwritten.sdocx`.
+- Tail tags (`u16` at raw-tail start): `1` x54, `3` x4, `5` x1, `20` x1.
+- The 8 bytes at raw-tail offset `+2` are exposed as `time_candidate`; they are timestamp-like and near
+  note/media edit times, but the field is deliberately not promoted beyond diagnostic status yet.

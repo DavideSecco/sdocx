@@ -47,6 +47,9 @@
   - Regenerates the machine-readable coverage/profile inventory from the current sample corpus.
   - Also surfaces conservative raw-tail RE diagnostics for preload preludes, pen-style tail blocks, and
     voice post `u32`/derived `u64` pairs.
+- `python -m pysdocx media-info <file> [--verify-hash] [--raw-tail]`
+  - Prints the decoded `media/mediaInfo.dat` manifest, checks media existence, and can verify SHA-256
+    against the archive members.
 
 ## Reverse-Engineering Backlog
 
@@ -76,6 +79,8 @@
 - Treat `note.note` tail prelude/style/audio raw fields as structurally bounded but semantically
   unresolved. Current corpus shows useful distributions, but not enough isolated variation to promote
   the remaining raw fields to stable names.
+- Treat the 11-byte `mediaInfo.dat` record tail similarly: manifest/index/name/SHA are decoded, while
+  `tail_tag` and `time_candidate` remain diagnostics until isolated by new samples.
 
 ## Future Sample Campaign
 

@@ -60,6 +60,15 @@ class InventoryRegressionTest(unittest.TestCase):
             tail["page_id_info_relations"],
             {"page_id_head_exact": 10, "page_id_head_shifted_u32_2": 3},
         )
+        media = report["media_info_profiles"]
+        self.assertEqual(media["parsed_files"], 13)
+        self.assertEqual(media["records"], 60)
+        self.assertEqual(media["magic"], {"0x1452": 1, "0x1518": 12})
+        self.assertEqual(media["tail_tags"], {"1": 54, "20": 1, "3": 4, "5": 1})
+        self.assertEqual(media["sha_mismatches"], 0)
+        self.assertEqual(media["missing_media"], 0)
+        self.assertEqual(media["unlisted_media"], 0)
+        self.assertEqual(media["bad_eof"], 0)
 
 
 class TextBoxLayoutRegressionTest(unittest.TestCase):

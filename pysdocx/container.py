@@ -1,5 +1,7 @@
-"""ZIP container access: listing .page files and the note-level background color."""
+"""ZIP container access: listing pages, media, and note-level metadata."""
 
+import hashlib
+import struct
 import zipfile
 from pathlib import Path
 
@@ -56,6 +58,115 @@ def load_media_by_index(path: Path, index: int) -> tuple[str, bytes] | None:
     return None
 
 
+MEDIA_INFO_EOF = b"EOFX"
+
+
+def load_media_info(path: Path) -> bytes | None:
+    """Read `media/mediaInfo.dat`, or None if absent."""
+    with zipfile.ZipFile(path) as z:
+        if "media/mediaInfo.dat" not in z.namelist():
+            return None
+        return z.read("media/mediaInfo.dat")
+
+
+def parse_media_info(data: bytes) -> dict | None:
+    """Parse Samsung's media manifest.
+
+    The manifest is:
+    `[u32 magic][u16 count]` followed by `count` records and the ASCII trailer `EOFX`.
+    Each record starts with `u32 payload_size`, where the payload excludes that size field:
+    `[u32 media_index][u16 filename_chars][UTF-16LE filename][64 ASCII SHA-256 hex][raw tail]`.
+    The filename already includes the `<index>@...` prefix used under `media/`.
+    """
+    if len(data) < 10:
+        return None
+    magic = struct.unpack_from("<I", data, 0)[0]
+    count = struct.unpack_from("<H", data, 4)[0]
+    off = 6
+    records = []
+    try:
+        for _ in range(count):
+            if off + 10 > len(data):
+                return None
+            payload_size = struct.unpack_from("<I", data, off)[0]
+            end = off + 4 + payload_size
+            if end > len(data):
+                return None
+            media_index = struct.unpack_from("<I", data, off + 4)[0]
+            name_chars = struct.unpack_from("<H", data, off + 8)[0]
+            name_start = off + 10
+            name_end = name_start + name_chars * 2
+            digest_end = name_end + 64
+            if digest_end > end:
+                return None
+            name = data[name_start:name_end].decode("utf-16-le")
+            sha256 = data[name_end:digest_end].decode("ascii")
+            raw_tail = data[digest_end:end]
+            tail_tag = struct.unpack_from("<H", raw_tail, 0)[0] if len(raw_tail) >= 2 else None
+            time_candidate = (
+                struct.unpack_from("<Q", raw_tail, 2)[0]
+                if len(raw_tail) >= 10
+                else None
+            )
+            tail_marker = raw_tail[10] if len(raw_tail) >= 11 else None
+            records.append({
+                "off": off,
+                "end": end,
+                "payload_size": payload_size,
+                "media_index": media_index,
+                "name": name,
+                "archive_name": f"media/{name}",
+                "name_chars": name_chars,
+                "sha256": sha256,
+                "raw_tail": raw_tail.hex(),
+                "tail_tag": tail_tag,
+                "time_candidate": time_candidate,
+                "tail_marker": tail_marker,
+            })
+            off = end
+    except (UnicodeDecodeError, struct.error):
+        return None
+
+    return {
+        "magic": magic,
+        "count": count,
+        "records": records,
+        "eof_off": off,
+        "eof": data[off : off + len(MEDIA_INFO_EOF)].decode("ascii", errors="replace"),
+        "valid_eof": data[off : off + len(MEDIA_INFO_EOF)] == MEDIA_INFO_EOF and off + 4 == len(data),
+    }
+
+
+def list_media_info(path: Path, verify_hash: bool = False) -> dict | None:
+    """Load and optionally verify `media/mediaInfo.dat` against archive members."""
+    with zipfile.ZipFile(path) as z:
+        if "media/mediaInfo.dat" not in z.namelist():
+            return None
+        parsed = parse_media_info(z.read("media/mediaInfo.dat"))
+        if parsed is None:
+            return None
+        infos = {info.filename: info for info in z.infolist()}
+        records = []
+        for record in parsed["records"]:
+            rec = dict(record)
+            info = infos.get(rec["archive_name"])
+            rec["exists"] = info is not None
+            rec["zip_size"] = info.file_size if info else None
+            rec["index_matches_name"] = rec["name"].startswith(f"{rec['media_index']}@")
+            if verify_hash and info is not None:
+                rec["sha256_matches"] = hashlib.sha256(z.read(rec["archive_name"])).hexdigest() == rec["sha256"]
+            records.append(rec)
+        parsed = dict(parsed)
+        parsed["records"] = records
+        manifest_names = {record["archive_name"] for record in records}
+        parsed["unlisted_media"] = sorted(
+            name
+            for name in infos
+            if name.startswith("media/") and name != "media/mediaInfo.dat" and name not in manifest_names
+        )
+        return parsed
+
+
 def raster_media_indices(path: Path) -> set[int]:
     """Media indices whose file is a jpg/png raster (usable as an image/drawing bitmap)."""
     indices: set[int] = set()
@@ -93,6 +204,11 @@ def list_attachments(path: Path) -> list[dict]:
     from any render. Returns `[{index, name, kind, size}]`, `kind` in
     `{"image", "audio", "sticky_note", "thumbnail", "other"}`.
     """
+    media_info = list_media_info(path, verify_hash=False)
+    manifest_by_name = {
+        record["archive_name"]: record
+        for record in (media_info or {}).get("records", ())
+    }
     attachments: list[dict] = []
     with zipfile.ZipFile(path) as z:
         for info in z.infolist():
@@ -111,7 +227,16 @@ def list_attachments(path: Path) -> list[dict]:
                     (k for ext, k in ATTACHMENT_EXT_KIND.items() if lower.endswith(ext)),
                     "other",
                 )
-            attachments.append({"index": index, "name": name, "kind": kind, "size": info.file_size})
+            manifest = manifest_by_name.get(name, {})
+            attachments.append({
+                "index": index,
+                "name": name,
+                "kind": kind,
+                "size": info.file_size,
+                "sha256": manifest.get("sha256"),
+                "media_info_tail_tag": manifest.get("tail_tag"),
+                "media_info_time_candidate": manifest.get("time_candidate"),
+            })
     return attachments
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from pysdocx.container import list_pages, load_note, load_page, load_page_id_info
+from pysdocx.container import list_media_info, list_pages, load_note, load_page, load_page_id_info
 from pysdocx.note import annotate_note_tail_with_page_id_info, parse_note_metadata, parse_tables, parse_typed_text
 from pysdocx.page import parse_page
 
@@ -31,6 +31,12 @@ COVERAGE_MATRIX = [
             "tail_hash_page_id_info_relation",
         ],
         "unknown": ["full_note_note_schema", "raw_tail_record_field_semantics", "remaining_metadata_flags"],
+    },
+    {
+        "surface": "zip_container.mediaInfo.dat",
+        "status": ["Structural", "Semantic"],
+        "decoded": ["manifest_records", "media_index", "filename", "sha256", "eof_marker"],
+        "unknown": ["manifest_tail_field_semantics"],
     },
     {
         "surface": "page.layer_object_tree",
@@ -242,6 +248,15 @@ def build_inventory(targets: list[Path]) -> dict:
     attachment_keys = Counter()
     attachment_kind_counts = Counter()
     attachment_examples: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
+    media_info_magic = Counter()
+    media_info_tail_tags = Counter()
+    media_info_name_kinds = Counter()
+    media_info_records = 0
+    media_info_parsed_files = 0
+    media_info_bad_eof = 0
+    media_info_sha_mismatches = []
+    media_info_missing_media = []
+    media_info_unlisted_media = []
     note_tail_kind_counts = Counter()
     note_tail_examples: dict[str, list[str]] = defaultdict(list)
     note_tail_relations = Counter()
@@ -266,6 +281,22 @@ def build_inventory(targets: list[Path]) -> dict:
     sample_rows = []
 
     for path in paths:
+        media_info = list_media_info(path, verify_hash=True)
+        if media_info is not None:
+            media_info_parsed_files += 1
+            media_info_magic[f"0x{media_info['magic']:x}"] += 1
+            if not media_info.get("valid_eof"):
+                media_info_bad_eof += 1
+            media_info_unlisted_media.extend(f"{path.name}:{name}" for name in media_info.get("unlisted_media", ()))
+            for record in media_info.get("records", ()):
+                media_info_records += 1
+                media_info_tail_tags[str(record.get("tail_tag"))] += 1
+                media_info_name_kinds[Path(record["name"]).suffix.lower() or "(none)"] += 1
+                if not record.get("exists"):
+                    media_info_missing_media.append(f"{path.name}:{record['archive_name']}")
+                if record.get("sha256_matches") is False:
+                    media_info_sha_mismatches.append(f"{path.name}:{record['archive_name']}")
+
         note = load_note(path)
         note_meta = parse_note_metadata(note) if note else None
         page_id_info = load_page_id_info(path)
@@ -544,5 +575,19 @@ def build_inventory(targets: list[Path]) -> dict:
                 }
                 for (kind, keys), examples in sorted(attachment_examples.items())
             ],
+        },
+        "media_info_profiles": {
+            "parsed_files": media_info_parsed_files,
+            "records": media_info_records,
+            "magic": dict(sorted(media_info_magic.items())),
+            "tail_tags": dict(sorted(media_info_tail_tags.items())),
+            "name_kinds": dict(sorted(media_info_name_kinds.items())),
+            "bad_eof": media_info_bad_eof,
+            "sha_mismatches": len(media_info_sha_mismatches),
+            "sha_mismatch_examples": media_info_sha_mismatches[:10],
+            "missing_media": len(media_info_missing_media),
+            "missing_media_examples": media_info_missing_media[:10],
+            "unlisted_media": len(media_info_unlisted_media),
+            "unlisted_media_examples": media_info_unlisted_media[:10],
         },
     }

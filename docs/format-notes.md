@@ -110,7 +110,7 @@ Where `normalized_pressure = clamp(cumulative_pressure / 1400, 0, 1)`.
 |------|---------|
 | `end_tag.bin` | Timestamps (i64 ms epoch), `"Document for S-Pen SDK"` |
 | `pageIdInfo.dat` | Page UUID (UTF-16LE) + 2 x 32-byte hashes |
-| `media/mediaInfo.dat` | Media filename + SHA-256 + `EOFX` |
+| `media/mediaInfo.dat` | Media manifest: index, filename, SHA-256, raw tail, `EOFX` |
 | `note.note` | Title, pen tools, background color, dimensions |
 | `media/*.spi` | Page thumbnail (Samsung proprietary) |
 | `<uuid>.page` | Stroke data (see below) |
