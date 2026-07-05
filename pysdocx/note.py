@@ -337,7 +337,7 @@ TABLE_ANCHOR_Y_BACK = 8
 # the color+font runs, no bold run. The window below (200 bytes) comfortably covers all of a
 # cell's runs without reaching into the next cell's (observed span for a 3-run cell: ~100 bytes).
 CELL_STYLE_WINDOW = 200
-VOICE_LABEL_RE = re.compile(r"^Voice \d+$")
+VOICE_LABEL_RE = re.compile(r"^(?:Voice|Voce) \d+$")
 VOICE_DURATION_RE = re.compile(r"^\d{2}:\d{2}:\d{2}$")
 PRELOAD_PATH_MARKER = "com.samsung.android.sdk.pen.pen.preload."
 TAIL_SENTINEL = b"\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00"
@@ -488,6 +488,78 @@ def _scan_pen_preload_paths(note_bytes: bytes, start: int) -> list[dict]:
     return records
 
 
+def _decode_pen_preload_prelude(blob: bytes) -> dict | None:
+    """Decode the small config block immediately before a preload path, when present.
+
+    Most preload path fields are preceded by a compact record shaped like
+    `u32... | u16 char_len | UTF-16LE digit/semicolon params | trailing u32...`. The surrounding
+    schema is still incomplete, so this returns raw prefix/trailing integers plus the parsed
+    parameter string instead of assigning stronger semantics.
+    """
+    best = None
+    for off in range(0, min(len(blob), 16) + 1, 2):
+        if off + 2 > len(blob):
+            continue
+        char_len = struct.unpack_from("<H", blob, off)[0]
+        text_start = off + 2
+        text_end = text_start + char_len * 2
+        if not (1 <= char_len <= 24) or text_end > len(blob):
+            continue
+        try:
+            param = blob[text_start:text_end].decode("utf-16-le")
+        except UnicodeDecodeError:
+            continue
+        if not param or not any(ch.isdigit() for ch in param):
+            continue
+        if not all(ch.isdigit() or ch == ";" for ch in param):
+            continue
+        prefix_u32 = [
+            struct.unpack_from("<I", blob, pos)[0]
+            for pos in range(0, off, 4)
+            if pos + 4 <= off
+        ]
+        trailing_u32 = [
+            struct.unpack_from("<I", blob, pos)[0]
+            for pos in range(text_end, len(blob), 4)
+            if pos + 4 <= len(blob)
+        ]
+        best = {
+            "param": param,
+            "param_off": off,
+            "prefix_u32": prefix_u32,
+            "trailing_u32": trailing_u32,
+            "raw_hex": blob.hex(),
+        }
+    return best
+
+
+def _decode_pen_style_tail(blob: bytes) -> dict | None:
+    """Decode a recurring pen-style tail block after the final preload path.
+
+    Current evidence: these blocks start with an f32-like pen width, an ARGB color, and `u32(1)`,
+    followed by small raw fields and fixed-looking markers. Only the stable leading fields are
+    named; the rest stays raw.
+    """
+    if len(blob) not in (50, 62, 66) or len(blob) < 24:
+        return None
+    width = struct.unpack_from("<f", blob, 0)[0]
+    argb = struct.unpack_from("<I", blob, 4)[0]
+    enabled = struct.unpack_from("<I", blob, 8)[0]
+    if not (0.0 <= width <= 40.0 and (argb >> 24) == 0xFF and enabled == 1):
+        return None
+    return {
+        "width": width,
+        "argb": f"0x{argb:08x}",
+        "enabled": enabled,
+        "raw_u32": [
+            struct.unpack_from("<I", blob, pos)[0]
+            for pos in range(12, len(blob), 4)
+            if pos + 4 <= len(blob)
+        ],
+        "raw_hex": blob.hex(),
+    }
+
+
 def _tail_hash_blocks(note_bytes: bytes, start: int) -> list[dict]:
     """Opaque 32-byte hash-like tail blocks seen in the current v5400 family."""
     records: list[dict] = []
@@ -515,6 +587,91 @@ def _tail_hash_blocks(note_bytes: bytes, start: int) -> list[dict]:
         else:
             off += 2
     return records
+
+
+def _tail_gaps(records: list[dict], start: int, end: int) -> list[tuple[int, int, dict | None, dict | None]]:
+    """Return unclassified gaps as `(start, end, previous_record, next_record)`."""
+    gaps = []
+    prev = None
+    cursor = start
+    for record in sorted(records, key=lambda r: (r["off"], r["end"], r["kind"])):
+        if cursor < record["off"]:
+            gaps.append((cursor, record["off"], prev, record))
+        if record["end"] > cursor:
+            cursor = record["end"]
+            prev = record
+    if cursor < end:
+        gaps.append((cursor, end, prev, None))
+    return gaps
+
+
+def _scan_tail_gap_records(note_bytes: bytes, start: int, records: list[dict]) -> list[dict]:
+    """Classify small tail gaps adjacent to already-known records.
+
+    These records intentionally keep conservative names (`*_raw`, `raw_u32`) where semantics are
+    not settled. The purpose is structural coverage: keep recurring, bounded tail blocks visible
+    instead of treating them as anonymous bytes.
+    """
+    extra: list[dict] = []
+    for gap_start, gap_end, prev_record, next_record in _tail_gaps(records, start, len(note_bytes)):
+        blob = note_bytes[gap_start:gap_end]
+        prev_kind = (prev_record or {}).get("kind")
+        next_kind = (next_record or {}).get("kind")
+
+        style = _decode_pen_style_tail(blob)
+        if style is not None:
+            extra.append({"kind": "pen_style_tail", "off": gap_start, "end": gap_end, **style})
+            continue
+
+        if prev_kind == "voice_clip":
+            extra.append({
+                "kind": "voice_clip_post",
+                "off": gap_start,
+                "end": gap_end,
+                "raw_u32": [
+                    struct.unpack_from("<I", blob, pos)[0]
+                    for pos in range(0, len(blob), 4)
+                    if pos + 4 <= len(blob)
+                ],
+                "raw_hex": blob.hex(),
+            })
+            continue
+
+        if next_kind == "pen_preload_path":
+            prelude = _decode_pen_preload_prelude(blob)
+            if prelude is not None:
+                extra.append({"kind": "pen_preload_prelude", "off": gap_start, "end": gap_end, **prelude})
+            elif len(blob) <= 24:
+                extra.append({
+                    "kind": "pen_preload_prelude_raw",
+                    "off": gap_start,
+                    "end": gap_end,
+                    "raw_u32": [
+                        struct.unpack_from("<I", blob, pos)[0]
+                        for pos in range(0, len(blob), 4)
+                        if pos + 4 <= len(blob)
+                    ],
+                    "raw_hex": blob.hex(),
+                })
+            continue
+
+        if next_kind == "voice_clip" and len(blob) == 16:
+            extra.append({
+                "kind": "voice_clip_header",
+                "off": gap_start,
+                "end": gap_end,
+                "raw_u32": list(struct.unpack_from("<4I", blob, 0)),
+            })
+            continue
+
+        if prev_kind == "tail_hash_block" and len(blob) == 4:
+            extra.append({
+                "kind": "tail_post_hash_u32",
+                "off": gap_start,
+                "end": gap_end,
+                "value": struct.unpack_from("<I", blob, 0)[0],
+            })
+    return extra
 
 
 def scan_note_tail_records(note_bytes: bytes, offset_to_data: int) -> list[dict]:
@@ -554,6 +711,7 @@ def scan_note_tail_records(note_bytes: bytes, offset_to_data: int) -> list[dict]
 
     records.extend(_scan_pen_preload_paths(note_bytes, cursor))
     records.extend(_tail_hash_blocks(note_bytes, cursor))
+    records.extend(_scan_tail_gap_records(note_bytes, cursor, records))
     records.sort(key=lambda r: (r["off"], r["end"], r["kind"]))
     deduped: list[dict] = []
     seen = set()

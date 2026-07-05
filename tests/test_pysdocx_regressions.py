@@ -29,8 +29,12 @@ class InventoryRegressionTest(unittest.TestCase):
         self.assertEqual(tail["kinds"]["tail_sentinel"], 13)
         self.assertEqual(tail["kinds"]["tail_hash_block"], 13)
         self.assertEqual(tail["kinds"]["pen_preload_path"], 38)
-        self.assertEqual(coverage["known_bytes"], 4594)
-        self.assertEqual(coverage["unknown_bytes"], 1344)
+        self.assertEqual(tail["kinds"]["pen_preload_prelude"], 24)
+        self.assertEqual(tail["kinds"]["pen_preload_prelude_raw"], 13)
+        self.assertEqual(tail["kinds"]["pen_style_tail"], 10)
+        self.assertEqual(tail["kinds"]["voice_clip"], 2)
+        self.assertEqual(coverage["known_bytes"], 5938)
+        self.assertEqual(coverage["unknown_bytes"], 0)
         self.assertEqual(
             tail["page_id_info_relations"],
             {"page_id_head_exact": 10, "page_id_head_shifted_u32_2": 3},

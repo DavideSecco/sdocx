@@ -20,8 +20,17 @@ COVERAGE_MATRIX = [
     {
         "surface": "zip_container.note.note",
         "status": ["Structural", "Semantic"],
-        "decoded": ["top_level_metadata", "typed_text", "tables", "title", "voice_clip_labels_durations"],
-        "unknown": ["full_note_note_schema", "remaining_metadata_flags_and_blocks"],
+        "decoded": [
+            "top_level_metadata",
+            "typed_text",
+            "tables",
+            "title",
+            "voice_clip_labels_durations",
+            "tail_record_boundaries",
+            "pen_preload_paths",
+            "tail_hash_page_id_info_relation",
+        ],
+        "unknown": ["full_note_note_schema", "raw_tail_record_field_semantics", "remaining_metadata_flags"],
     },
     {
         "surface": "page.layer_object_tree",

@@ -86,6 +86,6 @@
 
 - When motivation is there again, gather more `.sdocx` files with audio attachments.
 - Why:
-  - current corpus exposes a `voice_clip` record in `note.note`
+  - current corpus exposes two `voice_clip` records in `note.note`
   - current corpus still does NOT expose a trustworthy link from that record to the concrete audio attachment file/media index
   - additional audio-only / multi-audio / renamed-audio samples are the cleanest next step for that branch of RE

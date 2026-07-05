@@ -110,8 +110,10 @@ Observed top-level signatures:
 - The note tail is now partially classified:
   - `tail_sentinel` on every current sample
   - `pen_preload_path` on most `v4000` files and one mixed `v5400` sample
+  - `pen_preload_prelude` / `pen_preload_prelude_raw` around those preload paths
+  - `pen_style_tail` after preload groups
   - `tail_hash_block` on every current family
-  - `voice_clip` only on the audio sample
+  - `voice_clip` on the audio sample and the mixed Allsamsungnotes sample (`Voice`/`Voce` labels)
 
 ### Important caveat
 
@@ -128,17 +130,23 @@ Current tail-record kinds seen by the parser:
 | --- | ---: | --- |
 | `tail_sentinel` | 13 | Stable marker at `offset_to_data` |
 | `pen_preload_path` | 38 | Length-prefixed pen preload/config resource path strings |
+| `pen_preload_prelude` | 24 | Small parameter prelude before a preload path |
+| `pen_preload_prelude_raw` | 13 | Small raw prelude before a preload path |
+| `pen_style_tail` | 10 | Recurring pen-style tail block (`f32`, ARGB, raw fields) |
 | `tail_hash_block` | 13 | Opaque 32-byte hash-like block after the tail sentinel |
-| `voice_clip` | 1 | Voice label/duration record in the audio sample |
+| `tail_post_hash_u32` | 3 | 4-byte value after shifted pageIdInfo hash blocks |
+| `voice_clip` | 2 | Voice label/duration records (`Voice N` / `Voce N`) |
+| `voice_clip_header` | 2 | 16-byte raw header before a voice label/duration record |
+| `voice_clip_post` | 2 | Raw u32 block after a voice label/duration record |
 
 `pen_preload_path` is now decoded as `u16 char_len + UTF-16LE path` rather than as a null-terminated
 UTF-16 run. That fixes the earlier false leading slash and avoids swallowing printable-looking binary
 bytes after paths such as `InkPen2`. The inventory also records the nearest digit/semicolon parameter
 hints observed in this corpus: `8;` (6), `14;` (1), `18;0;100;` (1).
 
-This is still partial structure, but it is already much better than treating everything after
-`offset_to_data` as opaque mystery bytes: current known tail-byte coverage is `4594/5938` bytes
-(`77.37%`) across the 13-sample corpus.
+This is still partial semantic structure, but the byte coverage is now complete for the current
+corpus: `5938/5938` tail bytes (`100%`) are assigned to bounded records. Some records intentionally
+remain raw/partial because their exact field meanings are not settled.
 
 ### pageIdInfo relation
 
@@ -185,9 +193,9 @@ Observed page-level attachment bag keys:
 
 - A comparable page-level structural placement record for audio.
 - A generalized attachment-placement model beyond the sticky-note bag family.
-- Any trustworthy link from the `voice_clip` tail record to `media/12@...m4a`.
+- Any trustworthy link from the `voice_clip` tail records to concrete `media/*.m4a` entries.
 
-At the current stage, the audio sample does expose a `voice_clip` record in `note.note`, but no
+At the current stage, the audio-bearing samples expose `voice_clip` records in `note.note`, but no
 direct media-index/file-name linkage has been recovered yet.
 
 ## 4. What This Changes Strategically

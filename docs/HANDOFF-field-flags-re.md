@@ -220,6 +220,10 @@ Codex continued §7.2 and landed a conservative `note.note` tail inventory:
   length byte was not being treated as a length prefix.
 - Inventory now records preload path counts, nearby digit/semicolon `param_hint` strings, hash prefixes,
   voice `post_u32`, and byte-level tail coverage.
-- Current corpus tail coverage: `4594` known bytes / `1344` unknown bytes (`77.37%` known).
-- Remaining honest unknowns: full preload surrounding record schema, param-hint semantics, trailing
-  post-hash 4-byte values on some notes, and `voice_clip.post_u32` semantics.
+- Follow-up RE classifies bounded tail gap records: `pen_preload_prelude`,
+  `pen_preload_prelude_raw`, `pen_style_tail`, `voice_clip_header`, `voice_clip_post`, and
+  `tail_post_hash_u32`. Localized Italian voice labels (`Voce N`) are now recognized too.
+- Current corpus tail coverage: `5938` known bytes / `0` unknown bytes (`100%` structurally covered).
+- Remaining honest unknowns: full preload surrounding record semantics, param-hint semantics,
+  `pen_style_tail.raw_u32`, trailing post-hash 4-byte values on some notes, and
+  `voice_clip.post_u32` semantics.

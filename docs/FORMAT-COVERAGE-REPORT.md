@@ -336,21 +336,25 @@ Decoded/used:
 - `tail_sentinel` starts at `offset_to_data` on all current samples
 - `tail_hash_block` appears once per sample and is linked to the `pageIdInfo.dat` head
 - `pen_preload_path` is decoded as `u16 char_len + UTF-16LE path` (38 paths across the corpus)
+- `pen_preload_prelude` / `pen_preload_prelude_raw` classify the small bounded blocks before paths
+- `pen_style_tail` classifies recurring pen-style blocks with a leading f32 width + ARGB color
 - preload `param_hint` strings are recorded conservatively when adjacent (`8;`, `14;`, `18;0;100;`)
-- inventory reports known/unknown tail-byte coverage and recurring unknown-gap prefixes
+- localized voice labels are accepted as `Voice N` or `Voce N`
+- inventory reports known/unknown tail-byte coverage
 
 Current corpus measurement:
 
-- known tail bytes: `4594`
-- unknown tail bytes: `1344`
-- known ratio: `77.37%`
+- known tail bytes: `5938`
+- unknown tail bytes: `0`
+- known ratio: `100%`
 - hash prefixes: `[2, 2]` on 10 samples, `[0, 2]` on 3 samples
 
 What is still missing:
 
-- exact record schema around preload paths
+- exact semantics of the raw fields around preload paths
 - exact meaning of preload parameter hints
-- exact meaning of the 4-byte trailing bytes after some hash blocks
+- exact meaning of `pen_style_tail.raw_u32`
+- exact meaning of the 4-byte trailing values after some hash blocks
 - exact semantics of `voice_clip.post_u32`
 
 ### 12. note.note Tables
