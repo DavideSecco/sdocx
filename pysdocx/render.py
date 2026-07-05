@@ -59,6 +59,12 @@ TYPED_TEXT_BLANK_H = 75
 # Keep a whole line off the very bottom edge before pushing it to the next page.
 TYPED_TEXT_PAGE_PAD = 40
 
+# ⚠ HEURISTIC: text-box frame_midpoints describe the outer rotated frame, but Samsung lays text
+# out inside a smaller inner frame. Keeping the decoded anchor fixed and shrinking only the logical
+# wrap width matches the current GT better for shallow rotations; near-vertical boxes keep the full
+# projected width because their current three-column wrap matches the GT sample.
+TEXT_BOX_FRAME_WRAP_INSET = 18.0
+
 # Named backgrounds accepted by render_document/CLI (`--bg dark|white`).
 BG_DARK = "#252525"
 BG_WHITE = "#ffffff"
@@ -167,32 +173,159 @@ def _text_box_layout(box):
     Samsung stores the text-box angle as the same clockwise-positive f32 used by images, but the
     TEXT anchor itself is not always the bbox's top-left corner after rotation. Near-vertical
     boxes (≈90°/270°) visually start from the bbox's top-RIGHT/left edge respectively; anchoring
-    every box at `(x0, y0)` mirrors the column order compared to the GT sample. This helper picks
-    a stable anchor corner and logical wrap width before the shared rich-text renderer takes over.
+    every box at `(x0, y0)` mirrors the column order compared to the GT sample.
+
+    If a rotated text box exposes decoded `frame_midpoints`, use those first: they are the stored
+    edge-midpoints of the rotated frame, so projecting them onto the local text axes gives the true
+    half-extents and the exact logical top-left origin before rotation. The bbox-only branch below
+    is a fallback heuristic for cases where that geometry is unavailable.
     """
     x0, y0, x1, y1 = box["bbox"]
     angle_deg = (box.get("angle_deg") or 0.0) % 360.0
     box_w = max(x1 - x0 - 16, 1.0)
     box_h = max(y1 - y0 - 16, 1.0)
+    frame_midpoints = box.get("frame_midpoints") or ()
+
+    if frame_midpoints and angle_deg:
+        cx = sum(px for px, _py in frame_midpoints) / len(frame_midpoints)
+        cy = sum(py for _px, py in frame_midpoints) / len(frame_midpoints)
+        theta = math.radians(angle_deg)
+        ux, uy = math.cos(theta), math.sin(theta)
+        vx, vy = -math.sin(theta), math.cos(theta)
+        half_w = max(abs((px - cx) * ux + (py - cy) * uy) for px, py in frame_midpoints)
+        half_h = max(abs((px - cx) * vx + (py - cy) * vy) for px, py in frame_midpoints)
+        if half_w > 1.0 and half_h > 1.0:
+            near_vertical = abs(angle_deg - 90.0) <= 15.0 or abs(angle_deg - 270.0) <= 15.0
+            wrap_inset = 0.0 if near_vertical else min(TEXT_BOX_FRAME_WRAP_INSET, half_w - 1.0)
+            return {
+                "anchor_x": cx - ux * half_w - vx * half_h,
+                "anchor_y": cy - uy * half_w - vy * half_h,
+                "wrap_width": max(half_w * 2.0 - 2.0 * wrap_inset, 1.0),
+                "wrap_inset": wrap_inset,
+                "line_dir": 1.0,
+            }
+
+    vertical_wrap_w = min(box_w, max(box_h, box_h * 1.6))
+    vertical_anchor_pad = min(max(box_h * 0.1, 20.0), 36.0)
     if abs(angle_deg - 90.0) <= 15.0:
         return {
-            "anchor_x": x1 - 8,
+            "anchor_x": x1 - vertical_anchor_pad,
             "anchor_y": y0 + 8,
-            "wrap_width": box_h,
+            "wrap_width": vertical_wrap_w,
+            "wrap_inset": 0.0,
             "line_dir": 1.0,
         }
     if abs(angle_deg - 270.0) <= 15.0:
         return {
-            "anchor_x": x0 + 8,
+            "anchor_x": x0 + vertical_anchor_pad,
             "anchor_y": y1 - 8,
-            "wrap_width": box_h,
+            "wrap_width": vertical_wrap_w,
+            "wrap_inset": 0.0,
             "line_dir": 1.0,
         }
     return {
         "anchor_x": x0 + 8,
         "anchor_y": y0 + 8,
         "wrap_width": box_w,
+        "wrap_inset": 0.0,
         "line_dir": 1.0,
+    }
+
+
+def _group_sink_lines(sink):
+    """Collapse `(x, y, seg, style, line_h)` sink records into visual lines.
+
+    `_render_rich_text(..., sink=...)` emits one entry per rendered segment. For diagnostics we
+    want the logical lines the wrapper produced, preserving the segment/style boundaries that made
+    those lines. y is grouped with the same 0.01-page-unit tolerance used elsewhere for sink-based
+    pagination.
+    """
+    lines: list[dict] = []
+    by_y: dict[float, dict] = {}
+    for x, y, seg, style, line_h in sink:
+        key = round(y, 2)
+        line = by_y.get(key)
+        if line is None:
+            line = {"y": y, "advance": line_h, "segments": []}
+            by_y[key] = line
+            lines.append(line)
+        line["segments"].append({"x": x, "text": seg, "style": style})
+        line["advance"] = max(line["advance"], line_h)
+    for line in lines:
+        line["segments"].sort(key=lambda seg: seg["x"])
+        line["text"] = "".join(seg["text"] for seg in line["segments"])
+    lines.sort(key=lambda line: line["y"])
+    return lines
+
+
+def debug_text_box_layout(box, page_size=(1600, 2262), figsize=(9, 12), default_ink=DEFAULT_INK):
+    """Return the current heuristic layout decisions + wrapped lines for one text box.
+
+    This is diagnostic output for reverse engineering, not a decoded-format API: `wrap_width`,
+    `anchor_*`, `line_h` and `blank_h` all reflect the CURRENT renderer heuristics. The wrapped
+    lines are collected via the same sink-based path used for typed-text pagination, so they show
+    the exact logical line breaks the renderer is choosing before any rotation is applied.
+    """
+    layout = _text_box_layout(box)
+    x0, y0, x1, y1 = box["bbox"]
+    box_w = max(x1 - x0 - 16, 1.0)
+    box_h = max(y1 - y0 - 16, 1.0)
+    frame_midpoints = box.get("frame_midpoints") or ()
+    fontpt = max((box.get("font_size") or 11.0) * 1.36, 12.0)
+    line_h = max(fontpt * 3.2, 36.0)
+    blank_h = max(fontpt * 2.0, 24.0)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    try:
+        ax.set_xlim(0, page_size[0])
+        ax.set_ylim(page_size[1], 0)
+        sink: list = []
+        _render_rich_text(
+            ax,
+            box,
+            x0=layout["anchor_x"],
+            y0=layout["anchor_y"],
+            max_width=layout["wrap_width"],
+            line_h=line_h,
+            blank_h=blank_h,
+            fontpt=fontpt,
+            default_ink=default_ink,
+            angle_deg=box.get("angle_deg") or 0.0,
+            line_dir=layout["line_dir"],
+            sink=sink,
+        )
+    finally:
+        plt.close(fig)
+
+    heuristics = [
+        "line_h and blank_h are renderer geometry heuristics derived from font size",
+        "wrapped lines are the current renderer's hypothesis before rotation is applied",
+    ]
+    if frame_midpoints:
+        heuristics.insert(
+            0,
+            "anchor_x/anchor_y and wrap_width are derived from decoded frame_midpoints projected onto the local text axes",
+        )
+        if layout.get("wrap_inset"):
+            heuristics.insert(1, f"wrap_width is shrunk by renderer inner-frame inset {layout['wrap_inset']:.1f}")
+        else:
+            heuristics.insert(1, "near-vertical text boxes keep the full projected wrap width")
+    else:
+        heuristics.insert(0, "anchor_x/anchor_y come from _text_box_layout fallback logic, not from decoded frame geometry")
+        heuristics.insert(1, "wrap_width is the current renderer fallback, not a decoded logical box width")
+
+    return {
+        "bbox_inner_w": box_w,
+        "bbox_inner_h": box_h,
+        "anchor_x": layout["anchor_x"],
+        "anchor_y": layout["anchor_y"],
+        "wrap_width": layout["wrap_width"],
+        "line_dir": layout["line_dir"],
+        "fontpt": fontpt,
+        "line_h": line_h,
+        "blank_h": blank_h,
+        "heuristics": heuristics,
+        "lines": _group_sink_lines(sink),
     }
 
 
@@ -679,6 +812,20 @@ def _render_rich_text(
                     x = line_x0
                     y += rendered_line_h * line_dir
                     continue
+                # If a styled segment would only fit by splitting inside a word because the
+                # current line is already partially occupied (e.g. "... testo in " + bold
+                # "grassetto"), move the WHOLE segment to the next line and re-measure there.
+                # This avoids artificial extra rows that come purely from run boundaries rather
+                # than the paragraph's own word wrapping.
+                if x > line_x0 and fit_len < len(seg) and not re.search(r"[ \t]", seg[:fit_len]):
+                    seg_corners = _measure_text(
+                        ax, renderer, inv, line_x0, y, seg, seg_fontpt, style[0], style[1]
+                    )
+                    seg_width = seg_corners[:, 0].max() - seg_corners[:, 0].min()
+                    if line_x0 + seg_width <= max_x:
+                        x = line_x0
+                        y += rendered_line_h * line_dir
+                        continue
                 head, seg = _wrap_cut(seg, fit_len)
                 if not head:
                     x = line_x0
