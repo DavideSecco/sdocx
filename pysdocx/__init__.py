@@ -11,13 +11,21 @@ from pysdocx.container import (
     load_bg_color,
     load_media_by_index,
     load_note,
+    load_page_id_info,
     load_page,
     load_page_with_bg,
     raster_media_indices,
 )
-from pysdocx.note import parse_tables, parse_typed_text
+from pysdocx.note import (
+    annotate_note_tail_with_page_id_info,
+    parse_note_metadata,
+    parse_tables,
+    parse_typed_text,
+    scan_note_tail_records,
+)
 from pysdocx.dump import dump_container, hexdump
 from pysdocx.ink import color_hex, decode_coordinates, decode_sign_mag, decode_trailing, extract_color_and_width
+from pysdocx.inventory import build_inventory
 from pysdocx.page import (
     GRID_ORIGIN,
     GRID_SPACING,
@@ -29,6 +37,7 @@ from pysdocx.page import (
     parse_shapes,
     parse_shapes_from_objects,
     parse_text_boxes_from_objects,
+    scan_attachment_placements,
     scan_arrows,
     scan_drawings,
     scan_drawings_from_objects,
@@ -46,9 +55,12 @@ __all__ = [
     "load_page_with_bg",
     "load_media_by_index",
     "load_note",
+    "load_page_id_info",
     "raster_media_indices",
     "list_attachments",
     "parse_typed_text",
+    "parse_note_metadata",
+    "annotate_note_tail_with_page_id_info",
     "parse_tables",
     "hexdump",
     "dump_container",
@@ -57,6 +69,7 @@ __all__ = [
     "decode_trailing",
     "extract_color_and_width",
     "color_hex",
+    "build_inventory",
     "parse_page",
     "parse_page_tree",
     "page_template",
@@ -66,6 +79,8 @@ __all__ = [
     "parse_shapes",
     "parse_shapes_from_objects",
     "parse_text_boxes_from_objects",
+    "scan_attachment_placements",
+    "scan_note_tail_records",
     "scan_arrows",
     "decode_outline",
     "flatten_outline",

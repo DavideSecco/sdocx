@@ -6,10 +6,11 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from pysdocx.container import list_attachments, list_pages, load_note, load_page
+from pysdocx.container import list_attachments, list_pages, load_note, load_page, load_page_id_info
 from pysdocx.dump import dump_container
 from pysdocx.ink import color_hex
-from pysdocx.note import parse_typed_text
+from pysdocx.inventory import build_inventory
+from pysdocx.note import annotate_note_tail_with_page_id_info, parse_note_metadata, parse_typed_text
 from pysdocx.page import parse_page
 
 
@@ -36,6 +37,25 @@ def _preview(text: str, limit: int = 72) -> str:
 
 def _fmt_range(item: dict) -> str:
     return f"{item['start']}..{item['end']}"
+
+
+def _style_flags(style: tuple) -> str:
+    flags = []
+    if style[0]:
+        flags.append("bold")
+    if style[1]:
+        flags.append("italic")
+    if style[2]:
+        flags.append("underline")
+    if style[3]:
+        flags.append("strike")
+    if style[4]:
+        flags.append(f"color={_fmt_color(style[4])}")
+    if style[5]:
+        flags.append(f"highlight={_fmt_color(style[5])}")
+    if style[6]:
+        flags.append(f"font={style[6]:.2f}")
+    return ", ".join(flags) if flags else "plain"
 
 
 def cmd_stroke_table(args: argparse.Namespace) -> None:
@@ -88,11 +108,31 @@ def _print_object(obj: dict, depth: int, detail: bool, media_by_object: dict[int
         f"bbox={_fmt_optional_bbox(obj['bbox'])} uuid={uuid_short}"
     )
     if detail and header:
+        profile = obj.get("header_profile") or {}
         print(
             f"{indent}     header total={header['total_size']} var={header['var_data_offset']} "
             f"fmt={header['format_version']} flags=0x{header['flags']:x} "
-            f"field=0x{header['field_flags']:x} mtime={header['modified_time']}"
+            f"field=0x{header['field_flags']:x} mtime={header['modified_time']} "
+            f"profile={profile.get('signature', '-')}/{profile.get('family', '-')}"
         )
+        if profile.get("known_features") or profile.get("unknown_bits"):
+            print(
+                f"{indent}     header_features known={profile.get('known_features', [])} "
+                f"unknown_bits={profile.get('unknown_bits', [])}"
+            )
+        ext = header.get("ext_block")
+        if ext:
+            print(
+                f"{indent}     ext_block off={ext['off']} counter={ext['counter']} "
+                f"seq={ext['seq']} page={ext['page_width']}x{ext['page_height']}"
+            )
+        extra_key = header.get("extra_key_block")
+        if extra_key:
+            print(
+                f"{indent}     extra_key_block off={extra_key['off']} head={extra_key['head']} "
+                f"head_ok={extra_key['head_ok']} key_len={extra_key['key_len']} "
+                f"key={extra_key['key']!r} trailing={extra_key['trailing']}"
+            )
     if detail and media_by_object:
         for media in media_by_object.get(obj["off"], []):
             print(
@@ -127,21 +167,27 @@ def _print_attachments(attachments: list[dict]) -> None:
 def _print_object_summary(page_results: list[dict]) -> None:
     counts = Counter()
     header_counts = Counter()
+    header_profiles = Counter()
     total_objects = 0
     total_strokes = 0
     total_kept = 0
     total_sticky_notes = 0
+    total_attachment_placements = 0
     for result in page_results:
         total_objects += result["object_count"]
         total_strokes += result["stroke_count"]
         total_kept += result["kept"]
         total_sticky_notes += len(result["sticky_notes"])
+        total_attachment_placements += len(result.get("attachment_placements", ()))
         for layer in result["layers"]:
             for obj in _iter_cli_objects(layer["objects"]):
                 counts[(obj["raw_type"], obj["type"])] += 1
                 header = obj["header"]
                 if header:
                     header_counts[(obj["raw_type"], obj["type"], header["total_size"], header["field_flags"])] += 1
+                profile = obj.get("header_profile")
+                if profile:
+                    header_profiles[(obj["type"], profile["family"], profile["signature"])] += 1
 
     print(f"summary pages={len(page_results)} objects={total_objects} strokes={total_strokes} kept={total_kept}")
     for (raw_type, obj_type), count in sorted(counts.items()):
@@ -149,6 +195,12 @@ def _print_object_summary(page_results: list[dict]) -> None:
         for (hraw, htype, total_size, field_flags), header_count in sorted(header_counts.items()):
             if (raw_type, obj_type) == (hraw, htype):
                 print(f"      header total={total_size:<4} field=0x{field_flags:x} count={header_count}")
+    if header_profiles:
+        print("  header profiles:")
+        for (obj_type, family, signature), count in sorted(header_profiles.items()):
+            print(f"      type={obj_type:<14} family={family:<16} sig={signature:<12} count={count}")
+    if total_attachment_placements:
+        print(f"  attachment_placements (outside declared object count) count={total_attachment_placements}")
     if total_sticky_notes:
         print(f"  sticky_note_ref (outside declared object count) count={total_sticky_notes}")
 
@@ -193,6 +245,12 @@ def cmd_objects(args: argparse.Namespace) -> None:
                 f"     sticky_note_ref media={note['media_index']} "
                 f"bbox={_fmt_bbox(note['bbox'])} off=0x{note['off']:x}  "
                 f"(found via whole-page scan — outside this page's declared object count)"
+            )
+        for placement in result.get("attachment_placements", ()):
+            print(
+                f"     attachment_ref kind={placement['kind']} media={placement['media_index']} "
+                f"type_tag={placement.get('type_tag')} bbox={_fmt_optional_bbox(placement.get('bbox'))} "
+                f"off=0x{placement['off']:x} keys={placement.get('keys', [])}"
             )
 
     _print_attachments(attachments)
@@ -242,15 +300,53 @@ def _print_typed_text_debug(parsed: dict, show_all_paragraphs: bool) -> None:
         )
 
 
-def _print_text_box_debug(page_idx: int, result: dict) -> None:
+def _print_note_metadata(note_meta: dict | None) -> None:
+    if note_meta is None:
+        print("note_metadata: none")
+        return
+    print(
+        f"note_metadata fmt={note_meta.get('format_version')} size={note_meta.get('width')}x{note_meta.get('height')} "
+        f"title={note_meta.get('title')!r} created={note_meta.get('created_time')} "
+        f"modified={note_meta.get('modified_time')} title_size={note_meta.get('title_size')}"
+    )
+    for clip in note_meta.get("voice_clips", ()):
+        print(
+            f"  voice_clip label={clip['label']!r} duration={clip['duration']!r} "
+            f"label_off=0x{clip['label_off']:x} duration_off=0x{clip['duration_off']:x}"
+        )
+    for record in note_meta.get("tail_records", ()):
+        kind = record["kind"]
+        if kind == "tail_sentinel":
+            print(f"  tail_record sentinel off=0x{record['off']:x}")
+        elif kind == "voice_clip":
+            print(
+                f"  tail_record voice_clip off=0x{record['off']:x} "
+                f"label={record['label']!r} duration={record['duration']!r} post_u32={record['post_u32']}"
+            )
+        elif kind == "pen_preload_path":
+            print(
+                f"  tail_record pen_preload off=0x{record['off']:x} "
+                f"path={record['path']!r} param_hint={record.get('param_hint')!r}"
+            )
+        elif kind == "tail_hash_block":
+            relation = record.get("page_id_info_relation") or {}
+            print(
+                f"  tail_record hash_block off=0x{record['off']:x} "
+                f"prefix={record['prefix_u32']} hash32={record['hash32'][:16]}... "
+                f"pageIdInfo={relation}"
+            )
+
+
+def _print_text_box_debug(page_idx: int, result: dict, layout_debug: list[dict] | None = None) -> None:
     if not result["text_boxes"]:
         return
     print(f"page {page_idx} {result['uuid'][:8]} text_boxes={len(result['text_boxes'])}")
-    for box in result["text_boxes"]:
+    for idx, box in enumerate(result["text_boxes"]):
         bbox = _fmt_optional_bbox(box["bbox"])
         print(
             f"  object={box['object_idx']} angle={box.get('angle_deg') or 0.0:.2f} "
             f"bbox={bbox} chars={len(box['text'])} font={box.get('font_size') or '-'} "
+            f"text_off=0x{box['text_off']:x} object_off=0x{box['object_off']:x} "
             f"text={_preview(box['text'])!r}"
         )
         for run in box.get("runs", ()):
@@ -259,9 +355,33 @@ def _print_text_box_debug(page_idx: int, result: dict) -> None:
             print(f"    color {_fmt_range(color):>7} #{color['color'][0]:02x}{color['color'][1]:02x}{color['color'][2]:02x}")
         for font in box.get("font_sizes", ()):
             print(f"    font {_fmt_range(font):>8} {font['font_size']:.2f}")
+        if box.get("frame_midpoints"):
+            pts = ", ".join(f"({x:.1f},{y:.1f})" for x, y in box["frame_midpoints"])
+            print(f"    frame_midpoints {pts}")
+        if layout_debug:
+            debug = layout_debug[idx]
+            print(
+                f"    layout bbox_inner={debug['bbox_inner_w']:.1f}x{debug['bbox_inner_h']:.1f} "
+                f"anchor=({debug['anchor_x']:.1f},{debug['anchor_y']:.1f}) "
+                f"wrap={debug['wrap_width']:.1f} line_h={debug['line_h']:.1f} blank_h={debug['blank_h']:.1f}"
+            )
+            for note in debug.get("heuristics", ()):
+                print(f"      heuristic: {note}")
+            for line_idx, line in enumerate(debug["lines"], 1):
+                print(f"      line {line_idx:>2} y={line['y']:.1f} text={_preview(line['text'])!r}")
+                for seg in line["segments"]:
+                    print(
+                        f"        seg x={seg['x']:.1f} {_style_flags(seg['style'])} "
+                        f"text={_preview(seg['text'], limit=48)!r}"
+                    )
 
 
-def _text_debug_json(typed_text: dict | None, page_results: list[tuple[int, str, dict]]) -> dict:
+def _text_debug_json(
+    note_metadata: dict | None,
+    typed_text: dict | None,
+    page_results: list[tuple[int, str, dict]],
+    layout_debug_by_page: dict[int, list[dict]] | None = None,
+) -> dict:
     pages = []
     for page_idx, page_name, result in page_results:
         pages.append({
@@ -269,13 +389,16 @@ def _text_debug_json(typed_text: dict | None, page_results: list[tuple[int, str,
             "name": page_name,
             "uuid": result["uuid"],
             "text_boxes": result["text_boxes"],
+            "text_box_layout_debug": (layout_debug_by_page or {}).get(page_idx),
         })
-    return {"typed_text": typed_text, "pages": pages}
+    return {"note_metadata": note_metadata, "typed_text": typed_text, "pages": pages}
 
 
 def cmd_text(args: argparse.Namespace) -> None:
     """Print note.note typed text metadata and page-object text-box metadata."""
     note = load_note(args.file) or b""
+    note_metadata = parse_note_metadata(note)
+    note_metadata = annotate_note_tail_with_page_id_info(note_metadata, load_page_id_info(args.file))
     typed_text = parse_typed_text(note)
     page_names = list_pages(args.file)
     if args.page:
@@ -289,17 +412,34 @@ def cmd_text(args: argparse.Namespace) -> None:
             continue
         _, page_data = load_page(args.file, page_name)
         page_results.append((page_idx, page_name, parse_page(page_data)))
+    layout_debug_by_page = None
+    if args.layout_debug:
+        from pysdocx.render import debug_text_box_layout
+
+        layout_debug_by_page = {}
+        for page_idx, _page_name, result in page_results:
+            layout_debug_by_page[page_idx] = [
+                debug_text_box_layout(box, page_size=(result["width"], result["height"]))
+                for box in result["text_boxes"]
+            ]
 
     if args.json:
-        print(json.dumps(_text_debug_json(typed_text, page_results), indent=2, ensure_ascii=False))
+        print(
+            json.dumps(
+                _text_debug_json(note_metadata, typed_text, page_results, layout_debug_by_page),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
         return
 
+    _print_note_metadata(note_metadata)
     if typed_text is None:
         print("typed_text: none")
     else:
         _print_typed_text_debug(typed_text, args.all_paragraphs)
     for page_idx, _page_name, result in page_results:
-        _print_text_box_debug(page_idx, result)
+        _print_text_box_debug(page_idx, result, (layout_debug_by_page or {}).get(page_idx))
 
 
 def cmd_render(args: argparse.Namespace) -> None:
@@ -319,6 +459,85 @@ def cmd_render(args: argparse.Namespace) -> None:
     stem = args.file.stem
     pages = [args.page] if args.page else "all"
     print(f"wrote {stem}-page-NN.{args.format} to {out_dir} (pages: {pages})")
+
+
+def cmd_inventory(args: argparse.Namespace) -> None:
+    targets = args.paths or [Path("samples")]
+    report = build_inventory(targets)
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
+    print(f"inventory sample_count={report['sample_count']}")
+    print("object header profiles:")
+    for row in report["object_header_profiles"]:
+        print(
+            f"  type={row['object_type']:<14} family={row['family']:<16} "
+            f"sig={row['signature']:<12} count={row['count']}"
+        )
+    print("note profiles:")
+    for row in report["note_profiles"]:
+        print(
+            f"  family={row['family']:<18} sig={row['signature']:<28} count={row['count']}"
+        )
+    print("note tail kinds:")
+    for kind, count in sorted(report["note_tail_profiles"]["kinds"].items()):
+        print(f"  {kind:<20} count={count}")
+    if report["note_tail_profiles"].get("page_id_info_relations"):
+        print("note tail -> pageIdInfo:")
+        for kind, count in sorted(report["note_tail_profiles"]["page_id_info_relations"].items()):
+            print(f"  {kind:<28} count={count}")
+    if report["note_tail_profiles"].get("tail_hash_prefixes"):
+        print("note tail hash prefixes:")
+        for row in report["note_tail_profiles"]["tail_hash_prefixes"]:
+            print(f"  {row['prefix_u32']} count={row['count']}")
+    if report["note_tail_profiles"].get("preload_paths"):
+        print("note preload paths:")
+        for path, count in sorted(report["note_tail_profiles"]["preload_paths"].items()):
+            print(f"  {path:<58} count={count}")
+    if report["note_tail_profiles"].get("preload_param_hints"):
+        print("note preload param hints:")
+        for hint, count in sorted(report["note_tail_profiles"]["preload_param_hints"].items()):
+            print(f"  {hint!r:<16} count={count}")
+    if report["note_tail_profiles"].get("voice_post_u32"):
+        print("note voice post_u32:")
+        for row in report["note_tail_profiles"]["voice_post_u32"]:
+            print(f"  {row['post_u32']} count={row['count']}")
+    tail_cov = report["note_tail_profiles"].get("coverage") or {}
+    tail_known = tail_cov.get("known_bytes", 0)
+    tail_unknown = tail_cov.get("unknown_bytes", 0)
+    tail_total = tail_known + tail_unknown
+    tail_ratio = tail_known / tail_total if tail_total else 1.0
+    print(
+        f"note tail coverage: known={tail_known} unknown={tail_unknown} "
+        f"known_ratio={tail_ratio:.2%}"
+    )
+    for row in tail_cov.get("per_file", ()):
+        print(
+            f"  {row['file']:<58} tail={row['tail_len']:<5} known={row['known_bytes']:<4} "
+            f"unknown={row['unknown_bytes']:<4} gaps={row['gap_count']} max_gap={row['max_gap']}"
+        )
+    if tail_cov.get("gap_prefixes"):
+        print("note tail unknown-gap prefixes:")
+        for row in tail_cov["gap_prefixes"]:
+            print(f"  {row['prefix_hex']:<32} count={row['count']}")
+    ext = report.get("object_header_ext") or {}
+    print(
+        f"object header ext: count={ext.get('count', 0)} "
+        f"dim_mismatches={len(ext.get('dimension_mismatches', []))} "
+        f"extra_key_blocks={ext.get('extra_key_blocks', 0)} "
+        f"extra_key_bad={len(ext.get('extra_key_bad', []))}"
+    )
+    for row in ext.get("per_file", ()):
+        print(
+            f"  {row['file']:<58} n={row['count']:<4} "
+            f"seq={row['seq_min']}..{row['seq_max']} uniq={row['seq_unique']} "
+            f"inv={row['seq_inversions']} counters={row['counter_unique']} "
+            f"repeated_groups={row['repeated_counter_groups']} offsets={row['ext_offsets']}"
+        )
+    print("attachment bag keys:")
+    for key, count in sorted(report["attachment_profiles"]["keys"].items()):
+        print(f"  {key:<20} count={count}")
 
 
 def main() -> None:
@@ -350,6 +569,11 @@ def main() -> None:
         action="store_true",
         help="include default paragraphs, not only paragraphs with decoded metadata",
     )
+    p_text.add_argument(
+        "--layout-debug",
+        action="store_true",
+        help="also run the current renderer heuristics and print the wrapped text-box lines they produce",
+    )
     p_text.add_argument("--json", action="store_true", help="emit parsed text/page metadata as JSON")
     p_text.set_defaults(func=cmd_text)
 
@@ -363,6 +587,11 @@ def main() -> None:
     p_render.add_argument("--table-page", type=int, help="force note-level table rendering onto this page")
     p_render.add_argument("--bg", choices=("dark", "white"), help="page background (default: the file's stored color)")
     p_render.set_defaults(func=cmd_render)
+
+    p_inventory = sub.add_parser("inventory", help="summarize corpus-level format coverage/profiles")
+    p_inventory.add_argument("paths", type=Path, nargs="*", help="files or directories to scan (default: samples/)")
+    p_inventory.add_argument("--json", action="store_true", help="emit machine-readable inventory JSON")
+    p_inventory.set_defaults(func=cmd_inventory)
 
     args = parser.parse_args()
     args.func(args)
