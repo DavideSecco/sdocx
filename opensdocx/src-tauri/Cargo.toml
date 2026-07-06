@@ -1,0 +1,40 @@
+[package]
+name = "opensdocx"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "opensdocx_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+# OpenSdocx consumes the reverse-engineering core by path. This crate is its own
+# Cargo workspace (the [workspace] table below) so it stays decoupled from the RE
+# workspace and is ready to become its own repo later.
+sdocx = { path = "../../crates/sdocx", features = ["serde"] }
+
+# Linux: pin WebKitGTK's page-zoom to 100% so Ctrl+scroll can't scale the whole
+# UI (we do document zoom on the canvas instead). Version pinned to match wry's.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "=2.0.2", features = ["v2_40"] }
+gtk = "0.18"
+
+# Detach from the outer RE workspace: OpenSdocx is its own standalone product.
+[workspace]
+

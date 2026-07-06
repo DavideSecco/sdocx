@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+    <title>OpenSdocx</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <header class="toolbar">
+      <button id="open-btn">Apri .sdocx</button>
+      <div class="nav">
+        <button id="prev-btn" title="Pagina precedente" disabled>‹</button>
+        <span id="page-label">—</span>
+        <button id="next-btn" title="Pagina successiva" disabled>›</button>
+      </div>
+      <button id="fit-btn" title="Adatta (0)" disabled>Adatta</button>
+      <div class="spacer"></div>
+      <span id="stat" class="stat"></span>
+    </header>
+    <main id="stage" class="stage">
+      <div id="empty" class="empty">Apri un file <code>.sdocx</code> per iniziare</div>
+      <canvas id="page" hidden></canvas>
+    </main>
+  </body>
+</html>
