@@ -10,6 +10,10 @@ Reverse-engineered tooling for Samsung Notes `.sdocx` files (there is no working
 open-source viewer on Linux). Upstream is the Rust workspace `twangodev/sdocx`;
 active RE work happens on branch `feat/web-viewer`.
 
+**Resuming / current state:** read [`future_todo.md`](./future_todo.md) — it is
+the running checkpoint (what is decoded + validated, the toolchain, and the next
+concrete tasks). It is the handoff between work sessions and agents.
+
 ## Repo map
 
 - `pysdocx/` — **the RE workbench.** A Python parser/renderer where all format
