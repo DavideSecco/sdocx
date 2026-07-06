@@ -9,6 +9,11 @@ strongly-grounded RE in the project.
   — fed one object blob; models the base header **and** the field_flags-gated
   extensions. Validated field-by-field against pysdocx on **11788/11788** corpus
   objects by the test gate.
+- **HDR_EXT diagnostic:** [`spec/tools/analyze_header_ext.py`](../../../../spec/tools/analyze_header_ext.py)
+  exports every 0x40000 extension row and summaries for `seq` / `counter`
+  investigation.
+- **Residual diagnostic:** [`spec/tools/analyze_object_header_residuals.py`](../../../../spec/tools/analyze_object_header_residuals.py)
+  summarizes header `flags`, `extra_key.trailing`, and HDR_EXT residuals.
 - **Reference parser:** `_parse_object_header`, `_decode_header_ext`,
   `_decode_extra_key_block`, `_object_header_profile` in
   [`pysdocx/page.py`](../../../../pysdocx/page.py).
@@ -82,14 +87,46 @@ Layout `[u32 counter][u32 seq][u32 page_width][u32 page_height]`. The trailing
 `page_width`/`page_height` match the page header on **1690/1690** objects (across
 4 distinct page sizes — real signal).
 
+Diagnostic command:
+
+```bash
+.venv/bin/python spec/tools/analyze_header_ext.py samples
+```
+
+Current corpus summary:
+
+- **1690** HDR_EXT rows; **0** page-dimension mismatches.
+- Object types carrying it: stroke 1427, shape 251, image 8, text_box 4.
+- Extension offsets are explained by prior gated fields:
+  - `105` when HDR_EXT starts immediately after the base header;
+  - `109` when ANGLE precedes it;
+  - `137` when EXTRA_KEY precedes it;
+  - `141` when ANGLE + EXTRA_KEY precede it.
+- `seq` is file/session-like, not object-like: usually one value per file, with
+  small multi-value ranges on edited/copied notes (`415117..415119` on the
+  shape sample family). It is not per-object and not equivalent to
+  `file_revision`.
+- `counter` is not unique: 276 repeated groups / 1029 objects. Repeats are
+  meaningful, though: the two `OnlyShapesblack` samples share all 227 old
+  counters; the later `OnlyShapesblack_new` sample has those plus 92 additional
+  counters for the newly added page/content. This makes `counter` look like a
+  persistent object/group lineage id, but the corpus still has mixed groups
+  (shape+stroke) and repeated same-type groups, so the exact semantic is not
+  promoted.
+
 ## Unknown
 
 - **`flags` (the u16 before `field_flags`)** — constant `0x1bf` on non-stroke
-  objects; on strokes only bit `0x1` varies (an invariant: every extended-header
-  stroke sets it), but it does not split cleanly enough to name → documented, not
-  promoted.
-- **`ext_block.seq` / `ext_block.counter`** — `seq` is near-constant within a
-  note (not per-object, not always monotonic); `counter` repeats and often groups
-  related/copied objects. No clean semantic yet.
-- **`extra_key` trailing `u32 = 1`** — decoded as constant; flag-vs-count can't
-  be disambiguated because it never varies.
+  objects; on strokes only bit `0x1` varies. Corpus counts: `0x1be` on 7109
+  stroke objects, `0x1bf` on 4266 stroke objects and all 413 non-stroke
+  objects. Every extended-header stroke sets `0x1bf`; base stroke
+  `121/0x6000` can be either `0x1be` or `0x1bf`. The split crosses tool/width
+  families, so it is documented but not named.
+- **`ext_block.seq` / `ext_block.counter`** — bounded and structurally decoded,
+  but semantic names are deliberately withheld. `seq` behaves like a
+  file/session save-generation value; `counter` behaves like a persistent
+  object/group lineage id. Neither interpretation is clean enough for Decoded
+  status on the current corpus.
+- **`extra_key` trailing `u32 = 1`** — decoded as constant on 40/40 blocks, all
+  on stroke objects; flag-vs-count can't be disambiguated because it never
+  varies.

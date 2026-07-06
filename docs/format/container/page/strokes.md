@@ -8,6 +8,8 @@ here rather than in a `.ksy`.
 - **Reference parser:** `parse_stroke`, `decode_coordinates`, `decode_trailing`,
   `_select_layout`, `_parse_stroke_object` in
   [`pysdocx/page.py`](../../../../pysdocx/page.py).
+- **Absolute-f64 diagnostic:** [`spec/tools/analyze_absolute_f64_strokes.py`](../../../../spec/tools/analyze_absolute_f64_strokes.py)
+  searches stroke blobs for alternate absolute coordinate runs.
 - **Status:** record layout **Structural**; coordinates + channels **Decoded**;
   a couple of geometry constants and tool-id edges are noted below.
 
@@ -68,4 +70,9 @@ ruler-line geometry.
   See [`../../heuristics.md`](../../heuristics.md).
 - **Known open:** a raw-absolute-`f64` coordinate variant was observed on a
   couple of benchmark pages (points stored as absolute pairs, not deltas) that
-  neither layout reads; not yet fully decoded.
+  neither layout reads; not yet fully decoded. Current diagnostic result:
+  `analyze_absolute_f64_strokes.py samples` sees 11,375 stroke objects; 11,353
+  are already bbox-consistent under the delta decoder, and scanning the 22
+  delta-inconsistent objects finds no count-prefixed or aligned absolute-f64
+  point run. This is a negative result for the current corpus, not proof that
+  the variant does not exist in future samples.

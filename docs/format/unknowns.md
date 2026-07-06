@@ -21,10 +21,10 @@ shared question:
   `flags 0x8` show no clean feature against pages/images/shapes/sticky/template.
 - **Tail records:** raw fields around `pen_preload_path`; preload param hints
   (`8;`, `14;`, `18;0;100;`…) — do not map 1:1 to pen tool names;
-  `pen_style_tail.param` / `.raw_u32`; `tail_post_hash_u32` (matches
-  `note.note[-4:]` on shifted samples → likely a copy, not a checksum);
-  `voice_clip.post_u32` beyond the duration candidate; the meaning of the
-  `tail_hash_block` hash itself.
+  `pen_style_tail.param` / `.raw_u32`; why `tail_post_hash_u32` is present only
+  on the three shifted tail-hash samples (the value itself is decoded as a copy
+  of `note.note[-4:]`); `voice_clip.post_u32` beyond the duration/media-index
+  candidates; the meaning of the `tail_hash_block` hash itself.
 - **Title object** inner schema (only the visible title text is scanned out).
 - **Tables:** full block-level schema (borders, merges, column widths as stored
   fields); whether cell `kind` encodes a table style.
@@ -39,7 +39,10 @@ shared question:
   objects. No clean semantic.
 - **`extra_key` trailing `u32 = 1`**: constant; flag-vs-count undecidable.
 - **Raw-absolute-`f64` stroke variant**: observed on a couple of benchmark pages
-  (absolute coordinate pairs, not deltas); neither known layout reads it.
+  (absolute coordinate pairs, not deltas); neither known layout reads it. The
+  current corpus diagnostic scans only delta-inconsistent stroke objects by
+  default and finds no count-prefixed/aligned absolute-f64 run, so this likely
+  needs a targeted sample or a more specific signature.
 - **Shape payloads:** complete formal schema for every variant; whether future
   shape families add payload-geometry point roles.
 - **Drawing payload:** fuller object-level semantics.
@@ -49,8 +52,11 @@ shared question:
   `layer_flags` bits (boundaries known; not every bit meaning).
 
 ## `media/mediaInfo.dat`
-- **Per-record `raw_tail`** (~11 bytes): `tail_tag` (1/3/5/20), the timestamp-like
-  `time_candidate`, and the trailing marker byte.
+- **Per-record tail semantics:** the 11-byte tail boundaries are decoded as
+  `[u16 tag][u64 time_candidate][u8 marker]` (`marker == 1` on 60/60 records),
+  but `tag` (1/3/5/20) and the timestamp-like `time_candidate` are not yet
+  semantically named. `time_candidate` is not an exact match for note
+  created/modified or ZIP entry time on the current corpus.
 
 ## `end_tag.bin`
 - **Middle raw regions** `[16,72)` (minus decoded islands) and `[96, footer)`.
