@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from pysdocx.container import list_media_info, list_pages, load_note, load_page, load_page_id_info
+from pysdocx.container import list_end_tag, list_media_info, list_page_id_info, list_pages, load_note, load_page, load_page_id_info
 from pysdocx.note import annotate_note_tail_with_page_id_info, parse_note_metadata, parse_tables, parse_typed_text
 from pysdocx.page import parse_page
 
@@ -14,8 +15,8 @@ COVERAGE_MATRIX = [
     {
         "surface": "zip_container.pageIdInfo.dat",
         "status": ["Structural", "Semantic"],
-        "decoded": ["true_page_order"],
-        "unknown": [],
+        "decoded": ["true_page_order", "document_head_hash", "per_page_hash_records"],
+        "unknown": ["per_page_hash_semantics"],
     },
     {
         "surface": "zip_container.note.note",
@@ -39,6 +40,12 @@ COVERAGE_MATRIX = [
         "unknown": ["manifest_tail_field_semantics"],
     },
     {
+        "surface": "zip_container.end_tag.bin",
+        "status": ["Structural", "Semantic"],
+        "decoded": ["payload_size", "format_version", "modified_time", "created_time_candidates", "sdk_signature"],
+        "unknown": ["middle_raw_fields", "older_timestamp_unit_semantics"],
+    },
+    {
         "surface": "page.layer_object_tree",
         "status": ["Structural"],
         "decoded": ["layer_count", "current_layer_index", "object_boundaries", "child_recursion"],
@@ -59,6 +66,12 @@ COVERAGE_MATRIX = [
             "field_flag_bit_0x8000_media_shape_family",
         ],
         "unknown": ["object_flags_semantics", "header_ext_seq_counter_semantics"],
+    },
+    {
+        "surface": "page.payload_geometry_wrapper",
+        "status": ["Structural", "Semantic"],
+        "decoded": ["wrapper_lengths", "geometry_opcode", "frame_points", "marker_offset_equations", "shape_point_roles"],
+        "unknown": ["per_shape_variant_semantics_for_all_point_counts"],
     },
     {
         "surface": "page.strokes",
@@ -257,6 +270,20 @@ def build_inventory(targets: list[Path]) -> dict:
     media_info_sha_mismatches = []
     media_info_missing_media = []
     media_info_unlisted_media = []
+    end_tag_payload_sizes = Counter()
+    end_tag_format_versions = Counter()
+    end_tag_signature_offsets = Counter()
+    end_tag_time_relations = Counter()
+    end_tag_parsed_files = 0
+    end_tag_bad_size = 0
+    end_tag_bad_signature = 0
+    end_tag_modified_mismatches = []
+    page_id_info_parsed_files = 0
+    page_id_info_records = 0
+    page_id_info_bad_size = 0
+    page_id_info_record_tails = Counter()
+    page_id_info_page_hash_sha256_matches = 0
+    voice_media_links = Counter()
     note_tail_kind_counts = Counter()
     note_tail_examples: dict[str, list[str]] = defaultdict(list)
     note_tail_relations = Counter()
@@ -278,6 +305,12 @@ def build_inventory(targets: list[Path]) -> dict:
     header_ext_file_summaries = []
     extra_key_total = 0
     extra_key_bad = []
+    payload_geometry_total = 0
+    payload_geometry_by_type = Counter()
+    payload_geometry_point_counts = Counter()
+    payload_geometry_marker_deltas = Counter()
+    payload_geometry_centroid = Counter()
+    payload_geometry_shape_roles = Counter()
     sample_rows = []
 
     for path in paths:
@@ -299,6 +332,41 @@ def build_inventory(targets: list[Path]) -> dict:
 
         note = load_note(path)
         note_meta = parse_note_metadata(note) if note else None
+        page_id_parsed = list_page_id_info(path)
+        if page_id_parsed is not None:
+            page_id_info_parsed_files += 1
+            page_id_info_records += len(page_id_parsed["records"])
+            if not page_id_parsed.get("valid_size"):
+                page_id_info_bad_size += 1
+            for record in page_id_parsed["records"]:
+                page_id_info_record_tails[record.get("raw_tail_hex", "")] += 1
+        end_tag = list_end_tag(path)
+        if end_tag is not None:
+            end_tag_parsed_files += 1
+            end_tag_payload_sizes[str(end_tag["payload_size"])] += 1
+            end_tag_format_versions[str(end_tag["format_version"])] += 1
+            end_tag_signature_offsets[str(end_tag["signature_off"])] += 1
+            if not end_tag.get("valid_size"):
+                end_tag_bad_size += 1
+            if not end_tag.get("valid_signature"):
+                end_tag_bad_signature += 1
+            if note_meta is not None:
+                if end_tag.get("modified_time") == note_meta.get("modified_time"):
+                    end_tag_time_relations["modified_exact"] += 1
+                else:
+                    end_tag_modified_mismatches.append(path.name)
+                note_created = note_meta.get("created_time")
+                if end_tag.get("created_time_header") == note_created:
+                    end_tag_time_relations["created_time_header_exact"] += 1
+                for key in ("created_time_a", "created_time_b"):
+                    value = end_tag.get(key)
+                    if value == note_created:
+                        end_tag_time_relations[f"{key}_exact"] += 1
+                    elif isinstance(value, int) and isinstance(note_created, int) and abs(value * 1000 - note_created) < 5_000_000:
+                        end_tag_time_relations[f"{key}_millis_close"] += 1
+                extra = end_tag.get("extra_time_candidate")
+                if extra:
+                    end_tag_time_relations["extra_time_nonzero"] += 1
         page_id_info = load_page_id_info(path)
         note_meta = annotate_note_tail_with_page_id_info(note_meta, page_id_info)
         typed_text = parse_typed_text(note) if note else None
@@ -363,6 +431,12 @@ def build_inventory(targets: list[Path]) -> dict:
             elif record["kind"] == "voice_clip":
                 note_voice_post_u32[tuple(record.get("post_u32", ()))] += 1
                 note_voice_post_u64_pairs[tuple(record.get("post_u64_pairs", ()))] += 1
+                if record.get("media_index_candidate") is not None:
+                    voice_media_links["voice_media_index_candidate"] += 1
+                if record.get("actual_duration_ms_candidate") is not None:
+                    voice_media_links["voice_actual_duration_ms_candidate"] += 1
+                if record.get("media_time_candidate") is not None:
+                    voice_media_links["voice_media_time_candidate"] += 1
             elif record["kind"] == "voice_clip_post":
                 note_voice_post_record_u64_pairs[tuple(record.get("raw_u64_pairs", ()))] += 1
 
@@ -375,10 +449,26 @@ def build_inventory(targets: list[Path]) -> dict:
         for page_name in list_pages(path):
             page_count += 1
             _, data = load_page(path, page_name)
+            if page_id_parsed:
+                page_uuid = page_name.removesuffix(".page")
+                page_record = next((r for r in page_id_parsed["records"] if r["uuid"] == page_uuid), None)
+                if page_record is not None:
+                    if hashlib.sha256(data).hexdigest() == page_record["page_hash"]:
+                        page_id_info_page_hash_sha256_matches += 1
             result = parse_page(data)
             object_count += result["object_count"]
             sticky_count += len(result.get("sticky_notes", ()))
             attachment_count += len(result.get("attachment_placements", ()))
+            for shape in result.get("shapes", ()):
+                role = shape.get("payload_geometry_role")
+                if role:
+                    payload_geometry_shape_roles[
+                        (
+                            shape.get("type", ""),
+                            str(shape.get("type_code")),
+                            role,
+                        )
+                    ] += 1
             for placement in result.get("attachment_placements", ()):
                 keys = tuple(placement.get("keys", ()))
                 attachment_kind_counts[placement["kind"]] += 1
@@ -428,6 +518,26 @@ def build_inventory(targets: list[Path]) -> dict:
                                 "object_type": obj["type"],
                                 "block": extra_key,
                             })
+                    geometry = obj.get("payload_geometry")
+                    if geometry:
+                        payload_geometry_total += 1
+                        payload_geometry_by_type[obj["type"]] += 1
+                        payload_geometry_point_counts[str(geometry["point_count"])] += 1
+                        if geometry.get("bbox_centroid_match") is True:
+                            payload_geometry_centroid["bbox_centroid_match"] += 1
+                        elif geometry.get("bbox_centroid_match") is False:
+                            payload_geometry_centroid["bbox_centroid_mismatch"] += 1
+                        else:
+                            payload_geometry_centroid["bbox_centroid_unknown"] += 1
+                        for marker_name, marker in sorted(geometry.get("markers", {}).items()):
+                            payload_geometry_marker_deltas[
+                                (
+                                    obj["type"],
+                                    marker_name,
+                                    marker["l0_delta"],
+                                    marker["l1_delta"],
+                                )
+                            ] += 1
                     okey = (obj["type"], profile["family"], profile["signature"])
                     object_profiles[okey] += 1
                     object_profiles_by_type[obj["type"]][(profile["family"], profile["signature"])] += 1
@@ -546,6 +656,7 @@ def build_inventory(targets: list[Path]) -> dict:
                 {"raw_u64_pairs": list(raw_u64_pairs), "count": count}
                 for raw_u64_pairs, count in sorted(note_voice_post_record_u64_pairs.items())
             ],
+            "voice_media_links": dict(sorted(voice_media_links.items())),
             "coverage": {
                 "known_bytes": sum(row["known_bytes"] for row in note_tail_coverage_rows),
                 "unknown_bytes": sum(row["unknown_bytes"] for row in note_tail_coverage_rows),
@@ -562,6 +673,33 @@ def build_inventory(targets: list[Path]) -> dict:
             "extra_key_blocks": extra_key_total,
             "extra_key_bad": extra_key_bad[:10],
             "per_file": header_ext_file_summaries,
+        },
+        "payload_geometry_profiles": {
+            "count": payload_geometry_total,
+            "by_type": dict(sorted(payload_geometry_by_type.items())),
+            "point_counts": dict(sorted(payload_geometry_point_counts.items())),
+            "centroid": dict(sorted(payload_geometry_centroid.items())),
+            "marker_deltas": [
+                {
+                    "object_type": obj_type,
+                    "marker": marker_name,
+                    "l0_delta": l0_delta,
+                    "l1_delta": l1_delta,
+                    "count": count,
+                }
+                for (obj_type, marker_name, l0_delta, l1_delta), count in sorted(
+                    payload_geometry_marker_deltas.items()
+                )
+            ],
+            "shape_roles": [
+                {
+                    "shape_type": shape_type,
+                    "type_code": type_code,
+                    "role": role,
+                    "count": count,
+                }
+                for (shape_type, type_code, role), count in sorted(payload_geometry_shape_roles.items())
+            ],
         },
         "attachment_profiles": {
             "kinds": dict(sorted(attachment_kind_counts.items())),
@@ -589,5 +727,23 @@ def build_inventory(targets: list[Path]) -> dict:
             "missing_media_examples": media_info_missing_media[:10],
             "unlisted_media": len(media_info_unlisted_media),
             "unlisted_media_examples": media_info_unlisted_media[:10],
+        },
+        "end_tag_profiles": {
+            "parsed_files": end_tag_parsed_files,
+            "payload_sizes": dict(sorted(end_tag_payload_sizes.items())),
+            "format_versions": dict(sorted(end_tag_format_versions.items())),
+            "signature_offsets": dict(sorted(end_tag_signature_offsets.items())),
+            "time_relations": dict(sorted(end_tag_time_relations.items())),
+            "bad_size": end_tag_bad_size,
+            "bad_signature": end_tag_bad_signature,
+            "modified_mismatches": len(end_tag_modified_mismatches),
+            "modified_mismatch_examples": end_tag_modified_mismatches[:10],
+        },
+        "page_id_info_profiles": {
+            "parsed_files": page_id_info_parsed_files,
+            "records": page_id_info_records,
+            "bad_size": page_id_info_bad_size,
+            "tail_hex": dict(sorted(page_id_info_record_tails.items())),
+            "page_hash_sha256_matches": page_id_info_page_hash_sha256_matches,
         },
     }

@@ -411,6 +411,17 @@ def _u32_pairs_as_u64(values: list[int]) -> list[int]:
     return [values[i] | (values[i + 1] << 32) for i in range(0, len(values) - 1, 2)]
 
 
+def _duration_to_ms(text: str) -> int | None:
+    parts = text.split(":")
+    if len(parts) != 3:
+        return None
+    try:
+        hours, minutes, seconds = (int(part) for part in parts)
+    except ValueError:
+        return None
+    return ((hours * 60 + minutes) * 60 + seconds) * 1000
+
+
 def _scan_voice_clip_metadata(note_bytes: bytes) -> list[dict]:
     """Infer voice-clip descriptors from adjacent length-prefixed UTF-16 strings."""
     clips: list[dict] = []
@@ -680,11 +691,13 @@ def _scan_tail_gap_records(note_bytes: bytes, start: int, records: list[dict]) -
             continue
 
         if next_kind == "voice_clip" and len(blob) == 16:
+            raw_u32 = list(struct.unpack_from("<4I", blob, 0))
             extra.append({
                 "kind": "voice_clip_header",
                 "off": gap_start,
                 "end": gap_end,
-                "raw_u32": list(struct.unpack_from("<4I", blob, 0)),
+                "raw_u32": raw_u32,
+                "media_index_candidate": raw_u32[3] if raw_u32[:2] == [0, 1] else None,
             })
             continue
 
@@ -730,6 +743,7 @@ def scan_note_tail_records(note_bytes: bytes, offset_to_data: int) -> list[dict]
             "end": clip_end,
             "label": clip["label"],
             "duration": clip["duration"],
+            "duration_ms_display": _duration_to_ms(clip["duration"]),
             "post_u32": post_u32,
             "post_u64_pairs": _u32_pairs_as_u64(post_u32),
         })
@@ -738,6 +752,24 @@ def scan_note_tail_records(note_bytes: bytes, offset_to_data: int) -> list[dict]
     records.extend(_tail_hash_blocks(note_bytes, cursor))
     records.extend(_scan_tail_gap_records(note_bytes, cursor, records))
     records.sort(key=lambda r: (r["off"], r["end"], r["kind"]))
+    for idx, record in enumerate(records):
+        if record.get("kind") != "voice_clip":
+            continue
+        prev_record = records[idx - 1] if idx > 0 else {}
+        next_record = records[idx + 1] if idx + 1 < len(records) else {}
+        if prev_record.get("kind") == "voice_clip_header":
+            record["media_index_candidate"] = prev_record.get("media_index_candidate")
+            record["header_u32"] = prev_record.get("raw_u32", [])
+        if next_record.get("kind") == "voice_clip_post":
+            raw_u32 = next_record.get("raw_u32", [])
+            if raw_u32:
+                record["actual_duration_ms_candidate"] = (
+                    raw_u32[-3]
+                    if len(raw_u32) >= 3 and raw_u32[-2] == 0 and raw_u32[-1] < 1000
+                    else raw_u32[-1]
+                )
+            if len(raw_u32) >= 8 and raw_u32[6] == 4:
+                record["media_time_candidate"] = raw_u32[7] | (raw_u32[8] << 32) if len(raw_u32) > 8 else None
     deduped: list[dict] = []
     seen = set()
     for record in records:

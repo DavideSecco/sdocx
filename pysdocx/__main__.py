@@ -6,7 +6,16 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from pysdocx.container import list_attachments, list_media_info, list_pages, load_note, load_page, load_page_id_info
+from pysdocx.container import (
+    list_attachments,
+    list_end_tag,
+    list_media_info,
+    list_page_id_info,
+    list_pages,
+    load_note,
+    load_page,
+    load_page_id_info,
+)
 from pysdocx.dump import dump_container
 from pysdocx.ink import color_hex
 from pysdocx.inventory import build_inventory
@@ -132,6 +141,19 @@ def _print_object(obj: dict, depth: int, detail: bool, media_by_object: dict[int
                 f"{indent}     extra_key_block off={extra_key['off']} head={extra_key['head']} "
                 f"head_ok={extra_key['head_ok']} key_len={extra_key['key_len']} "
                 f"key={extra_key['key']!r} trailing={extra_key['trailing']}"
+            )
+        geometry = obj.get("payload_geometry")
+        if geometry:
+            marker_bits = []
+            for name, marker in sorted(geometry.get("markers", {}).items()):
+                marker_bits.append(
+                    f"{name}@+0x{marker['rel']:x}/dL0={marker['l0_delta']}/dL1={marker['l1_delta']}"
+                )
+            markers = " ".join(marker_bits) if marker_bits else "-"
+            print(
+                f"{indent}     payload_geometry off={geometry['off']} l0={geometry['l0']} "
+                f"l1={geometry['l1']} n={geometry['point_count']} "
+                f"bbox_centroid={geometry.get('bbox_centroid_match')} markers={markers}"
             )
     if detail and media_by_object:
         for media in media_by_object.get(obj["off"], []):
@@ -322,6 +344,10 @@ def _print_note_metadata(note_meta: dict | None) -> None:
             print(
                 f"  tail_record voice_clip off=0x{record['off']:x} "
                 f"label={record['label']!r} duration={record['duration']!r} "
+                f"media_index={record.get('media_index_candidate')} "
+                f"display_ms={record.get('duration_ms_display')} "
+                f"actual_ms={record.get('actual_duration_ms_candidate')} "
+                f"media_time={record.get('media_time_candidate')} "
                 f"post_u32={record['post_u32']} post_u64_pairs={record.get('post_u64_pairs', [])}"
             )
         elif kind == "pen_preload_path":
@@ -354,7 +380,10 @@ def _print_note_metadata(note_meta: dict | None) -> None:
                 f"param={record.get('param')!r} raw_u32={record.get('raw_u32', [])}"
             )
         elif kind == "voice_clip_header":
-            print(f"  tail_record voice_clip_header off=0x{record['off']:x} raw_u32={record.get('raw_u32', [])}")
+            print(
+                f"  tail_record voice_clip_header off=0x{record['off']:x} "
+                f"media_index={record.get('media_index_candidate')} raw_u32={record.get('raw_u32', [])}"
+            )
         elif kind == "voice_clip_post":
             print(
                 f"  tail_record voice_clip_post off=0x{record['off']:x} "
@@ -518,6 +547,48 @@ def cmd_media_info(args: argparse.Namespace) -> None:
             print(f"  {name}")
 
 
+def cmd_page_id_info(args: argparse.Namespace) -> None:
+    info = list_page_id_info(args.file)
+    if info is None:
+        print("pageIdInfo: none")
+        return
+    print(
+        f"pageIdInfo pages={info['page_count']} valid_size={info['valid_size']} "
+        f"head_hash={info['head_hash'][:16]}..."
+    )
+    for idx, record in enumerate(info["records"], 1):
+        page_hash = record["page_hash"] if args.full_hash else record["page_hash"][:16] + "..."
+        print(
+            f"  {idx:>2}. off=0x{record['off']:x} uuid={record['uuid']} "
+            f"hash32={page_hash} tail={record['raw_tail_hex'] or '-'}"
+        )
+    if info["trailing_hex"]:
+        print(f"trailing={info['trailing_hex']}")
+
+
+def cmd_end_tag(args: argparse.Namespace) -> None:
+    end_tag = list_end_tag(args.file)
+    if end_tag is None:
+        print("end_tag: none")
+        return
+    print(
+        f"end_tag size={end_tag['payload_size']} valid_size={end_tag['valid_size']} "
+        f"fmt={end_tag['format_version']} fmt_dup={end_tag['format_version_dup']} "
+        f"modified={end_tag['modified_time']} page_width={end_tag['page_width']} "
+        f"signature_off={end_tag['signature_off']} valid_signature={end_tag['valid_signature']}"
+    )
+    print(
+        f"  created_header={end_tag['created_time_header']} "
+        f"created_a={end_tag['created_time_a']} created_b={end_tag['created_time_b']} "
+        f"extra_time={end_tag['extra_time_candidate']} footer_u32={end_tag['footer_u32']} "
+        f"footer_sentinel={end_tag['footer_sentinel']} signature={end_tag['signature']!r}"
+    )
+    if args.raw:
+        print(f"  raw_mid={end_tag['raw_mid_hex']}")
+        print(f"  raw_between_times_and_footer={end_tag['raw_between_times_and_footer_hex']}")
+        print(f"  raw_footer_padding={end_tag['raw_footer_padding_hex']}")
+
+
 def cmd_inventory(args: argparse.Namespace) -> None:
     targets = args.paths or [Path("samples")]
     report = build_inventory(targets)
@@ -591,6 +662,10 @@ def cmd_inventory(args: argparse.Namespace) -> None:
         print("note voice post-record u64 pairs:")
         for row in report["note_tail_profiles"]["voice_post_record_u64_pairs"]:
             print(f"  {row['raw_u64_pairs']} count={row['count']}")
+    if report["note_tail_profiles"].get("voice_media_links"):
+        print("note voice media links:")
+        for kind, count in sorted(report["note_tail_profiles"]["voice_media_links"].items()):
+            print(f"  {kind:<36} count={count}")
     tail_cov = report["note_tail_profiles"].get("coverage") or {}
     tail_known = tail_cov.get("known_bytes", 0)
     tail_unknown = tail_cov.get("unknown_bytes", 0)
@@ -623,6 +698,27 @@ def cmd_inventory(args: argparse.Namespace) -> None:
             f"inv={row['seq_inversions']} counters={row['counter_unique']} "
             f"repeated_groups={row['repeated_counter_groups']} offsets={row['ext_offsets']}"
         )
+    geometry = report.get("payload_geometry_profiles") or {}
+    print(
+        f"payload geometry: count={geometry.get('count', 0)} "
+        f"by_type={geometry.get('by_type', {})} point_counts={geometry.get('point_counts', {})}"
+    )
+    if geometry.get("centroid"):
+        print(f"payload geometry centroid: {geometry['centroid']}")
+    if geometry.get("marker_deltas"):
+        print("payload geometry marker deltas:")
+        for row in geometry["marker_deltas"]:
+            print(
+                f"  type={row['object_type']:<10} marker={row['marker']:<7} "
+                f"dL0={row['l0_delta']:<4} dL1={row['l1_delta']:<4} count={row['count']}"
+            )
+    if geometry.get("shape_roles"):
+        print("payload geometry shape roles:")
+        for row in geometry["shape_roles"]:
+            print(
+                f"  shape={row['shape_type']:<16} code={row['type_code']:<4} "
+                f"role={row['role']:<28} count={row['count']}"
+            )
     print("attachment bag keys:")
     for key, count in sorted(report["attachment_profiles"]["keys"].items()):
         print(f"  {key:<20} count={count}")
@@ -640,6 +736,28 @@ def cmd_inventory(args: argparse.Namespace) -> None:
         print("mediaInfo tail tags:")
         for key, count in sorted(media["tail_tags"].items()):
             print(f"  {key:<8} count={count}")
+    end_tag = report.get("end_tag_profiles") or {}
+    print(
+        f"end_tag: parsed_files={end_tag.get('parsed_files', 0)} bad_size={end_tag.get('bad_size', 0)} "
+        f"bad_signature={end_tag.get('bad_signature', 0)} modified_mismatches={end_tag.get('modified_mismatches', 0)}"
+    )
+    if end_tag.get("payload_sizes"):
+        print("end_tag payload sizes:")
+        for key, count in sorted(end_tag["payload_sizes"].items()):
+            print(f"  {key:<8} count={count}")
+    if end_tag.get("time_relations"):
+        print("end_tag time relations:")
+        for key, count in sorted(end_tag["time_relations"].items()):
+            print(f"  {key:<28} count={count}")
+    page_id = report.get("page_id_info_profiles") or {}
+    print(
+        f"pageIdInfo: parsed_files={page_id.get('parsed_files', 0)} records={page_id.get('records', 0)} "
+        f"bad_size={page_id.get('bad_size', 0)} page_hash_sha256_matches={page_id.get('page_hash_sha256_matches', 0)}"
+    )
+    if page_id.get("tail_hex"):
+        print("pageIdInfo record tails:")
+        for key, count in sorted(page_id["tail_hex"].items()):
+            print(f"  {key or '-':<8} count={count}")
 
 
 def main() -> None:
@@ -696,6 +814,16 @@ def main() -> None:
     p_media.add_argument("--full-hash", action="store_true", help="print full SHA-256 values")
     p_media.add_argument("--raw-tail", action="store_true", help="print the raw tail bytes for each manifest record")
     p_media.set_defaults(func=cmd_media_info)
+
+    p_page_id = sub.add_parser("page-id-info", help="print pageIdInfo.dat page order/hash diagnostics")
+    p_page_id.add_argument("file", type=Path)
+    p_page_id.add_argument("--full-hash", action="store_true", help="print full 32-byte hashes")
+    p_page_id.set_defaults(func=cmd_page_id_info)
+
+    p_end = sub.add_parser("end-tag", help="print end_tag.bin footer diagnostics")
+    p_end.add_argument("file", type=Path)
+    p_end.add_argument("--raw", action="store_true", help="print raw undecoded byte ranges")
+    p_end.set_defaults(func=cmd_end_tag)
 
     p_inventory = sub.add_parser("inventory", help="summarize corpus-level format coverage/profiles")
     p_inventory.add_argument("paths", type=Path, nargs="*", help="files or directories to scan (default: samples/)")
