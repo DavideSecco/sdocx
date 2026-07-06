@@ -5,6 +5,10 @@ fixed layout; its length grows by an **additive `field_flags` model** that is
 fully decoded (zero counterexamples across the corpus). This is some of the most
 strongly-grounded RE in the project.
 
+- **Formal spec:** [`spec/ksy/sdocx_object_header.ksy`](../../../../spec/ksy/sdocx_object_header.ksy)
+  — fed one object blob; models the base header **and** the field_flags-gated
+  extensions. Validated field-by-field against pysdocx on **11788/11788** corpus
+  objects by the test gate.
 - **Reference parser:** `_parse_object_header`, `_decode_header_ext`,
   `_decode_extra_key_block`, `_object_header_profile` in
   [`pysdocx/page.py`](../../../../pysdocx/page.py).

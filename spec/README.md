@@ -63,3 +63,4 @@ Expected validator output:
 | `media/mediaInfo.dat` | `ksy/sdocx_media_info.ksy` | `tools/validate_media_info.py` | 13/13 ✅ |
 | `note.note` (header) | `ksy/sdocx_note.ksy` | `tools/validate_note.py` | 13/13 ✅ |
 | `<uuid>.page` (header) | `ksy/sdocx_page.ksy` | `tools/validate_page.py` | 48/48 pages ✅ |
+| `.page` object header | `ksy/sdocx_object_header.ksy` | `tools/validate_object_header.py` | 11788/11788 objects ✅ |

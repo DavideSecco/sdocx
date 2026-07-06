@@ -25,6 +25,7 @@ try:
     from sdocx_end_tag import SdocxEndTag
     from sdocx_media_info import SdocxMediaInfo
     from sdocx_note import SdocxNote
+    from sdocx_object_header import SdocxObjectHeader
     from sdocx_page import SdocxPage
     from sdocx_page_id_info import SdocxPageIdInfo
     _KAITAI_AVAILABLE = True
@@ -34,7 +35,12 @@ except ImportError as exc:  # pragma: no cover - environment dependent
 
 from pysdocx.container import parse_end_tag, parse_media_info, parse_page_id_info  # noqa: E402
 from pysdocx.note import parse_note_metadata  # noqa: E402
-from pysdocx.page import parse_page  # noqa: E402
+from pysdocx.page import (  # noqa: E402
+    _iter_objects,
+    _parse_object_header,
+    parse_page,
+    parse_page_tree,
+)
 
 
 def _samples():
@@ -117,6 +123,47 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                 self.assertEqual(ref[f], getattr(k, f), f"{sample.name}: {f}")
             self.assertEqual(ref["note_id"], k.note_id.value, f"{sample.name}: note_id")
             checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_object_header(self) -> None:
+        base_fields = ("total_size", "data_type", "var_data_offset", "flags",
+                       "field_flags", "format_version", "uuid", "modified_time",
+                       "timestamp", "resizable")
+        checked = 0
+        for sample in _samples():
+            with zipfile.ZipFile(sample) as z:
+                for name in sorted(n for n in z.namelist() if n.endswith(".page")):
+                    data = z.read(name)
+                    try:
+                        base = parse_page(data)["base"]
+                    except ValueError:
+                        continue
+                    tree = parse_page_tree(data, 0, 0, base)
+                    for layer in tree["layers"]:
+                        for obj in _iter_objects(layer["objects"]):
+                            blob = data[obj["blob_off"]:obj["end"]]
+                            ref = _parse_object_header(blob)
+                            if ref is None:
+                                continue
+                            k = SdocxObjectHeader.from_bytes(blob)
+                            where = f"{sample.name}/{name[:12]} obj@{obj['blob_off']}"
+                            for f in base_fields:
+                                self.assertEqual(ref[f], getattr(k, f), f"{where}: {f}")
+                            self.assertEqual(
+                                struct.pack("<4d", *k.bbox),
+                                struct.pack("<4d", *ref["bbox"]), f"{where}: bbox")
+                            if ref["field_flags"] & 0x20:
+                                ek = ref["extra_key_block"]
+                                self.assertIsNotNone(k.extra_key, f"{where}: extra_key")
+                                self.assertEqual(k.extra_key.key.rstrip("\x00"), ek["key"], f"{where}: extra_key.key")
+                                self.assertEqual(k.extra_key.trailing, ek["trailing"], f"{where}: extra_key.trailing")
+                            if ref["field_flags"] & 0x40000:
+                                ex = ref["ext_block"]
+                                self.assertIsNotNone(k.hdr_ext, f"{where}: hdr_ext")
+                                self.assertEqual(
+                                    (k.hdr_ext.counter, k.hdr_ext.seq, k.hdr_ext.page_width, k.hdr_ext.page_height),
+                                    (ex["counter"], ex["seq"], ex["page_width"], ex["page_height"]), f"{where}: hdr_ext")
+                            checked += 1
         self.assertGreater(checked, 0)
 
     def test_page_header(self) -> None:
