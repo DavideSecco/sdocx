@@ -153,7 +153,8 @@ IMAGE_ANGLE_FIELD_FLAG = 0x1
 #                                           [u32 page_height] — the trailing width/height match the page
 #                                           header on 1690/1690 objects; `seq`/`counter`
 #                                           semantics NOT settled (seq near-constant per note; counter not
-#                                           a unique id) — see _decode_header_ext + OBJECT-HEADER-RE-NOTES.
+#                                           a unique id) — see _decode_header_ext +
+#                                           docs/format/container/page/object-header.md.
 # FIELD_FLAG_MEDIA_FAMILY (0x8000) is a family discriminator, not a size contributor: it is set on every
 # image/shape/drawing object and on no stroke/text_box object across the corpus. FIELD_FLAG_BASE_PRESENT
 # bits (0x2000|0x4000) are set on every object seen so far, so they read as "record present" base bits.
@@ -572,7 +573,7 @@ def _decode_header_ext(blob: bytes, field_flags: int) -> dict | None:
     415139) that is near-constant WITHIN a note (e.g. 579 objects spanning a spread of 1) and only bumps
     occasionally, so it reads as a save-time/session/app-global counter, NOT a per-object counter; `counter`
     repeats within a file (e.g. 200 objects, 152 unique), so it is NOT a unique per-object id. Both are
-    exposed raw pending a firmer characterization (see docs/OBJECT-HEADER-RE-NOTES.md). If an extra_key
+    exposed raw pending a firmer characterization (see docs/format/container/page/object-header.md). If an extra_key
     block (0x20) is present, it is stored first and shifts this extension by 32 bytes.
     """
     if not (field_flags & FIELD_FLAG_HDR_EXT):

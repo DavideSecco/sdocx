@@ -40,10 +40,11 @@
   - Includes `text_box_layout_debug` in the JSON output for each page.
 - `docs/REGRESSION-CHECKLIST-pysdocx.md`
   - Compact sanity checklist for the squared typed-text sample and the current text-box state.
-- `docs/TEXTBOX-ROTATION-RE-NOTES.md`
-  - Object-level notes gathered from the existing `_squared` sample without creating new files.
-- `docs/FORMAT-PROFILES.md` and `docs/FORMAT-COVERAGE-INVENTORY.json`
-  - Current corpus-level family inventory for object headers, note.note profiles, and attachment bags.
+- `docs/format/` (structured RE reference) and `docs/FORMAT-COVERAGE-INVENTORY.json`
+  - The `docs/format/` tree is the authoritative, Kaitai-validated format reference (see
+    `docs/format/README.md`); it superseded the old round-note docs. The rotated text-box notes now
+    live in `docs/format/container/page/object-types.md` + `docs/format/heuristics.md`, and the corpus
+    family inventory is regenerated into `docs/FORMAT-COVERAGE-INVENTORY.json`.
 - `python -m pysdocx inventory [paths...] [--json]`
   - Regenerates the machine-readable coverage/profile inventory from the current sample corpus.
   - Also surfaces conservative raw-tail RE diagnostics for preload preludes, pen-style tail blocks, and
