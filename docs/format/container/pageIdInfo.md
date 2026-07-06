@@ -33,10 +33,13 @@ offset  size  field        status
 
 ## Decoded fields
 
-### `head_hash` — 32 bytes @ 0
-A document-level hash. Its bytes are read deterministically and are stable per
-file, but the construction is not known, so only its presence and size are
-promoted; the meaning is **Unknown**.
+### `head_hash` — 32 bytes @ 0 — Decoded (source found)
+A document-level hash, and — like `page_hash` — a **copy**, not a digest computed
+here: it equals **`note.note`'s trailing 32 bytes** (`head_hash == note.note[-32:]`)
+on **13/13** samples (the test gate cross-checks this). So `pageIdInfo.dat` is a
+manifest that mirrors hashes stored at the tail of `note.note` (`head_hash`) and
+in each page footer (`page_hash`). What `note.note` computes that 32-byte hash
+over is still Unknown; the linkage is decoded.
 
 ### `page_count` — `u16` @ 32
 Number of `page_record`s that follow. The list order **is** the document's page
@@ -64,10 +67,16 @@ decoded.
 
 ## Unknown regions
 
-- **`head_hash` construction** — 32 bytes, purpose unclear.
-- **How the `.page` computes its footer hash** — the *linkage* is decoded
-  (manifest `page_hash` = the page footer hash), but what that 32-byte digest is
-  computed over inside the page is still Unknown.
+Both hashes are now decoded as **copies** (`head_hash = note.note[-32:]`,
+`page_hash = the .page footer hash`); what remains open is how those source
+hashes are computed:
+
+- **The hash construction** (shared question for both) — the 32-byte digest that
+  `note.note` and each `.page` store. Negative results on the corpus: no plain
+  `sha256`/`sha3_256`/`blake2b` of the raw member reproduces it, and a full
+  brute-force over every contiguous byte range of the smallest page finds no
+  match either. So it is over a canonical/serialized form or is keyed (HMAC with
+  a device/app secret) — the latter would be unrecoverable from files alone.
 - There is **no trailing data**: records tile the file exactly
   (`valid_size` true on 13/13), so there is no unexplained tail here.
 

@@ -7,11 +7,14 @@ variable at a time. The discipline is "an honest Unknown over a speculative
 name" ([conventions](./00-conventions.md)).
 
 ## `pageIdInfo.dat`
-- **`head_hash`** (32 bytes) construction.
-- **`page_hash` construction** — the *linkage* is now decoded: the manifest
-  `page_hash` is a copy of the `.page` footer hash (48/48). What the page
-  computes that 32-byte digest over internally is still open. Next step: try
-  hashing canonicalised page content / page+metadata against the footer hash.
+Both manifest hashes are decoded as **copies** — `head_hash = note.note[-32:]`
+(13/13), `page_hash = the .page footer hash` (48/48). What remains open is one
+shared question:
+- **The 32-byte hash construction** stored at the tail of `note.note` and each
+  `.page`. Negative results: no plain `sha256`/`sha3_256`/`blake2b` of the raw
+  member reproduces it, and a full contiguous-range brute force on the smallest
+  page finds nothing. Likely a canonical/serialized input or a keyed HMAC (the
+  latter unrecoverable from files alone). Lower priority given that risk.
 
 ## `note.note`
 - **`meta_flags`** bits other than `0x2000` (has-tables): `0x400`, `0x8000`, and

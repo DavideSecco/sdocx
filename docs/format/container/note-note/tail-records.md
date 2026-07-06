@@ -28,8 +28,11 @@ not fixed offsets — so it is documented here, not in a `.ksy`.
 
 - **`tail_sentinel`** — the fixed pattern `00000000 ffffffff 0000000000000000`
   marks the start of the tail; it begins exactly at `offset_to_data` on 13/13.
-- **`tail_hash_block`** — appears once per note and is structurally linked to the
-  `pageIdInfo.dat` head hash (10 exact + 3 shifted matches on the corpus).
+- **`tail_hash_block`** — appears once per note. The note's **trailing 32 bytes**
+  are exactly `pageIdInfo.dat`'s `head_hash` (`note.note[-32:] == head_hash` on
+  13/13; the test gate cross-checks it). So the manifest head is a copy of this
+  note tail hash. What the hash is computed over is still Unknown (see
+  [pageIdInfo unknowns](../pageIdInfo.md#unknown-regions)).
 - **`pen_preload_path`** — decoded as `u16 char_len + UTF-16LE path`, e.g.
   `com.samsung.android.sdk.pen.pen.preload.InkPen2`. Reading it as a
   length-prefixed string (not null-terminated) fixed a false leading slash and a

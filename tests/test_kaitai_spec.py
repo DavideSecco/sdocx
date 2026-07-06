@@ -91,6 +91,10 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
             for i, (kp, rp) in enumerate(zip(k.pages, ref["records"])):
                 self.assertEqual(kp.uuid, rp["uuid"], f"{sample.name}: pages[{i}].uuid")
                 self.assertEqual(kp.page_hash.hex(), rp["page_hash"], f"{sample.name}: pages[{i}].page_hash")
+            # Cross-file linkage: head_hash is a copy of note.note's trailing 32 bytes.
+            note = _member(sample, "note.note")
+            if note is not None:
+                self.assertEqual(ref["head_hash"], note[-32:].hex(), f"{sample.name}: head_hash!=note[-32:]")
             checked += 1
         self.assertGreater(checked, 0)
 
