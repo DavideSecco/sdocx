@@ -6,6 +6,8 @@ per document.
 - **Formal spec:** [`spec/ksy/sdocx_end_tag.ksy`](../../../spec/ksy/sdocx_end_tag.ksy)
   (Kaitai Struct; validated against the whole corpus — see [validation](#validation)).
 - **Reference parser:** `parse_end_tag` in [`pysdocx/container.py`](../../../pysdocx/container.py).
+- **Time diagnostic:** [`spec/tools/analyze_time_fields.py`](../../../spec/tools/analyze_time_fields.py)
+  compares timestamp-like fields across `end_tag.bin`, `note.note`, and media tails.
 - **Conventions:** see [`../00-conventions.md`](../00-conventions.md) for byte-order,
   types, and the `Decoded` / `Heuristic` / `Unknown` legend.
 
@@ -28,6 +30,7 @@ offset  size  field                    status
 8       8     modified_time (s64)      Decoded   = note.note modified_time
 16     ...    (raw island)             Unknown
 22      2     page_width               Decoded   = page header width
+26      4     document_height          Decoded   f32 = note.note height
 ...    ...    (raw island)             Unknown
 42      2     format_version_dup       Decoded   = format_version
 46      8     created_time_header      Decoded   = note.note created_time
@@ -61,6 +64,11 @@ Equals the page-header page width on the current corpus. Lives inside an
 otherwise-unnamed region, so it is decoded as an isolated island rather than as
 part of a fully-mapped struct.
 
+### `document_height` — `f32` @ 26
+Equals `note.note`'s `height` on 13/13 samples. This is the document/note height
+(for multi-page notes, the stacked note height), not the per-page `.page`
+height.
+
 ### `created_time_header` — `s64` @ 46
 Creation-time candidate carried in the header region; matches `note.note`
 `created_time` exactly on 13/13 (`created_time_header_exact = 13`).
@@ -71,9 +79,15 @@ on the 10 newer samples; on the 3 older imports they read as millisecond-close
 but not identical values. `created_time_a` and `created_time_b` are identical to
 each other on the 10 newer samples.
 
+`analyze_time_fields.py` confirms the split: `created_time_header` matches
+`note.note.created_time` on 13/13, while `created_time_a` and `created_time_b`
+match exactly on 10/13 and diverge on the three older/imported samples.
+
 ### `extra_time_candidate` — `s64` @ 88
 An additional timestamp-like value; non-zero on only 2 samples. Named
 conservatively because two positives are not enough to fix its meaning.
+The two non-zero values do not equal `note.note.modified_time`; they precede it
+by about 13.18s and 0.99s respectively in the current corpus.
 
 ### `signature` — 22-byte ASCII @ `end - 22`
 Always the literal `Document for S-Pen SDK` (`bad_signature = 0`). Located from
@@ -85,9 +99,9 @@ Structurally present, not yet semantically named. They are deliberately left
 unmodeled in the `.ksy` rather than given speculative names:
 
 - **`[16, 72)` minus the decoded islands** — `page_width` @22,
-  `format_version_dup` @42 and `created_time_header` @46 sit inside this range;
-  the surrounding bytes are exposed only as `raw_mid_hex` diagnostics by the
-  reference parser.
+  `document_height` @26, `format_version_dup` @42 and
+  `created_time_header` @46 sit inside this range; the surrounding bytes are
+  exposed only as `raw_mid_hex` diagnostics by the reference parser.
 - **`[96, footer)`** — bytes between the last decoded timestamp and the footer
   constants (`raw_between_times_and_footer_hex`).
 - **Footer constants** — the reference parser locates a 16-byte pattern

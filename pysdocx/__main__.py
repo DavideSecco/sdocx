@@ -575,6 +575,7 @@ def cmd_end_tag(args: argparse.Namespace) -> None:
         f"end_tag size={end_tag['payload_size']} valid_size={end_tag['valid_size']} "
         f"fmt={end_tag['format_version']} fmt_dup={end_tag['format_version_dup']} "
         f"modified={end_tag['modified_time']} page_width={end_tag['page_width']} "
+        f"doc_height={end_tag['document_height']:.1f} "
         f"signature_off={end_tag['signature_off']} valid_signature={end_tag['valid_signature']}"
     )
     print(

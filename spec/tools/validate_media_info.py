@@ -40,6 +40,12 @@ def main() -> int:
                 diffs.append(f"records[{i}].name")
             if b.sha256 != rr["sha256"]:
                 diffs.append(f"records[{i}].sha256")
+            if b.tail.tag != rr["tail_tag"]:
+                diffs.append(f"records[{i}].tail.tag")
+            if b.tail.time_candidate != rr["time_candidate"]:
+                diffs.append(f"records[{i}].tail.time_candidate")
+            if b.tail.marker != rr["tail_marker"]:
+                diffs.append(f"records[{i}].tail.marker")
         if diffs:
             failures += 1
             print(f"FAIL  {sample.name}: {diffs}")

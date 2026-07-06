@@ -9,6 +9,8 @@ index, archive filename, and a SHA-256 digest. Closed by the ASCII trailer
   (validated corpus-wide — see [validation](#validation)).
 - **Reference parser:** `parse_media_info` / `list_media_info` in
   [`pysdocx/container.py`](../../../pysdocx/container.py).
+- **Tail diagnostic:** [`spec/tools/analyze_media_tail.py`](../../../spec/tools/analyze_media_tail.py)
+  explores remaining `tag` / `time_candidate` semantics.
 - **Conventions:** [`../00-conventions.md`](../00-conventions.md).
 
 ## At a glance
@@ -41,7 +43,7 @@ offset  size       field         status
 4       2          name_len      Decoded   UTF-16 char count
 6       name_len*2 name          Decoded   UTF-16LE archive filename
 6+n*2   64         sha256        Decoded   ASCII hex; verifies vs media/<name>
-...     ~11        raw_tail      Marker / Unknown
+...     11         tail          Structural [u16 tag][u64 time][u8 marker]
 ```
 
 ## Decoded fields
@@ -79,13 +81,44 @@ the actual archive bytes on **60/60** records (`sha_mismatches = 0`,
 Always `EOFX`, immediately after the last record (`bad_eof = 0`), and the file
 ends there.
 
+### `body.tail` — 11 bytes
+The tail is structurally fixed on 60/60 corpus records:
+
+```
+u16 tag
+u64 time_candidate
+u8  marker
+```
+
+`marker` is constant `1` on 60/60. `tag` values are `1` ×54, `3` ×4, `5` ×1,
+`20` ×1. The tag correlates partly with media kind (`3` appears on four `.jpg`
+records, `5` on one `.jpg`, `20` on one `.pdf`), but not cleanly enough to name.
+`time_candidate` is timestamp-like and near note/media edit times, but it is not
+identical to the note created/modified times. The structure is Decoded; the
+semantics of `tag` and `time_candidate` remain Unknown.
+
+Corpus diagnostics:
+
+```bash
+.venv/bin/python spec/tools/analyze_media_tail.py samples
+```
+
+Current negative/partial results:
+
+- `time_candidate` exactly matches neither `note.note.created_time`, nor
+  `note.note.modified_time`, nor ZIP entry time on any of the 60 records.
+- Per file, the latest `time_candidate` is often close to the note modified time
+  (from -176 µs to about -2.1e9 µs in the current corpus), so it plausibly tracks
+  media import/edit time, but not tightly enough to promote a semantic name.
+- `tag` is not simply file extension: `tag=1` covers `.spi`, `.spp`, `.jpg`,
+  `.png`, `.pdf`, `.m4a`, and nested `.sdocx`; non-1 tags appear only on a small
+  set of `.jpg` / `.pdf` records.
+
 ## Unknown regions
 
-- **`body.raw_tail`** — ~11 bytes at the end of each record body. It begins with
-  a `u16` tag (corpus values `1` ×54, `3` ×4, `5` ×1, `20` ×1) and carries a
-  timestamp-like `u64` near note/media edit times, plus a trailing marker byte.
-  Bounded and exposed as diagnostics (`tail_tag`, `time_candidate`,
-  `tail_marker`) but not semantically named — left opaque in the spec.
+There is no unbounded raw region left in `mediaInfo.dat` on the current corpus:
+the former `raw_tail` is now structurally decoded. The remaining Unknowns are
+semantic, not boundary-related: `tail.tag` and `tail.time_candidate`.
 
 ## Validation
 
@@ -95,6 +128,6 @@ KSC_GEN=<scratch>/gen .venv/bin/python spec/tools/validate_media_info.py
 ```
 
 The check compares `magic`, `record_count`, the `EOFX` trailer, and every
-record's `media_index`, `name`, and `sha256` against the reference `pysdocx`
-parser. See [`../../../spec/README.md`](../../../spec/README.md) for the
-toolchain.
+record's `media_index`, `name`, `sha256`, `tail.tag`, `tail.time_candidate`, and
+`tail.marker` against the reference `pysdocx` parser. See
+[`../../../spec/README.md`](../../../spec/README.md) for the toolchain.

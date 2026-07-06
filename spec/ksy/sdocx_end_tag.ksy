@@ -36,6 +36,10 @@ instances:
     pos: 22
     type: u2
     doc: Page width; equals the page header width on the current corpus.
+  document_height:
+    pos: 26
+    type: f4
+    doc: Document/note height; equals note.note height on the current corpus.
   format_version_dup:
     pos: 42
     type: u2

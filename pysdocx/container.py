@@ -254,6 +254,7 @@ def parse_end_tag(data: bytes) -> dict | None:
         format_version = struct.unpack_from("<H", data, 2)[0]
         modified_time = struct.unpack_from("<q", data, 8)[0]
         page_width = struct.unpack_from("<H", data, 22)[0]
+        document_height = struct.unpack_from("<f", data, 26)[0]
         format_version_dup = struct.unpack_from("<H", data, 42)[0]
         created_time_header = struct.unpack_from("<q", data, 46)[0]
         created_time_a = struct.unpack_from("<q", data, 72)[0]
@@ -274,6 +275,7 @@ def parse_end_tag(data: bytes) -> dict | None:
         "format_version_dup": format_version_dup,
         "modified_time": modified_time,
         "page_width": page_width,
+        "document_height": document_height,
         "created_time_header": created_time_header,
         "created_time_a": created_time_a,
         "created_time_b": created_time_b,

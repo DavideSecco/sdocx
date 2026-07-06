@@ -108,9 +108,14 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
             ref, k = parse_end_tag(data), SdocxEndTag.from_bytes(data)
             for f in ("payload_size", "format_version", "format_version_dup",
                       "modified_time", "page_width", "created_time_header",
-                      "created_time_a", "created_time_b", "extra_time_candidate"):
+                      "document_height", "created_time_a", "created_time_b",
+                      "extra_time_candidate"):
                 self.assertEqual(ref[f], getattr(k, f), f"{sample.name}: {f}")
             self.assertEqual(k.signature, "Document for S-Pen SDK", sample.name)
+            note = _member(sample, "note.note")
+            if note is not None:
+                note_ref = parse_note_metadata(note)
+                self.assertEqual(k.document_height, float(note_ref["height"]), f"{sample.name}: document_height")
             checked += 1
         self.assertGreater(checked, 0)
 
@@ -147,6 +152,13 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                 self.assertEqual(kr.body.media_index, rr["media_index"], f"{sample.name}: rec[{i}].media_index")
                 self.assertEqual(kr.body.name, rr["name"], f"{sample.name}: rec[{i}].name")
                 self.assertEqual(kr.body.sha256, rr["sha256"], f"{sample.name}: rec[{i}].sha256")
+                self.assertEqual(kr.body.tail.tag, rr["tail_tag"], f"{sample.name}: rec[{i}].tail.tag")
+                self.assertEqual(
+                    kr.body.tail.time_candidate,
+                    rr["time_candidate"],
+                    f"{sample.name}: rec[{i}].tail.time_candidate",
+                )
+                self.assertEqual(kr.body.tail.marker, rr["tail_marker"], f"{sample.name}: rec[{i}].tail.marker")
             checked += 1
         self.assertGreater(checked, 0)
 

@@ -11,7 +11,7 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
 class SdocxMediaInfo(KaitaiStruct):
     """The `media/mediaInfo.dat` manifest inside a `.sdocx` archive: one record per
     attachment under `media/`, closed by the ASCII trailer `EOFX`.
-    
+
     Fully decoded with zero counterexamples across the 13-sample corpus: a `u32`
     magic, a `u16` record count, then that many length-prefixed records. Each
     record's `payload_size` counts the bytes after itself and frames a body of
@@ -19,11 +19,11 @@ class SdocxMediaInfo(KaitaiStruct):
     hex][raw tail]`. The filename already includes the `<index>@...` prefix used
     under `media/`. On the corpus, 60/60 records point at existing archive members
     and every SHA-256 verifies.
-    
-    The record's raw tail (11 bytes on the corpus) begins with a `u16` tag and
-    carries a timestamp-like value; those are exposed as diagnostics but not yet
-    semantically named (see the companion Markdown), so the tail is left opaque
-    here.
+
+    The record's 11-byte tail is structurally modeled as
+    `[u16 tag][u64 time_candidate][u8 marker]`. The boundaries are decoded with
+    zero counterexamples; the tag/time semantics remain deliberately conservative
+    (see the companion Markdown).
     """
     def __init__(self, _io, _parent=None, _root=None):
         super(SdocxMediaInfo, self).__init__(_io)
@@ -60,11 +60,14 @@ class SdocxMediaInfo(KaitaiStruct):
             self.name_len = self._io.read_u2le()
             self.name = (self._io.read_bytes(self.name_len * 2)).decode(u"UTF-16LE")
             self.sha256 = (self._io.read_bytes(64)).decode(u"ASCII")
-            self.raw_tail = self._io.read_bytes_full()
+            self._raw_tail = self._io.read_bytes_full()
+            _io__raw_tail = KaitaiStream(BytesIO(self._raw_tail))
+            self.tail = SdocxMediaInfo.MediaTail(_io__raw_tail, self, self._root)
 
 
         def _fetch_instances(self):
             pass
+            self.tail._fetch_instances()
 
 
     class MediaRecord(KaitaiStruct):
@@ -84,6 +87,23 @@ class SdocxMediaInfo(KaitaiStruct):
         def _fetch_instances(self):
             pass
             self.body._fetch_instances()
+
+
+    class MediaTail(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxMediaInfo.MediaTail, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.tag = self._io.read_u2le()
+            self.time_candidate = self._io.read_u8le()
+            self.marker = self._io.read_u1()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

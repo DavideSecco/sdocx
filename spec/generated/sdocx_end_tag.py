@@ -13,7 +13,7 @@ class SdocxEndTag(KaitaiStruct):
     footer record that closes the document. Two size families are seen in the
     corpus: a 148-byte footer (payload_size = 146) on newer notes, and a
     144-byte footer (payload_size = 142) on `handwritten.sdocx`.
-    
+
     Only the byte ranges named below are decoded with zero counterexamples across
     the 13-sample corpus. The gaps between them (documented as `*_raw` islands in
     the companion Markdown) are structurally bounded but not yet semantically
@@ -47,6 +47,10 @@ class SdocxEndTag(KaitaiStruct):
 
         _ = self.created_time_header
         if hasattr(self, '_m_created_time_header'):
+            pass
+
+        _ = self.document_height
+        if hasattr(self, '_m_document_height'):
             pass
 
         _ = self.extra_time_candidate
@@ -105,6 +109,18 @@ class SdocxEndTag(KaitaiStruct):
         self._m_created_time_header = self._io.read_s8le()
         self._io.seek(_pos)
         return getattr(self, '_m_created_time_header', None)
+
+    @property
+    def document_height(self):
+        """Document/note height; equals note.note height on the current corpus."""
+        if hasattr(self, '_m_document_height'):
+            return self._m_document_height
+
+        _pos = self._io.pos()
+        self._io.seek(26)
+        self._m_document_height = self._io.read_f4le()
+        self._io.seek(_pos)
+        return getattr(self, '_m_document_height', None)
 
     @property
     def extra_time_candidate(self):
