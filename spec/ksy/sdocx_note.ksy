@@ -8,14 +8,20 @@ meta:
 doc: |
   The leading metadata header of a `.sdocx` archive's `note.note` member. This
   header is deterministic and fully decoded (zero counterexamples across the
-  13-sample corpus). It ends at the title object blob; everything after it —
-  typed rich text, tables, and the tail records that begin at `offset_to_data` —
-  is decoded procedurally (marker/TLV scanning, not a fixed layout) and is
-  documented in the companion Markdown rather than modeled here:
+  13-sample corpus). It ends at the title object blob; most content after it —
+  typed rich text, tables, and marker-located tail records — is decoded
+  procedurally (marker/TLV scanning, not a fixed layout) and is documented in
+  the companion Markdown rather than forced into Kaitai:
 
     - typed rich text  -> docs/format/container/note-note/typed-text.md
     - tables           -> docs/format/container/note-note/tables.md
     - tail records     -> docs/format/container/note-note/tail-records.md
+
+  Only fixed-boundary tail anchors are modeled as instances: the sentinel at
+  `offset_to_data`, the trailing 32-byte note hash copied into pageIdInfo.dat,
+  and the two EOF-relative tail-hash-block candidate windows seen in the corpus
+  (EOF-aligned, or followed by a 4-byte post-hash u32). Marker-scanned pen and
+  voice records remain procedural.
 
   Note the two single-byte pads after `offset_to_data` and after `flags`; they
   are part of the on-disk layout, not alignment we add.
@@ -77,7 +83,34 @@ seq:
   - id: title_blob
     size: 'title_size > 0 ? title_size : 0'
     doc: Title object blob (opaque here; see note-note docs).
+instances:
+  tail_sentinel:
+    pos: offset_to_data
+    size: 16
+    doc: Fixed 16-byte tail sentinel at `offset_to_data`.
+  trailing_hash:
+    pos: _io.size - 32
+    size: 32
+    doc: The note's trailing hash; exactly pageIdInfo.dat `head_hash`.
+  tail_hash_block_eof:
+    pos: _io.size - 40
+    type: tail_hash_block
+    if: _io.size >= 40
+    doc: Candidate 40-byte tail hash block when the block ends at EOF.
+  tail_hash_block_before_post_u32:
+    pos: _io.size - 44
+    type: tail_hash_block
+    if: _io.size >= 44
+    doc: Candidate 40-byte tail hash block when followed by a 4-byte post-hash u32.
 types:
+  tail_hash_block:
+    seq:
+      - id: prefix_u32
+        type: u4
+        repeat: expr
+        repeat-expr: 2
+      - id: hash32
+        size: 32
   short_utf16:
     doc: A u16 character count followed by that many UTF-16LE code units.
     seq:

@@ -1,4 +1,4 @@
-"""Cross-check the Kaitai note.note header spec against pysdocx on the corpus.
+"""Cross-check the Kaitai note.note spec against pysdocx on the corpus.
 
     KSC_GEN=<gen dir> .venv/bin/python spec/tools/validate_note.py
 """
@@ -46,6 +46,25 @@ def main() -> int:
         diffs = [f for f in FIELDS if ref.get(f) != got.get(f)]
         if ref.get("note_id") != got["note_id"]:
             diffs.append("note_id")
+        tail_sentinel = next(r for r in ref["tail_records"] if r["kind"] == "tail_sentinel")
+        if k.tail_sentinel.hex() != tail_sentinel["signature"]:
+            diffs.append("tail_sentinel")
+        if k.trailing_hash.hex() != data[-32:].hex():
+            diffs.append("trailing_hash")
+        tail_hash = next(r for r in ref["tail_records"] if r["kind"] == "tail_hash_block")
+        candidates = []
+        if tail_hash["off"] == len(data) - 40:
+            candidates.append(k.tail_hash_block_eof)
+        if tail_hash["off"] == len(data) - 44:
+            candidates.append(k.tail_hash_block_before_post_u32)
+        if len(candidates) != 1:
+            diffs.append("tail_hash_block_boundary")
+        else:
+            block = candidates[0]
+            if block.prefix_u32 != tail_hash["prefix_u32"]:
+                diffs.append("tail_hash_block.prefix")
+            if block.hash32.hex() != tail_hash["hash32"]:
+                diffs.append("tail_hash_block.hash32")
         if diffs:
             failures += 1
             print(f"FAIL  {sample.name}: {diffs}")

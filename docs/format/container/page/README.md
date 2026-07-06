@@ -4,7 +4,8 @@ One per page. Carries the page header (dimensions, UUID, content bounding box)
 followed by a **layer/object tree** holding all the per-page graphics: ink
 strokes, shapes, images, drawings, and in-page text boxes.
 
-- **Formal spec (header):** [`spec/ksy/sdocx_page.ksy`](../../../../spec/ksy/sdocx_page.ksy)
+- **Formal spec (header + layer/object tree):**
+  [`spec/ksy/sdocx_page.ksy`](../../../../spec/ksy/sdocx_page.ksy)
   (validated on all 48 corpus pages — see [validation](#validation)).
 - **Reference parser:** `parse_page` / `parse_page_tree` / `_parse_object_header`
   in [`pysdocx/page.py`](../../../../pysdocx/page.py).
@@ -78,6 +79,24 @@ boundaries are deterministic — the parser walks the tree by stored sizes rathe
 than resyncing byte-by-byte (which is what lets mixed pages keep their
 handwriting between non-stroke records).
 
+This structure is now modeled in Kaitai as `SdocxPage.tree`. Each object entry
+uses a substream of `blob_size` bytes, whose first bytes are parsed as the
+common `sdocx_object_header`; semantic payload decoding remains procedural.
+
+Current corpus layer invariants (48/48 pages):
+
+- exactly one layer per page; `current_layer_index == 0`;
+- `layer_prefix == 0x62`;
+- flag triple `(flag1, flag2, flag3) == (1, 2, 1)`;
+- `content_flags == 0x18`, so each layer carries `layer_uuid` and
+  `modified_time` and none of the other optional fields;
+- `layer_flags == 0`;
+- every layer has a 32-byte hash after its object tree.
+
+These are structural facts, not full semantics for the flag bits. Future
+multi-layer samples are needed before naming `layer_flags` or the other
+`content_flags` options.
+
 ### Object types in the corpus
 
 ```
@@ -93,7 +112,12 @@ unclassified" object types on the current corpus.
 ```bash
 KSC_GEN=<scratch>/gen .venv/bin/python spec/tools/validate_page.py
 # -> 48 matched, 0 mismatched, out of 48 pages
+KSC_GEN=<scratch>/gen .venv/bin/python spec/tools/validate_page_tree.py
+# -> 48 page trees matched, 0 mismatched, 11788 objects, out of 48 pages
 ```
 
-Compares `base`, `page_width`, `page_height`, `uuid`, and `content_bbox`
-(bytewise, to survive NaN) against `parse_page` on every `.page` in the corpus.
+The header validator compares `base`, `page_width`, `page_height`, `uuid`, and
+`content_bbox` (bytewise, to survive NaN) against `parse_page`. The tree
+validator compares layer counts, flags, optional-field boundaries, object entry
+offsets (`off`, `blob_off`, `end`), raw type, child count, blob size, recursive
+child order, and the 32-byte layer hash against `parse_page_tree`.

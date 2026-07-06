@@ -2,12 +2,22 @@
 
 The region of `note.note` beginning at the header's `offset_to_data`. It is a
 sequence of small records (a sentinel, a hash block, pen-preload paths and
-their preludes, pen-style blocks, and voice-clip records) located by **markers**,
-not fixed offsets — so it is documented here, not in a `.ksy`.
+their preludes, pen-style blocks, and voice-clip records) located mostly by
+**markers**, not fixed offsets.
+
+Only the fixed-boundary anchors are modeled in
+[`spec/ksy/sdocx_note.ksy`](../../../../spec/ksy/sdocx_note.ksy): the 16-byte
+`tail_sentinel` at `offset_to_data`, the note's trailing 32-byte hash
+(`note.note[-32:]`), and two EOF-relative candidate windows for the
+`tail_hash_block` shape observed in the corpus (40 bytes ending at EOF, or 40
+bytes followed by a 4-byte `tail_post_hash_u32`). Marker-scanned pen and voice
+records remain procedural here.
 
 - **Reference parser:** `scan_note_tail_records` /
   `annotate_note_tail_with_page_id_info` in
   [`pysdocx/note.py`](../../../../pysdocx/note.py).
+- **Tail diagnostic:** [`spec/tools/analyze_note_tail.py`](../../../../spec/tools/analyze_note_tail.py)
+  summarizes pen preload/style, voice, and post-hash relations.
 - **Status:** boundaries **Structural**; several fields **Semantic**; residual
   fields **Unknown**. Corpus byte-coverage of the tail is **100% structurally
   accounted** (no unexplained bytes), but "accounted" ≠ "semantically named".
@@ -33,6 +43,10 @@ not fixed offsets — so it is documented here, not in a `.ksy`.
   13/13; the test gate cross-checks it). So the manifest head is a copy of this
   note tail hash. What the hash is computed over is still Unknown (see
   [pageIdInfo unknowns](../pageIdInfo.md#unknown-regions)).
+  Structurally, 10/13 corpus notes store the 40-byte block at EOF
+  (`u32,u32,hash32`); 3/13 store that block immediately before a 4-byte
+  `tail_post_hash_u32`, so the trailing 32 bytes overlap the latter part of the
+  block plus the post field rather than being identical to `hash32`.
 - **`pen_preload_path`** — decoded as `u16 char_len + UTF-16LE path`, e.g.
   `com.samsung.android.sdk.pen.pen.preload.InkPen2`. Reading it as a
   length-prefixed string (not null-terminated) fixed a false leading slash and a
@@ -43,6 +57,10 @@ not fixed offsets — so it is documented here, not in a `.ksy`.
   `mediaInfo.dat` media index on both audio samples; `voice_clip_post` exposes an
   actual-duration-ms candidate (`5760`, `12053`). Promoted as **diagnostic**
   linkage, not a complete audio schema.
+- **`tail_post_hash_u32`** — appears on 3/13 notes, immediately after a shifted
+  `tail_hash_block`. Its `u32` value is exactly the little-endian value of
+  `note.note[-4:]` on all 3 occurrences. This is a copied trailing fragment, not
+  evidence for an independent checksum.
 
 ## Unknown (bounded, not named)
 
@@ -50,9 +68,8 @@ not fixed offsets — so it is documented here, not in a `.ksy`.
   preload parameter hints (`8;`, `14;`, `18;0;100;`, …) — these do **not** map
   one-to-one to pen tool names on the current corpus.
 - `pen_style_tail.param` / `pen_style_tail.raw_u32`.
-- The 4-byte `tail_post_hash_u32` values after some hash blocks (they match
-  `note.note[-4:]` on the 3 shifted samples — likely a copy of the trailing
-  bytes, not a standalone checksum).
+- Exact meaning of why `tail_post_hash_u32` is emitted on only the three shifted
+  tail-hash samples.
 - `voice_clip.post_u32` semantics beyond the duration candidate.
 - The meaning of the `tail_hash_block` hash itself.
 

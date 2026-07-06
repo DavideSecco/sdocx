@@ -5,17 +5,21 @@ meta:
   file-extension: page
   endian: le
   license: CC0-1.0
+  imports:
+    - sdocx_object_header
 doc: |
-  The fixed header of a `.sdocx` archive's `<uuid>.page` member. Each page is one
-  `.page` file; the header carries page dimensions, the page UUID, and the
-  content bounding box, and is followed by a layer/object tree.
+  A `.sdocx` archive's `<uuid>.page` member. Each page is one `.page` file; the
+  header carries page dimensions, the page UUID, and the content bounding box,
+  and is followed by a layer/object tree.
 
-  Only the header is modeled here. The layer/object tree, the common object
-  header (its `field_flags` additive size model), the non-stroke payload-geometry
-  wrapper, and the stroke payloads (delta-compressed coordinates — procedural)
-  are documented in the companion Markdown:
+  The layer/object tree is structural: object entries carry raw type, child
+  count, and blob size, and recursive children follow the blob. The blob itself
+  begins with the common object header, modeled by `sdocx_object_header` via a
+  substream. Payload internals (strokes, semantic shape/image/text markers) stay
+  procedural and are documented in the companion Markdown:
 
-    - object tree + header  -> docs/format/container/page/object-header.md
+    - layer/object tree     -> docs/format/container/page/README.md
+    - common object header  -> docs/format/container/page/object-header.md
     - payload geometry       -> docs/format/container/page/payload-geometry.md
     - strokes                -> docs/format/container/page/strokes.md
     - shapes/images/text     -> docs/format/container/page/object-types.md
@@ -29,6 +33,10 @@ seq:
     type: u4
     doc: Header base/layout selector at offset 0.
 instances:
+  tree:
+    pos: base
+    type: page_tree
+    doc: Layer/object tree rooted at the header's `base` offset.
   page_width:
     pos: 0x16
     type: u4
@@ -67,3 +75,79 @@ instances:
     type: str
     encoding: ASCII
     doc: Trailing marker; always "Page for SAMSUNG S-Pen SDK".
+types:
+  page_tree:
+    seq:
+      - id: layer_count
+        type: u2
+      - id: current_layer_index
+        type: u2
+      - id: layers
+        type: layer
+        repeat: expr
+        repeat-expr: layer_count
+  layer:
+    seq:
+      - id: layer_prefix
+        type: u4
+      - id: next_offset
+        type: u4
+      - id: flag1
+        type: u1
+      - id: flag2
+        type: u1
+      - id: flag3
+        type: u1
+      - id: content_flags
+        type: u1
+      - id: layer_flags
+        type: u4
+      - id: content_01
+        type: u1
+        if: (content_flags & 0x01) != 0
+      - id: content_02
+        size: 4
+        if: (content_flags & 0x02) != 0
+      - id: content_04_text
+        type: utf16_string
+        if: (content_flags & 0x04) != 0
+      - id: layer_uuid
+        type: utf16_string
+        if: (content_flags & 0x08) != 0
+      - id: modified_time
+        type: s8
+        if: (content_flags & 0x10) != 0
+      - id: content_20
+        size: 4
+        if: (content_flags & 0x20) != 0
+      - id: object_count
+        type: u4
+      - id: objects
+        type: object_entry
+        repeat: expr
+        repeat-expr: object_count
+      - id: layer_hash
+        size: 32
+  object_entry:
+    seq:
+      - id: raw_type
+        type: u1
+      - id: child_count
+        type: s2
+      - id: blob_size
+        type: u4
+      - id: blob
+        type: sdocx_object_header
+        size: blob_size
+      - id: children
+        type: object_entry
+        repeat: expr
+        repeat-expr: 'child_count > 0 ? child_count : 0'
+  utf16_string:
+    seq:
+      - id: char_len
+        type: u2
+      - id: value
+        type: str
+        size: char_len * 2
+        encoding: UTF-16LE
