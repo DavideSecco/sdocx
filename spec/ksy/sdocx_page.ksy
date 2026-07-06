@@ -53,3 +53,17 @@ instances:
     repeat: expr
     repeat-expr: 4
     doc: Content bounding box [x_min, y_min, x_max, y_max] as f64.
+  page_hash:
+    pos: _io.size - 58
+    size: 32
+    doc: |
+      32-byte page content hash. This is exactly the value pageIdInfo.dat stores
+      as the page's `page_hash` (the manifest copies it), which is why that
+      manifest hash is not a digest of the raw .page member. Sits immediately
+      before the footer signature.
+  footer_signature:
+    pos: _io.size - 26
+    size: 26
+    type: str
+    encoding: ASCII
+    doc: Trailing marker; always "Page for SAMSUNG S-Pen SDK".

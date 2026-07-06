@@ -32,10 +32,23 @@ offset  size  field           status    note
 0x26    2     uuid_char_len   Decoded
 0x28    ...   uuid            Decoded   UTF-16LE (= member filename, pageIdInfo)
 0x80    32    content_bbox    Decoded   4 x f64 [x_min,y_min,x_max,y_max]
+end-58  32    page_hash       Decoded   copied into pageIdInfo.dat (see below)
+end-26  26    footer_signature Decoded  "Page for SAMSUNG S-Pen SDK"
 ```
 
 On empty pages `content_bbox` is left uninitialised (NaN + denormals); that is
 the source data, not a parse error.
+
+### Page footer — Decoded
+
+Every `.page` ends with a 32-byte page content hash immediately followed by the
+ASCII signature `Page for SAMSUNG S-Pen SDK` (the per-page analog of
+`end_tag.bin`'s `Document for S-Pen SDK`). That 32-byte hash is exactly what
+[`pageIdInfo.dat`](../pageIdInfo.md#page_recordpage_hash--32-bytes--74--decoded-source-found)
+stores as the page's `page_hash` — the manifest copies it. The test gate
+cross-checks the two per page (48/48). Reference: `parse_page_footer` in
+[`pysdocx/page.py`](../../../../pysdocx/page.py). How the page computes the hash
+is still Unknown; the manifest↔page linkage is decoded.
 
 The **template** (grid vs plain, grid pitch) is *not* a single fixed field: its
 offset depends on `base` and whether the note is built-in or an imported PDF, so

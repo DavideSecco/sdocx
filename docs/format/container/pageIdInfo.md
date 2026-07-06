@@ -51,17 +51,23 @@ UTF-16 character count of the UUID. Always `36` on the corpus (a canonical
 The page UUID, matching a `<uuid>.page` member in the archive. This is the link
 from page order to page content.
 
-### `page_record.page_hash` — 32 bytes @ 74
-An opaque per-page hash. **It is not the SHA-256 of the raw `.page` member**
-(0/48 matches on the corpus), so it is some other digest or a hash over
-different input. Bytes are decoded; meaning is **Unknown**.
+### `page_record.page_hash` — 32 bytes @ 74 — Decoded (source found)
+This is **not a digest computed over the raw `.page` member** (0/48 SHA-256
+matches). It is a **copy of the page's own stored footer hash**: every `.page`
+file ends with a 32-byte content hash immediately followed by the ASCII
+signature `Page for SAMSUNG S-Pen SDK`, and this manifest field is that exact
+hash, mirrored. Confirmed on **48/48** pages (`page_hash == .page[-58:-26]`, and
+the test gate cross-checks the two per page). See
+[the page footer](./page/README.md#page-footer--decoded). How the page itself
+computes that 32-byte hash is still Unknown, but the manifest↔page linkage is
+decoded.
 
 ## Unknown regions
 
 - **`head_hash` construction** — 32 bytes, purpose unclear.
-- **`page_hash` construction** — 32 bytes per page; not SHA-256 of the `.page`
-  bytes. Candidate next step: try hashing canonicalised page content, or the
-  page plus metadata, to see what reproduces these digests.
+- **How the `.page` computes its footer hash** — the *linkage* is decoded
+  (manifest `page_hash` = the page footer hash), but what that 32-byte digest is
+  computed over inside the page is still Unknown.
 - There is **no trailing data**: records tile the file exactly
   (`valid_size` true on 13/13), so there is no unexplained tail here.
 

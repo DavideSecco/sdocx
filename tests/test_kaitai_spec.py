@@ -198,6 +198,8 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
         checked = 0
         for sample in _samples():
             with zipfile.ZipFile(sample) as z:
+                manifest = parse_page_id_info(z.read("pageIdInfo.dat")) if "pageIdInfo.dat" in z.namelist() else None
+                manifest_hash = {r["uuid"]: r["page_hash"] for r in (manifest or {}).get("records", ())}
                 page_names = sorted(n for n in z.namelist() if n.endswith(".page"))
                 for name in page_names:
                     data = z.read(name)
@@ -206,16 +208,22 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                     except ValueError:
                         continue
                     k = SdocxPage.from_bytes(data)
-                    self.assertEqual(k.base, ref["base"], f"{sample.name}/{name}")
-                    self.assertEqual(k.page_width, ref["width"], f"{sample.name}/{name}")
-                    self.assertEqual(k.page_height, ref["height"], f"{sample.name}/{name}")
-                    self.assertEqual(k.uuid, ref["uuid"], f"{sample.name}/{name}")
+                    where = f"{sample.name}/{name}"
+                    self.assertEqual(k.base, ref["base"], where)
+                    self.assertEqual(k.page_width, ref["width"], where)
+                    self.assertEqual(k.page_height, ref["height"], where)
+                    self.assertEqual(k.uuid, ref["uuid"], where)
                     # Bytewise: empty pages leave content_bbox uninitialised (NaN).
                     self.assertEqual(
                         struct.pack("<4d", *k.content_bbox),
                         struct.pack("<4d", *ref["content_bbox"]),
-                        f"{sample.name}/{name}: content_bbox",
+                        f"{where}: content_bbox",
                     )
+                    self.assertEqual(k.footer_signature, "Page for SAMSUNG S-Pen SDK", where)
+                    self.assertEqual(k.page_hash.hex(), ref["footer"]["page_hash"], f"{where}: page_hash")
+                    # Cross-file linkage: page footer hash IS the pageIdInfo manifest hash.
+                    if ref["uuid"] in manifest_hash:
+                        self.assertEqual(k.page_hash.hex(), manifest_hash[ref["uuid"]], f"{where}: page_hash!=manifest")
                     checked += 1
         self.assertGreater(checked, 0)
 

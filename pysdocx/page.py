@@ -1143,6 +1143,33 @@ def page_template(data: bytes) -> dict | None:
     return result
 
 
+# A .page file ends with a 32-byte content hash immediately followed by the ASCII signature
+# "Page for SAMSUNG S-Pen SDK" (26 bytes) — the per-page analog of end_tag.bin's
+# "Document for S-Pen SDK". This 32-byte hash is what pageIdInfo.dat copies into its per-page
+# record (`page_hash`), which is why that manifest hash is not a digest of the raw .page member:
+# it is this stored footer hash, mirrored. Anchored to the signature so it is robust to the file
+# length. Confirmed on all 48 corpus pages (hash at data[-58:-26], signature at data[-26:]).
+PAGE_FOOTER_SIGNATURE = b"Page for SAMSUNG S-Pen SDK"
+
+
+def parse_page_footer(data: bytes) -> dict | None:
+    """Decode the .page footer: the 32-byte content hash + trailing SDK signature.
+
+    Returns `{signature, valid_signature, page_hash, hash_off}` where `page_hash` is the hex
+    digest that pageIdInfo.dat stores for this page. Anchored to PAGE_FOOTER_SIGNATURE at EOF.
+    """
+    sig_off = data.rfind(PAGE_FOOTER_SIGNATURE)
+    if sig_off < 0 or sig_off < 32:
+        return None
+    hash_off = sig_off - 32
+    return {
+        "signature": data[sig_off:].decode("ascii", errors="replace"),
+        "valid_signature": data[sig_off:] == PAGE_FOOTER_SIGNATURE,
+        "page_hash": data[hash_off:sig_off].hex(),
+        "hash_off": hash_off,
+    }
+
+
 def parse_page(data: bytes) -> dict:
     """Parse a .page file's header + layer/object tree + strokes.
 
@@ -1191,6 +1218,7 @@ def parse_page(data: bytes) -> dict:
         "height": height,
         "template": page_template(data),
         "content_bbox": content_bbox,
+        "footer": parse_page_footer(data),
         "layers": tree["layers"],
         "object_count": tree["object_count"],
         "stroke_count": stroke_count,

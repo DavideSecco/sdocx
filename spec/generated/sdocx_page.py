@@ -47,6 +47,14 @@ class SdocxPage(KaitaiStruct):
                 pass
 
 
+        _ = self.footer_signature
+        if hasattr(self, '_m_footer_signature'):
+            pass
+
+        _ = self.page_hash
+        if hasattr(self, '_m_page_hash'):
+            pass
+
         _ = self.page_height
         if hasattr(self, '_m_page_height'):
             pass
@@ -78,6 +86,34 @@ class SdocxPage(KaitaiStruct):
 
         self._io.seek(_pos)
         return getattr(self, '_m_content_bbox', None)
+
+    @property
+    def footer_signature(self):
+        """Trailing marker; always "Page for SAMSUNG S-Pen SDK"."""
+        if hasattr(self, '_m_footer_signature'):
+            return self._m_footer_signature
+
+        _pos = self._io.pos()
+        self._io.seek(self._io.size() - 26)
+        self._m_footer_signature = (self._io.read_bytes(26)).decode(u"ASCII")
+        self._io.seek(_pos)
+        return getattr(self, '_m_footer_signature', None)
+
+    @property
+    def page_hash(self):
+        """32-byte page content hash. This is exactly the value pageIdInfo.dat stores
+        as the page's `page_hash` (the manifest copies it), which is why that
+        manifest hash is not a digest of the raw .page member. Sits immediately
+        before the footer signature.
+        """
+        if hasattr(self, '_m_page_hash'):
+            return self._m_page_hash
+
+        _pos = self._io.pos()
+        self._io.seek(self._io.size() - 58)
+        self._m_page_hash = self._io.read_bytes(32)
+        self._io.seek(_pos)
+        return getattr(self, '_m_page_hash', None)
 
     @property
     def page_height(self):

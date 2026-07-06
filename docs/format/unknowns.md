@@ -8,9 +8,10 @@ name" ([conventions](./00-conventions.md)).
 
 ## `pageIdInfo.dat`
 - **`head_hash`** (32 bytes) construction.
-- **`page_hash`** (32 bytes per page) construction — not SHA-256 of the raw
-  `.page` member (0/48 matches). Next step: try hashing canonicalised page
-  content / page+metadata.
+- **`page_hash` construction** — the *linkage* is now decoded: the manifest
+  `page_hash` is a copy of the `.page` footer hash (48/48). What the page
+  computes that 32-byte digest over internally is still open. Next step: try
+  hashing canonicalised page content / page+metadata against the footer hash.
 
 ## `note.note`
 - **`meta_flags`** bits other than `0x2000` (has-tables): `0x400`, `0x8000`, and
