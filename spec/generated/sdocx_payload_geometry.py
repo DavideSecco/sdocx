@@ -12,7 +12,7 @@ class SdocxPayloadGeometry(KaitaiStruct):
     """The geometry wrapper that begins the payload of a non-stroke inserted object
     (shape, image, in-page text box), immediately after the common object header
     (i.e. at object-blob offset `total_size`). Fed that payload slice.
-    
+
     Decoded corpus-wide: 412/412 wrapper-bearing objects (shape 390, image 15,
     text_box 7). Only the wrapper header + coordinate points are modeled here; the
     later semantic markers (shape/image/text) and per-shape point roles are marker-

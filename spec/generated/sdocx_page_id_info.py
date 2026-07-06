@@ -12,13 +12,13 @@ class SdocxPageIdInfo(KaitaiStruct):
     """The `pageIdInfo.dat` member of a `.sdocx` archive. It defines the true page
     order of the document (the `.page` members are named by UUID, not by order)
     and carries an opaque per-page hash.
-    
+
     Layout is fully decoded with zero counterexamples across the 13-sample corpus:
     a 32-byte document head hash, a `u16` page count, then that many fixed 106-byte
     records. Every record is a 36-char UTF-16LE page UUID followed by a 32-byte
     per-page hash; the record is exactly filled (2 + 72 + 32 = 106), so there is no
     trailing padding.
-    
+
     The per-page hash is stable manifest data but is NOT the SHA-256 of the raw
     `.page` member (0/48 matches on the corpus); its construction is Unknown and is
     documented as such in the companion Markdown rather than named here.

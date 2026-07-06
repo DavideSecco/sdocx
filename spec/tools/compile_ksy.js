@@ -13,12 +13,21 @@ if (!ksyPath || !outDir) {
   process.exit(2);
 }
 const ksy = yaml.load(fs.readFileSync(ksyPath, "utf8"));
+const ksyDir = path.dirname(ksyPath);
+const yamlImporter = {
+  importYaml: function(name, mode) {
+    const file = name.endsWith(".ksy") ? name : `${name}.ksy`;
+    const importPath = path.isAbsolute(file) ? file : path.join(ksyDir, file);
+    const importKsy = yaml.load(fs.readFileSync(importPath, "utf8"));
+    return Promise.resolve(importKsy);
+  },
+};
 compiler
-  .compile("python", ksy, null, false)
+  .compile("python", ksy, yamlImporter, false)
   .then((files) => {
     fs.mkdirSync(outDir, { recursive: true });
     for (const name of Object.keys(files)) {
-      fs.writeFileSync(path.join(outDir, name), files[name]);
+      fs.writeFileSync(path.join(outDir, name), files[name].replace(/[ \t]+$/gm, ""));
       console.log("wrote", name);
     }
   })

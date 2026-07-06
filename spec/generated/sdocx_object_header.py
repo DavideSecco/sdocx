@@ -13,17 +13,17 @@ class SdocxObjectHeader(KaitaiStruct):
     Fed one object blob (the bytes from an object entry's stored size). The base
     header is a fixed layout ending at offset 105; its length then grows by an
     ADDITIVE `field_flags` size model (zero counterexamples across the corpus):
-    
+
       0x1     ANGLE      +4   rotation-angle f32 at offset 105
       0x20    EXTRA_KEY  +32  "extra_key_stroke_shape" attribute block
       0x40000 HDR_EXT    +16  [counter, seq, page_width, page_height]
       0x8000  MEDIA_FAMILY  0 image/shape/drawing discriminator (no size)
       0x2000|0x4000 BASE   0  present on every object
-    
+
     The three size-contributing blocks are stored in bit order (angle, then
     extra_key, then hdr_ext), so this type reads them in that order. Payload data
     after the header (strokes, geometry wrappers) is NOT read here.
-    
+
     Corpus invariants baked in: `flag_len == 2` and `field_len == 4` on all 11788
     objects, and `uuid_len == 36`, which is what makes the base header land exactly
     at 105. A future variant that breaks these would surface as a test-gate
