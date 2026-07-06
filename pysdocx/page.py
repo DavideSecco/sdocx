@@ -77,6 +77,26 @@ SHAPE_TYPES = {
     90: "freeform_smooth",
 }
 
+# Role of the decoded payload-geometry point list for each marker-based shape family. This is a
+# structural interpretation of the wrapper points, not a rendering source of truth: the rendered outline
+# still comes from the shape marker's path when available.
+SHAPE_PAYLOAD_GEOMETRY_ROLES = {
+    1: "outline_vertices",  # ellipse: 8 boundary/control vertices
+    2: "vertices_with_edge_midpoints",  # triangle: vertex, midpoint, vertex, ...
+    4: "frame_edge_midpoints",
+    6: "outline_vertices",
+    8: "outline_vertices",
+    9: "frame_edge_midpoints",
+    11: "outline_vertices",
+    13: "outer_vertices",
+    17: "frame_edge_midpoints",
+    23: "bezier_control_points",
+    64: "frame_edge_midpoints",
+    88: "freeform_vertices",
+    89: "freeform_vertices",
+    90: "bezier_control_points",
+}
+
 # Types whose stored outline path is degenerate (lone MoveTo) — render from the vertex list.
 DEGENERATE_OUTLINE_TYPES = frozenset({1, 64})
 
@@ -150,6 +170,21 @@ EXTRA_KEY_MARKER = b"extra_key"
 EXTRA_KEY_STROKE_SHAPE = b"extra_key_stroke_shape"
 TEXT_BOX_TEXT_PREFIX = b"\x06\x00"
 TEXT_BOX_TEXT_MARKER_LEN = 10  # 06 00 <u16 kind> 00 00 <u32 char_count>
+
+# Non-stroke inserted objects start their payload with a small geometry wrapper immediately after
+# the common object header: `[u32 L0][u16 tag=6][u32 L1][01 00 01 0c][u32 point_count]` followed by
+# `point_count` f64 coordinate pairs. For marker-based shapes and images, the later semantic marker
+# sits at `total_size + L0 + 10` / `total_size + L1 + 49`; for text boxes the UTF-16 text marker sits
+# 172 bytes after the geometry block's L1-relative start. Exposed as diagnostics because it gives us
+# a formal anchor for frame geometry instead of scattered offset constants.
+PAYLOAD_GEOMETRY_TAG = 6
+PAYLOAD_GEOMETRY_OPCODE = b"\x01\x00\x01\x0c"
+PAYLOAD_GEOMETRY_HEADER_LEN = 18
+PAYLOAD_GEOMETRY_MIN_POINTS = 1
+PAYLOAD_GEOMETRY_MAX_POINTS = 64
+PAYLOAD_GEOMETRY_MARKER_L0_DELTA = 10
+PAYLOAD_GEOMETRY_MARKER_L1_DELTA = 49
+PAYLOAD_GEOMETRY_TEXT_MARKER_L1_DELTA = 172
 
 # Sticky-note (file-attachment) placements on a page are a property-bag object type that isn't
 # reachable via the normal layer-object-count-driven tree walk: on the sample where this was
@@ -712,6 +747,85 @@ def _object_header_profile(raw_type: int, obj_type: str, header: dict | None) ->
     }
 
 
+def _decode_payload_geometry(blob: bytes, header: dict | None) -> dict | None:
+    """Decode the inserted-object geometry wrapper after the common object header."""
+    if header is None:
+        return None
+    start = header["total_size"]
+    if start + PAYLOAD_GEOMETRY_HEADER_LEN > len(blob):
+        return None
+
+    l0 = _read_u32(blob, start)
+    tag = _read_u16(blob, start + 4)
+    l1 = _read_u32(blob, start + 6)
+    if l0 is None or tag != PAYLOAD_GEOMETRY_TAG or l1 is None:
+        return None
+    if blob[start + 10 : start + 14] != PAYLOAD_GEOMETRY_OPCODE:
+        return None
+    point_count = _read_u32(blob, start + 14)
+    if point_count is None or not (PAYLOAD_GEOMETRY_MIN_POINTS <= point_count <= PAYLOAD_GEOMETRY_MAX_POINTS):
+        return None
+
+    points_start = start + PAYLOAD_GEOMETRY_HEADER_LEN
+    points_end = points_start + point_count * 16
+    if points_end > len(blob):
+        return None
+
+    points = []
+    for idx in range(point_count):
+        x = _read_f64(blob, points_start + idx * 16)
+        y = _read_f64(blob, points_start + idx * 16 + 8)
+        if x is None or y is None or not (math.isfinite(x) and math.isfinite(y)):
+            return None
+        points.append((x, y))
+
+    bbox = header.get("bbox")
+    centroid = (
+        sum(x for x, _y in points) / len(points),
+        sum(y for _x, y in points) / len(points),
+    )
+    bbox_centroid_match = None
+    if bbox is not None and len(points) >= 2 and all(math.isfinite(v) for v in bbox):
+        bx = (bbox[0] + bbox[2]) / 2.0
+        by = (bbox[1] + bbox[3]) / 2.0
+        bbox_centroid_match = abs(centroid[0] - bx) <= 1.0 and abs(centroid[1] - by) <= 1.0
+
+    markers: dict[str, dict] = {}
+    for name, marker in (
+        ("shape", SHAPE_TYPE_MARKER),
+        ("image", IMAGE_MARKER),
+    ):
+        rel = blob.find(marker, start)
+        if rel >= 0:
+            markers[name] = {
+                "rel": rel,
+                "l0_delta": rel - (start + l0 + PAYLOAD_GEOMETRY_MARKER_L0_DELTA),
+                "l1_delta": rel - (start + l1 + PAYLOAD_GEOMETRY_MARKER_L1_DELTA),
+            }
+
+    text = _text_from_marker(blob)
+    if text is not None:
+        marker_rel = text[0] - TEXT_BOX_TEXT_MARKER_LEN
+        markers["text"] = {
+            "rel": marker_rel,
+            "l0_delta": marker_rel - (start + l0 + PAYLOAD_GEOMETRY_MARKER_L0_DELTA),
+            "l1_delta": marker_rel - (start + l1 + PAYLOAD_GEOMETRY_TEXT_MARKER_L1_DELTA),
+        }
+
+    return {
+        "off": start,
+        "l0": l0,
+        "tag": tag,
+        "l1": l1,
+        "point_count": point_count,
+        "points_off": points_start,
+        "points": points,
+        "centroid": centroid,
+        "bbox_centroid_match": bbox_centroid_match,
+        "markers": markers,
+    }
+
+
 def _classify_page_object(raw_type: int, blob: bytes) -> str:
     if raw_type == 1:
         return "stroke"
@@ -831,6 +945,7 @@ def _parse_objects(data: bytes, pos: int, count: int, width: int, height: int, d
             "children": [],
         }
         obj["header_profile"] = _object_header_profile(raw_type, obj["type"], header)
+        obj["payload_geometry"] = _decode_payload_geometry(blob, header)
         pos = blob_end
         if child_count > 0 and depth < 16:
             obj["children"], pos = _parse_objects(data, pos, child_count, width, height, depth + 1)
@@ -1191,6 +1306,7 @@ def scan_images_from_objects(data: bytes, width: int, height: int, layers: list[
                         "object_idx": obj["idx"],
                         "object_off": obj["off"],
                         "angle_deg": angle_deg,
+                        "payload_geometry": obj.get("payload_geometry"),
                     })
     return images
 
@@ -1343,6 +1459,7 @@ def parse_text_boxes_from_objects(data: bytes, layers: list[dict]) -> list[dict]
                 "bbox": obj["bbox"],
                 "angle_deg": _image_rotation_deg(obj["header"], blob),
                 "frame_midpoints": _text_box_frame_midpoints(obj, blob),
+                "payload_geometry": obj.get("payload_geometry"),
                 "object_idx": obj["idx"],
                 "object_off": obj["off"],
             })
@@ -1363,6 +1480,12 @@ def _text_box_frame_midpoints(obj: dict, blob: bytes) -> list[tuple[float, float
     """
     header = obj.get("header")
     bbox = obj.get("bbox")
+    geometry = obj.get("payload_geometry")
+    if geometry and geometry.get("point_count") == 4:
+        pts = geometry["points"]
+        if bbox is not None and _points_centroid_matches_bbox(pts, bbox):
+            return pts
+
     if header is None or bbox is None or header["total_size"] + 0x12 + 8 * 8 > len(blob):
         return None
     if not (header.get("field_flags", 0) & IMAGE_ANGLE_FIELD_FLAG):
@@ -1386,6 +1509,21 @@ def _text_box_frame_midpoints(obj: dict, blob: bytes) -> list[tuple[float, float
         return None
 
     return pts
+
+
+def _points_centroid_matches_bbox(
+    points: list[tuple[float, float]],
+    bbox: tuple[float, float, float, float],
+    tolerance: float = 1.0,
+) -> bool:
+    if not points or not all(math.isfinite(v) for pt in points for v in pt):
+        return False
+    if not all(math.isfinite(v) for v in bbox):
+        return False
+    x0, y0, x1, y1 = bbox
+    cx = sum(x for x, _y in points) / len(points)
+    cy = sum(y for _x, y in points) / len(points)
+    return abs(cx - (x0 + x1) / 2.0) <= tolerance and abs(cy - (y0 + y1) / 2.0) <= tolerance
 
 
 def _read_len_prefixed_ascii(data: bytes, offset: int) -> tuple[str, int] | None:
@@ -1740,6 +1878,17 @@ def _shape_is_closed(points, bbox) -> bool:
     return math.hypot(first[0] - last[0], first[1] - last[1]) / diagonal < SHAPE_OPEN_RATIO
 
 
+def _shape_payload_geometry_role(shape: dict, geometry: dict | None) -> str | None:
+    if not geometry:
+        return None
+    if shape.get("type") == "arrow":
+        return "shaft_endpoints"
+    type_code = shape.get("type_code")
+    if type_code in SHAPE_PAYLOAD_GEOMETRY_ROLES:
+        return SHAPE_PAYLOAD_GEOMETRY_ROLES[type_code]
+    return "unknown"
+
+
 # The line/arrow tool is a distinct, markerless object (no `01 04 04 01` type code): a 2-point
 # shaft (start -> end) right after the sub-header `01 00 01 0c 02 00 00 00`, plus two arrowhead
 # flags a fixed distance past the shaft points — head_end at shaft+76, head_start at shaft+78.
@@ -1828,6 +1977,8 @@ def parse_shapes_from_objects(data: bytes, width: int, height: int, layers: list
                     continue
                 shape["object_idx"] = obj["idx"]
                 shape["object_off"] = obj["off"]
+                shape["payload_geometry"] = obj.get("payload_geometry")
+                shape["payload_geometry_role"] = _shape_payload_geometry_role(shape, obj.get("payload_geometry"))
                 shapes.append(shape)
                 found_marker_shape = True
             if found_marker_shape:
@@ -1836,5 +1987,7 @@ def parse_shapes_from_objects(data: bytes, width: int, height: int, layers: list
             if arrow is not None:
                 arrow["object_idx"] = obj["idx"]
                 arrow["object_off"] = obj["off"]
+                arrow["payload_geometry"] = obj.get("payload_geometry")
+                arrow["payload_geometry_role"] = _shape_payload_geometry_role(arrow, obj.get("payload_geometry"))
                 shapes.append(arrow)
     return shapes
