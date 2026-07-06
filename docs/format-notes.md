@@ -108,7 +108,7 @@ Where `normalized_pressure = clamp(cumulative_pressure / 1400, 0, 1)`.
 
 | File | Content |
 |------|---------|
-| `end_tag.bin` | Timestamps (i64 ms epoch), `"Document for S-Pen SDK"` |
+| `end_tag.bin` | Footer metadata: size, format, timestamps, raw fields, `"Document for S-Pen SDK"` |
 | `pageIdInfo.dat` | Page UUID (UTF-16LE) + 2 x 32-byte hashes |
 | `media/mediaInfo.dat` | Media manifest: index, filename, SHA-256, raw tail, `EOFX` |
 | `note.note` | Title, pen tools, background color, dimensions |
@@ -194,6 +194,46 @@ are present before the object count.
 
 The parser classifies objects primarily by payload markers, not by raw byte alone, because raw
 values vary between sample families.
+
+**Inserted-object payload geometry wrapper** (validated on shape/image/text-box objects):
+
+After the common object header, non-stroke visual objects observed in the current corpus carry:
+
+```text
+0   u32 L0
++4  u16 tag = 6
++6  u32 L1
++10 01 00 01 0c
++14 u32 point_count
++18 point_count x (f64 x, f64 y)
+```
+
+Current corpus coverage: 412 decoded wrappers (`shape=390`, `image=15`, `text_box=7`). Marker equations:
+
+| Family | Equation |
+|--------|----------|
+| Image marker `01 00 04 20` | `marker == total_size + L0 + 10 == total_size + L1 + 49` |
+| Shape marker `01 04 04 01 00 00 00` | same as image, on marker-based shapes |
+| Text-box UTF-16 marker | `marker == total_size + L1 + 172` (`L0` relation differs by +123) |
+
+Images and text boxes use the 4 decoded points as frame geometry. Shape centroid relation is not a
+global invariant across every shape variant, so the wrapper is structural while per-shape semantics are
+still partly variant-specific.
+
+Current shape point-role map:
+
+| Role | Shape families |
+|------|----------------|
+| `outline_vertices` | ellipse, hexagon, rhombus, pentagon |
+| `frame_edge_midpoints` | rectangle, trapezoid, cross, rounded-rect |
+| `vertices_with_edge_midpoints` | triangle |
+| `outer_vertices` | star |
+| `freeform_vertices` | freeform 88/89 |
+| `bezier_control_points` | smooth freeform, heart |
+| `shaft_endpoints` | markerless line/arrow |
+
+This role is exposed as `payload_geometry_role` on parsed shape dictionaries when parsing from the
+object tree.
 
 **Stroke object payload** (inside a raw type `1` object):
 

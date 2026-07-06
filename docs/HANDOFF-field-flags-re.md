@@ -273,3 +273,82 @@ Corpus facts:
 - Tail tags (`u16` at raw-tail start): `1` x54, `3` x4, `5` x1, `20` x1.
 - The 8 bytes at raw-tail offset `+2` are exposed as `time_candidate`; they are timestamp-like and near
   note/media edit times, but the field is deliberately not promoted beyond diagnostic status yet.
+
+## 11. Follow-up end_tag.bin footer decode
+
+`end_tag.bin` is now parsed as a first-class footer record:
+
+```text
+u16 payload_size          # bytes after this field; 146 on 12 files, 142 on handwritten.sdocx
+u16 format_version        # matches note.note format_version
+u32 zero
+i64 modified_time         # matches note.note modified_time 13/13
+... middle raw fields ...
+u16 format_version_dup    # duplicate format version
+... middle raw fields ...
+i64 created_time_a        # exact note created_time on 10 newer samples; ms-close on 3 older samples
+i64 created_time_b        # exact same as created_time_a on 10 newer samples; different ms-like time on old imports
+i64 extra_time_candidate  # non-zero on 2 samples
+padding
+u32 2
+u32 2
+i64 -1
+zero padding
+"Document for S-Pen SDK"
+```
+
+Corpus facts:
+
+- 13/13 files parse and have valid size/signature.
+- `modified_time` matches `note.note` modified time 13/13.
+- `format_version` and `format_version_dup` match each other and `note.note` format version.
+- Signature offset is 126 on the 148-byte footer family and 122 on the 144-byte `handwritten.sdocx`
+  family.
+- Middle raw fields remain exposed as hex diagnostics; do not promote yet.
+
+## 12. Parallel RE follow-up — pageIdInfo, audio linkage, page payload wrapper
+
+Read-only explorer passes found and/or confirmed:
+
+- `pageIdInfo.dat` layout:
+  `32-byte head_hash`, `u16 page_count @0x20`, then `page_count` records of `0x6a` bytes:
+  `u16(36)`, UTF-16LE page UUID, 32-byte per-page hash. The per-page hashes do not match SHA-256 of
+  raw `.page` members on the current corpus (`0` matches), so their semantics remain opaque.
+- `note.note` voice linkage:
+  `voice_clip_header.raw_u32[3]` matches the `.m4a` media index on both voice samples. The following
+  `voice_clip_post` exposes an actual-duration-ms candidate (`5760`, `12053`) and a media-time
+  candidate near the `.m4a` `mediaInfo.dat` tail time. This is promoted as diagnostic linkage, not a
+  complete audio schema.
+- `.page` non-stroke payload wrapper:
+  several image/shape/text-box payloads begin after the common header with
+  `u32 L0 | u16 6 | u32 L1 | 01 00 01 0c | u32 n | n*(f64 x, f64 y)`.
+  Stable equations from the explorer:
+  marker-based shapes/images have marker at `total + L0 + 10 == total + L1 + 49`; images and text boxes
+  have `n=4` geometry points whose centroid matches bbox center; markerless arrows have `n=2` shaft
+  endpoints. These facts are documented for the next payload-schema round but not yet implemented as a
+  first-class object-payload coverage parser.
+
+## 13. Follow-up `.page` payload geometry wrapper implementation
+
+Codex implemented the §12 payload-wrapper lead as a first-class parser field:
+
+- `page.py` now exposes `obj["payload_geometry"]` for every validated non-stroke geometry wrapper:
+  `[u32 L0][u16 tag=6][u32 L1][01 00 01 0c][u32 point_count][point_count x (f64 x, f64 y)]`.
+- Corpus result on 13 samples: **412/412** wrapper-bearing objects decoded:
+  `shape=390`, `image=15`, `text_box=7`.
+- Marker equations now have executable inventory coverage:
+  `image marker: dL0=0/dL1=0` on 15/15,
+  `shape marker: dL0=0/dL1=0` on 337/337 marker-based shapes,
+  `text marker: dL0=123/dL1=0` on 7/7 text boxes.
+- Text-box `frame_midpoints` now use this decoded geometry first; the previous offset-specific fallback
+  remains for compatibility.
+- CLI `objects --detail` prints `payload_geometry ... markers=...`; inventory reports
+  `payload_geometry_profiles`, and regression tests pin the corpus counts/deltas.
+- Shape entries parsed from the object tree now expose `payload_geometry_role`. Current role coverage:
+  outline vertices (ellipse/hexagon/rhombus/pentagon), frame edge-midpoints
+  (rectangle/trapezoid/cross/rounded-rect), triangle vertices+midpoints, star outer vertices,
+  freeform/control points, and arrow shaft endpoints.
+
+Important nuance: centroid match is semantic for image/text-box frames, but not universal for every shape
+variant. Current inventory has `bbox_centroid_match=301`, `bbox_centroid_mismatch=103`,
+`bbox_centroid_unknown=8`; do not promote centroid-match as a global invariant.

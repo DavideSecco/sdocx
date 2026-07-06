@@ -446,9 +446,13 @@
         "Semantic"
       ],
       "decoded": [
-        "true_page_order"
+        "true_page_order",
+        "document_head_hash",
+        "per_page_hash_records"
       ],
-      "unknown": []
+      "unknown": [
+        "per_page_hash_semantics"
+      ]
     },
     {
       "surface": "zip_container.note.note",
@@ -490,6 +494,24 @@
       ]
     },
     {
+      "surface": "zip_container.end_tag.bin",
+      "status": [
+        "Structural",
+        "Semantic"
+      ],
+      "decoded": [
+        "payload_size",
+        "format_version",
+        "modified_time",
+        "created_time_candidates",
+        "sdk_signature"
+      ],
+      "unknown": [
+        "middle_raw_fields",
+        "older_timestamp_unit_semantics"
+      ]
+    },
+    {
       "surface": "page.layer_object_tree",
       "status": [
         "Structural"
@@ -525,6 +547,23 @@
       "unknown": [
         "object_flags_semantics",
         "header_ext_seq_counter_semantics"
+      ]
+    },
+    {
+      "surface": "page.payload_geometry_wrapper",
+      "status": [
+        "Structural",
+        "Semantic"
+      ],
+      "decoded": [
+        "wrapper_lengths",
+        "geometry_opcode",
+        "frame_points",
+        "marker_offset_equations",
+        "shape_point_roles"
+      ],
+      "unknown": [
+        "per_shape_variant_semantics_for_all_point_counts"
       ]
     },
     {
@@ -1511,6 +1550,11 @@
         "count": 1
       }
     ],
+    "voice_media_links": {
+      "voice_actual_duration_ms_candidate": 2,
+      "voice_media_index_candidate": 2,
+      "voice_media_time_candidate": 2
+    },
     "coverage": {
       "known_bytes": 5938,
       "unknown_bytes": 0,
@@ -1815,6 +1859,148 @@
       }
     ]
   },
+  "payload_geometry_profiles": {
+    "count": 412,
+    "by_type": {
+      "image": 15,
+      "shape": 390,
+      "text_box": 7
+    },
+    "point_counts": {
+      "1": 8,
+      "10": 1,
+      "12": 3,
+      "15": 1,
+      "2": 58,
+      "3": 8,
+      "4": 154,
+      "5": 28,
+      "6": 75,
+      "7": 1,
+      "8": 72,
+      "9": 3
+    },
+    "centroid": {
+      "bbox_centroid_match": 301,
+      "bbox_centroid_mismatch": 103,
+      "bbox_centroid_unknown": 8
+    },
+    "marker_deltas": [
+      {
+        "object_type": "image",
+        "marker": "image",
+        "l0_delta": 0,
+        "l1_delta": 0,
+        "count": 15
+      },
+      {
+        "object_type": "shape",
+        "marker": "shape",
+        "l0_delta": 0,
+        "l1_delta": 0,
+        "count": 337
+      },
+      {
+        "object_type": "text_box",
+        "marker": "text",
+        "l0_delta": 123,
+        "l1_delta": 0,
+        "count": 7
+      }
+    ],
+    "shape_roles": [
+      {
+        "shape_type": "arrow",
+        "type_code": "None",
+        "role": "shaft_endpoints",
+        "count": 53
+      },
+      {
+        "shape_type": "cross",
+        "type_code": "17",
+        "role": "frame_edge_midpoints",
+        "count": 8
+      },
+      {
+        "shape_type": "ellipse",
+        "type_code": "1",
+        "role": "outline_vertices",
+        "count": 71
+      },
+      {
+        "shape_type": "freeform",
+        "type_code": "88",
+        "role": "freeform_vertices",
+        "count": 1
+      },
+      {
+        "shape_type": "freeform",
+        "type_code": "89",
+        "role": "freeform_vertices",
+        "count": 4
+      },
+      {
+        "shape_type": "freeform_smooth",
+        "type_code": "90",
+        "role": "bezier_control_points",
+        "count": 32
+      },
+      {
+        "shape_type": "heart",
+        "type_code": "23",
+        "role": "bezier_control_points",
+        "count": 5
+      },
+      {
+        "shape_type": "hexagon",
+        "type_code": "6",
+        "role": "outline_vertices",
+        "count": 36
+      },
+      {
+        "shape_type": "pentagon",
+        "type_code": "11",
+        "role": "outline_vertices",
+        "count": 6
+      },
+      {
+        "shape_type": "rectangle",
+        "type_code": "4",
+        "role": "frame_edge_midpoints",
+        "count": 48
+      },
+      {
+        "shape_type": "rhombus",
+        "type_code": "8",
+        "role": "outline_vertices",
+        "count": 24
+      },
+      {
+        "shape_type": "rounded_rect",
+        "type_code": "64",
+        "role": "frame_edge_midpoints",
+        "count": 6
+      },
+      {
+        "shape_type": "star",
+        "type_code": "13",
+        "role": "outer_vertices",
+        "count": 22
+      },
+      {
+        "shape_type": "trapezoid",
+        "type_code": "9",
+        "role": "frame_edge_midpoints",
+        "count": 37
+      },
+      {
+        "shape_type": "triangle",
+        "type_code": "2",
+        "role": "vertices_with_edge_midpoints",
+        "count": 37
+      }
+    ]
+  },
   "attachment_profiles": {
     "kinds": {
       "sticky_note": 3
@@ -1870,5 +2056,41 @@
     "missing_media_examples": [],
     "unlisted_media": 0,
     "unlisted_media_examples": []
+  },
+  "end_tag_profiles": {
+    "parsed_files": 13,
+    "payload_sizes": {
+      "142": 1,
+      "146": 12
+    },
+    "format_versions": {
+      "4000": 9,
+      "5400": 4
+    },
+    "signature_offsets": {
+      "122": 1,
+      "126": 12
+    },
+    "time_relations": {
+      "created_time_a_exact": 10,
+      "created_time_a_millis_close": 3,
+      "created_time_b_exact": 10,
+      "created_time_header_exact": 13,
+      "extra_time_nonzero": 2,
+      "modified_exact": 13
+    },
+    "bad_size": 0,
+    "bad_signature": 0,
+    "modified_mismatches": 0,
+    "modified_mismatch_examples": []
+  },
+  "page_id_info_profiles": {
+    "parsed_files": 13,
+    "records": 48,
+    "bad_size": 0,
+    "tail_hex": {
+      "": 48
+    },
+    "page_hash_sha256_matches": 0
   }
 }

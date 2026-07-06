@@ -95,6 +95,7 @@ Status:
 
 - `pageIdInfo.dat`: `Structural + Semantic`
   - true page order decoded and used by [`container.py`](../pysdocx/container.py)
+  - record layout decoded: document head hash, page count, page UUIDs, per-page opaque hashes
 - `note.note`: `Structural`, partially `Semantic`
   - loaded deterministically
   - typed rich text, tables, top-level metadata, and part of the tail records decoded
@@ -108,13 +109,16 @@ Status:
   - current corpus: 60/60 manifest records point to existing media files and SHA-256 verification passes
 - `media/*`: `Structural`, partially `Semantic`
   - attachments enumerated, raster media recognized, manifest metadata attached where present
-- `end_tag.bin`: `Known but effectively unused`
+- `end_tag.bin`: `Structural + Semantic`
+  - payload size, format version, modified timestamp, creation-time candidates, footer constants, and
+    `"Document for S-Pen SDK"` signature decoded
 
 What is still missing:
 
-- no full semantic decode of `end_tag.bin`
 - no full semantic decode of the raw `note.note` tail fields around pen preload/style/audio metadata
 - no semantic decode of the 11-byte raw per-record tail inside `mediaInfo.dat`
+- no semantic decode of the middle raw fields inside `end_tag.bin`
+- no semantic decode of `pageIdInfo.dat` per-page hash values beyond their record placement
 
 ### 2. Page Header
 
@@ -192,6 +196,29 @@ What is still missing:
 
 - exact semantic of the object-header `flags` u16
 - exact semantic of `ext_block.counter` and `ext_block.seq`
+
+### 4b. Inserted-Object Payload Geometry Wrapper
+
+Status:
+
+- `Structural + Semantic` for wrapper boundaries and point geometry
+- per-shape variant meaning remains partially decoded
+
+Decoded/used:
+
+- wrapper layout: `u32 L0`, `u16 tag=6`, `u32 L1`, geometry opcode `01 00 01 0c`, point count,
+  f64 point pairs
+- current corpus coverage: 412 decoded wrappers (`shape=390`, `image=15`, `text_box=7`)
+- marker equations: image and marker-based shape markers at `total + L0 + 10 == total + L1 + 49`;
+  text-box text marker at `total + L1 + 172`
+- text-box frame geometry now reads from this wrapper first
+- shape wrapper points are classified by role: outline vertices, frame edge-midpoints, star outer
+  vertices, triangle vertices+midpoints, freeform/control points, or arrow shaft endpoints
+
+What is still missing:
+
+- full drawing object payload schema (drawing does not share this wrapper in the current corpus)
+- whether future Samsung Notes shape families introduce additional wrapper point roles
 
 ### 5. Stroke Objects
 
@@ -384,7 +411,6 @@ What is still missing:
 
 ### Largely Ignored / Not Yet First-Class
 
-- `end_tag.bin` semantics
 - most object-header flag meanings
 - most layer/content flag meanings
 - attachment/page linkage for all non-image attachment families
@@ -394,6 +420,8 @@ What is still missing:
 ### Partially Used But Not Fully Explained
 
 - `mediaInfo.dat` per-record raw tail fields
+- `end_tag.bin` middle raw fields and older-sample timestamp unit differences
+- `pageIdInfo.dat` per-page hash semantics
 - shape payload variants
 - drawing payload details
 - text-box inner layout model
