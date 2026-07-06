@@ -6,10 +6,13 @@ findings can be checked from the shell or a notebook before being ported back.
 
 from pysdocx.container import (
     bg_color_from_note,
+    list_end_tag,
     list_attachments,
     list_pages,
     load_bg_color,
+    load_end_tag,
     list_media_info,
+    list_page_id_info,
     load_media_by_index,
     load_media_info,
     load_note,
@@ -18,6 +21,8 @@ from pysdocx.container import (
     load_page_with_bg,
     raster_media_indices,
     parse_media_info,
+    parse_end_tag,
+    parse_page_id_info,
 )
 from pysdocx.note import (
     annotate_note_tail_with_page_id_info,
@@ -60,8 +65,13 @@ __all__ = [
     "load_media_info",
     "parse_media_info",
     "list_media_info",
+    "load_end_tag",
+    "parse_end_tag",
+    "list_end_tag",
     "load_note",
     "load_page_id_info",
+    "parse_page_id_info",
+    "list_page_id_info",
     "raster_media_indices",
     "list_attachments",
     "parse_typed_text",

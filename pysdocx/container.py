@@ -33,9 +33,69 @@ def _page_uuid_order(page_id_info: bytes) -> list[str]:
     """Extract the ordered page-UUID list from pageIdInfo.dat (UTF-16LE UUIDs)."""
     import re
 
+    parsed = parse_page_id_info(page_id_info)
+    if parsed is not None and parsed["records"]:
+        return [record["uuid"] for record in parsed["records"]]
     text = page_id_info.decode("utf-16-le", errors="replace")
     pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     return re.findall(pattern, text)
+
+
+PAGE_ID_INFO_RECORD_SIZE = 0x6A
+PAGE_ID_INFO_UUID_CHARS = 36
+
+
+def parse_page_id_info(data: bytes) -> dict | None:
+    """Parse `pageIdInfo.dat` page order plus opaque page hashes.
+
+    Layout observed corpus-wide:
+    `32-byte document head`, `u16 page_count`, then `page_count` records of 0x6a bytes:
+    `u16(36)`, UTF-16LE page UUID, 32-byte per-page hash. The per-page hashes are stable
+    manifest data but do not match raw SHA-256 of the `.page` members in the current corpus.
+    """
+    if len(data) < 34:
+        return None
+    page_count = struct.unpack_from("<H", data, 0x20)[0]
+    off = 0x22
+    records = []
+    try:
+        for _ in range(page_count):
+            end = off + PAGE_ID_INFO_RECORD_SIZE
+            if end > len(data):
+                return None
+            uuid_chars = struct.unpack_from("<H", data, off)[0]
+            uuid_start = off + 2
+            uuid_end = uuid_start + uuid_chars * 2
+            if uuid_chars != PAGE_ID_INFO_UUID_CHARS or uuid_end + 32 > end:
+                return None
+            uuid = data[uuid_start:uuid_end].decode("utf-16-le")
+            records.append({
+                "off": off,
+                "end": end,
+                "uuid_chars": uuid_chars,
+                "uuid": uuid,
+                "page_hash": data[uuid_end : uuid_end + 32].hex(),
+                "raw_tail_hex": data[uuid_end + 32 : end].hex(),
+            })
+            off = end
+    except (UnicodeDecodeError, struct.error):
+        return None
+    return {
+        "head_hash": data[:0x20].hex(),
+        "page_count": page_count,
+        "records": records,
+        "end": off,
+        "trailing_hex": data[off:].hex(),
+        "valid_size": off == len(data),
+    }
+
+
+def list_page_id_info(path: Path) -> dict | None:
+    """Load and parse `pageIdInfo.dat`."""
+    data = load_page_id_info(path)
+    if data is None:
+        return None
+    return parse_page_id_info(data)
 
 
 def load_page(path: Path, page_filename: str | None = None) -> tuple[str, bytes]:
@@ -59,6 +119,8 @@ def load_media_by_index(path: Path, index: int) -> tuple[str, bytes] | None:
 
 
 MEDIA_INFO_EOF = b"EOFX"
+END_TAG_SIGNATURE = b"Document for S-Pen SDK"
+END_TAG_FOOTER_PATTERN = b"\x02\x00\x00\x00\x02\x00\x00\x00\xff\xff\xff\xff\xff\xff\xff\xff"
 
 
 def load_media_info(path: Path) -> bytes | None:
@@ -165,6 +227,76 @@ def list_media_info(path: Path, verify_hash: bool = False) -> dict | None:
             if name.startswith("media/") and name != "media/mediaInfo.dat" and name not in manifest_names
         )
         return parsed
+
+
+def load_end_tag(path: Path) -> bytes | None:
+    """Read `end_tag.bin`, or None if absent."""
+    with zipfile.ZipFile(path) as z:
+        if "end_tag.bin" not in z.namelist():
+            return None
+        return z.read("end_tag.bin")
+
+
+def parse_end_tag(data: bytes) -> dict | None:
+    """Parse the fixed footer record stored in `end_tag.bin`.
+
+    Stable corpus fields: the first u16 is the byte count after that size field; the next u16 matches
+    note format version; offset +8 is the note modified time; offset +72/+80 are creation-ish time
+    candidates; the tail carries two u32(2), i64(-1), zero padding, then `Document for S-Pen SDK`.
+    """
+    if len(data) < 96:
+        return None
+    signature_off = data.find(END_TAG_SIGNATURE)
+    if signature_off < 0:
+        return None
+    try:
+        payload_size = struct.unpack_from("<H", data, 0)[0]
+        format_version = struct.unpack_from("<H", data, 2)[0]
+        modified_time = struct.unpack_from("<q", data, 8)[0]
+        page_width = struct.unpack_from("<H", data, 22)[0]
+        format_version_dup = struct.unpack_from("<H", data, 42)[0]
+        created_time_header = struct.unpack_from("<q", data, 46)[0]
+        created_time_a = struct.unpack_from("<q", data, 72)[0]
+        created_time_b = struct.unpack_from("<q", data, 80)[0]
+        extra_time_candidate = struct.unpack_from("<q", data, 88)[0]
+    except struct.error:
+        return None
+    footer_off = data.rfind(END_TAG_FOOTER_PATTERN, 0, signature_off)
+    footer_a = footer_b = None
+    footer_sentinel = None
+    if footer_off >= 0:
+        footer_a = struct.unpack_from("<I", data, footer_off)[0]
+        footer_b = struct.unpack_from("<I", data, footer_off + 4)[0]
+        footer_sentinel = struct.unpack_from("<q", data, footer_off + 8)[0]
+    return {
+        "payload_size": payload_size,
+        "format_version": format_version,
+        "format_version_dup": format_version_dup,
+        "modified_time": modified_time,
+        "page_width": page_width,
+        "created_time_header": created_time_header,
+        "created_time_a": created_time_a,
+        "created_time_b": created_time_b,
+        "extra_time_candidate": extra_time_candidate,
+        "footer_u32": [footer_a, footer_b],
+        "footer_sentinel": footer_sentinel,
+        "footer_off": footer_off,
+        "signature_off": signature_off,
+        "signature": data[signature_off:].decode("ascii", errors="replace"),
+        "valid_size": payload_size == len(data) - 2,
+        "valid_signature": data[signature_off:] == END_TAG_SIGNATURE,
+        "raw_mid_hex": data[16:72].hex(),
+        "raw_between_times_and_footer_hex": data[88:max(88, footer_off)].hex() if footer_off >= 0 else data[88:signature_off].hex(),
+        "raw_footer_padding_hex": data[footer_off + 16:signature_off].hex() if footer_off >= 0 else "",
+    }
+
+
+def list_end_tag(path: Path) -> dict | None:
+    """Load and parse `end_tag.bin`."""
+    data = load_end_tag(path)
+    if data is None:
+        return None
+    return parse_end_tag(data)
 
 
 def raster_media_indices(path: Path) -> set[int]:
