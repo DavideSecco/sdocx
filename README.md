@@ -1,111 +1,50 @@
-# sdocx
+# OpenSdocx
 
-[![CI](https://img.shields.io/github/actions/workflow/status/twangodev/sdocx/rust.yml?label=CI)](https://github.com/twangodev/sdocx/actions/workflows/rust.yml)
-[![crates.io (sdocx)](https://img.shields.io/crates/v/sdocx)](https://crates.io/crates/sdocx)
-[![npm](https://img.shields.io/npm/v/@twango/sdocx)](https://www.npmjs.com/package/@twango/sdocx)
-[![docs.rs](https://img.shields.io/docsrs/sdocx)](https://docs.rs/sdocx)
-[![License](https://img.shields.io/crates/l/sdocx)](https://github.com/twangodev/sdocx/blob/main/LICENSE)
+> **Open Samsung Notes, anywhere.**
 
-Reverse-engineered tooling and SDK for converting Samsung Notes (`.sdocx`) files.
+OpenSdocx is a **standalone, multiplatform, open-source desktop app** that opens
+Samsung Notes (`.sdocx`) files — faithfully, without a Samsung device or account,
+and with your files never leaving your computer.
 
-## Installation
+The goal is to be **the standard open-source way to open Samsung Notes**: there is
+no working open-source viewer for these files on the desktop (Linux / Windows /
+macOS), and OpenSdocx aims to fill that gap.
 
-### CLI
+> **Status: in active development.** The app already opens a real `.sdocx` and
+> renders it (strokes, images) with page navigation and document zoom; faithful
+> rendering of every content type (shapes, grid/templates, typed text, tables,
+> sticky notes, audio) plus export and text search are in progress. The living
+> development plan is [`docs/app/README.md`](docs/app/README.md).
 
-```sh
-cargo install sdocx-cli
-```
+## Repository layout
 
-### Library
+- [`opensdocx/`](opensdocx/) — **the OpenSdocx app** (Tauri: a native Rust core +
+  a web UI, one binary per OS).
+- [`crates/`](crates/) — the Rust `.sdocx` parser/renderer the app is built on.
+- [`pysdocx/`](pysdocx/) — Python reference implementation and reverse-engineering
+  workbench; the correctness baseline the app's renderer is checked against.
+- [`docs/format/`](docs/format/) + [`spec/`](spec/) — the reverse-engineered
+  **format knowledge base** (narrative docs + machine-checked Kaitai specs).
+- `samples/` — ground-truth corpus used to validate fidelity.
 
-```sh
-cargo add sdocx
-```
+## Running the app (development)
 
-### npm (WASM)
-
-```sh
-npm install @twango/sdocx
-```
-
-### Docker
-
-```sh
-docker pull ghcr.io/twangodev/sdocx
-```
-
-## CLI Usage
+Requires **Rust**, **Node.js**, and (on Linux) **`webkit2gtk-4.1`** + **`gtk3`**.
 
 ```sh
-sdocx-cli samples/handwritten.sdocx
+npm --prefix opensdocx install        # first time only
+npm --prefix opensdocx run tauri dev  # build + launch the native window
 ```
 
-```
-Page dimensions: 1848 x 7838
-Background: #252525
-1 page(s)
-  Page 0: 1848 x 7838, 2769 strokes, 321776 points, 3 colors, 2769 with pressure
-```
+Then click **Apri .sdocx** and pick a file from `samples/`.
 
-With Docker:
+## Credits
 
-```sh
-docker run --rm -v "$(pwd)":/data ghcr.io/twangodev/sdocx /data/samples/handwritten.sdocx
-```
-
-## Library Usage
-
-```rust
-use sdocx::parse;
-
-fn main() -> sdocx::Result<()> {
-    let doc = parse("notes.sdocx")?;
-
-    println!("{} page(s)", doc.pages.len());
-
-    for page in &doc.pages {
-        for stroke in &page.strokes {
-            println!(
-                "Stroke: {} points, color {:?}, width {}",
-                stroke.points.len(),
-                stroke.color,
-                stroke.pen_width
-            );
-            for point in &stroke.points {
-                println!("  ({}, {})", point.x, point.y);
-            }
-        }
-    }
-
-    Ok(())
-}
-```
-
-## JavaScript Usage
-
-```js
-import init, { parse } from "@twango/sdocx";
-
-await init();
-
-const bytes = new Uint8Array(await file.arrayBuffer());
-const doc = parse(bytes);
-
-for (const page of doc.pages) {
-  for (const stroke of page.strokes) {
-    console.log(`${stroke.points.length} points, color:`, stroke.color);
-  }
-}
-```
-
-## Format Documentation
-
-Samsung Notes `.sdocx` files are ZIP archives containing binary stroke data, metadata, and page definitions. The [`notebooks/`](notebooks/) directory contains Jupyter notebooks that document the reverse-engineering process:
-
-- [`01_container.ipynb`](notebooks/01_container.ipynb) — Archive structure and container parsing
-- [`02_strokes.ipynb`](notebooks/02_strokes.ipynb) — Stroke decoding and coordinate parsing
-- [`03_ink.ipynb`](notebooks/03_ink.ipynb) — Ink color and metadata extraction
+OpenSdocx builds on the Rust `.sdocx` decoder from
+[twangodev/sdocx](https://github.com/twangodev/sdocx) (GPL-3.0), extended here with
+substantial additional reverse-engineering of the format and a new rendering and
+application layer.
 
 ## License
 
-[GPL-3.0](LICENSE)
+[GPL-3.0](LICENSE) — as required by the twangodev/sdocx core it builds on.
