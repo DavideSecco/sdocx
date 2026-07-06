@@ -57,6 +57,14 @@ class InventoryRegressionTest(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            tail["voice_media_links"],
+            {
+                "voice_actual_duration_ms_candidate": 2,
+                "voice_media_index_candidate": 2,
+                "voice_media_time_candidate": 2,
+            },
+        )
+        self.assertEqual(
             tail["page_id_info_relations"],
             {"page_id_head_exact": 10, "page_id_head_shifted_u32_2": 3},
         )
@@ -69,6 +77,65 @@ class InventoryRegressionTest(unittest.TestCase):
         self.assertEqual(media["missing_media"], 0)
         self.assertEqual(media["unlisted_media"], 0)
         self.assertEqual(media["bad_eof"], 0)
+        end_tag = report["end_tag_profiles"]
+        self.assertEqual(end_tag["parsed_files"], 13)
+        self.assertEqual(end_tag["payload_sizes"], {"142": 1, "146": 12})
+        self.assertEqual(end_tag["format_versions"], {"4000": 9, "5400": 4})
+        self.assertEqual(end_tag["signature_offsets"], {"122": 1, "126": 12})
+        self.assertEqual(end_tag["bad_size"], 0)
+        self.assertEqual(end_tag["bad_signature"], 0)
+        self.assertEqual(end_tag["modified_mismatches"], 0)
+        self.assertEqual(
+            end_tag["time_relations"],
+            {
+                "created_time_a_exact": 10,
+                "created_time_a_millis_close": 3,
+                "created_time_b_exact": 10,
+                "created_time_header_exact": 13,
+                "extra_time_nonzero": 2,
+                "modified_exact": 13,
+            },
+        )
+        page_id = report["page_id_info_profiles"]
+        self.assertEqual(page_id["parsed_files"], 13)
+        self.assertEqual(page_id["records"], 48)
+        self.assertEqual(page_id["bad_size"], 0)
+        self.assertEqual(page_id["page_hash_sha256_matches"], 0)
+        geometry = report["payload_geometry_profiles"]
+        self.assertEqual(geometry["count"], 412)
+        self.assertEqual(geometry["by_type"], {"image": 15, "shape": 390, "text_box": 7})
+        self.assertEqual(
+            geometry["point_counts"],
+            {"1": 8, "10": 1, "12": 3, "15": 1, "2": 58, "3": 8, "4": 154, "5": 28, "6": 75, "7": 1, "8": 72, "9": 3},
+        )
+        self.assertEqual(
+            geometry["marker_deltas"],
+            [
+                {"object_type": "image", "marker": "image", "l0_delta": 0, "l1_delta": 0, "count": 15},
+                {"object_type": "shape", "marker": "shape", "l0_delta": 0, "l1_delta": 0, "count": 337},
+                {"object_type": "text_box", "marker": "text", "l0_delta": 123, "l1_delta": 0, "count": 7},
+            ],
+        )
+        self.assertEqual(
+            geometry["shape_roles"],
+            [
+                {"shape_type": "arrow", "type_code": "None", "role": "shaft_endpoints", "count": 53},
+                {"shape_type": "cross", "type_code": "17", "role": "frame_edge_midpoints", "count": 8},
+                {"shape_type": "ellipse", "type_code": "1", "role": "outline_vertices", "count": 71},
+                {"shape_type": "freeform", "type_code": "88", "role": "freeform_vertices", "count": 1},
+                {"shape_type": "freeform", "type_code": "89", "role": "freeform_vertices", "count": 4},
+                {"shape_type": "freeform_smooth", "type_code": "90", "role": "bezier_control_points", "count": 32},
+                {"shape_type": "heart", "type_code": "23", "role": "bezier_control_points", "count": 5},
+                {"shape_type": "hexagon", "type_code": "6", "role": "outline_vertices", "count": 36},
+                {"shape_type": "pentagon", "type_code": "11", "role": "outline_vertices", "count": 6},
+                {"shape_type": "rectangle", "type_code": "4", "role": "frame_edge_midpoints", "count": 48},
+                {"shape_type": "rhombus", "type_code": "8", "role": "outline_vertices", "count": 24},
+                {"shape_type": "rounded_rect", "type_code": "64", "role": "frame_edge_midpoints", "count": 6},
+                {"shape_type": "star", "type_code": "13", "role": "outer_vertices", "count": 22},
+                {"shape_type": "trapezoid", "type_code": "9", "role": "frame_edge_midpoints", "count": 37},
+                {"shape_type": "triangle", "type_code": "2", "role": "vertices_with_edge_midpoints", "count": 37},
+            ],
+        )
 
 
 class TextBoxLayoutRegressionTest(unittest.TestCase):
