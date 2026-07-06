@@ -6,7 +6,8 @@
 - Keep iterating in `pysdocx` first; do not port the rotated text-box behaviour to Rust yet.
 - Current rotated text-box status:
   - Better than the old bbox-only wrap heuristic.
-  - The renderer now uses decoded `frame_midpoints` when available on rotated boxes.
+  - The renderer now uses decoded `frame_midpoints` from the first-class payload geometry wrapper when
+    available on rotated boxes.
   - The 90-degree box in `samples/OnlyTextTypeWritten_squared_260703_013624.sdocx` now preserves the
     GT-like three-column wrap; keep treating it as provisional until more rotated samples exist.
   - Non-vertical rotated boxes use a small renderer-only inner-wrap inset (`18.0`) so the 16-degree
@@ -47,9 +48,16 @@
   - Regenerates the machine-readable coverage/profile inventory from the current sample corpus.
   - Also surfaces conservative raw-tail RE diagnostics for preload preludes, pen-style tail blocks, and
     voice post `u32`/derived `u64` pairs.
+  - Reports `payload_geometry_profiles` for the inserted-object wrapper:
+    shape/image/text-box counts, point-count distribution, centroid checks, marker delta equations, and
+    per-shape geometry roles.
+- `python -m pysdocx objects ... --detail`
+  - Prints decoded `payload_geometry` blocks where present (`L0`, `L1`, point count, marker deltas).
 - `python -m pysdocx media-info <file> [--verify-hash] [--raw-tail]`
   - Prints the decoded `media/mediaInfo.dat` manifest, checks media existence, and can verify SHA-256
     against the archive members.
+- `python -m pysdocx end-tag <file> [--raw]`
+  - Prints the decoded `end_tag.bin` footer fields and the remaining raw middle/padding ranges.
 
 ## Reverse-Engineering Backlog
 
@@ -62,6 +70,8 @@
   - inner padding/insets
   - line direction or text flow orientation
   - per-object text layout metadata beyond style runs
+- Do not spend time rediscovering the wrapper itself: it is now decoded as
+  `obj["payload_geometry"]`, and text-box UTF-16 marker offset is covered by the `L1 + 172` equation.
 - Use the new `--layout-debug` output as the “renderer hypothesis” side-by-side with the raw object offsets.
 
 ## Next Solid Tasks
@@ -81,6 +91,10 @@
   the remaining raw fields to stable names.
 - Treat the 11-byte `mediaInfo.dat` record tail similarly: manifest/index/name/SHA are decoded, while
   `tail_tag` and `time_candidate` remain diagnostics until isolated by new samples.
+- Treat `end_tag.bin` middle fields similarly: size/format/modified/signature/footer constants are
+  decoded, while the central raw region and old-sample timestamp unit differences need isolated samples.
+- Treat current shape payload-geometry roles as corpus-backed, not universal: they cover every current
+  shape sample, but new Samsung shape families may need new role names.
 
 ## Future Sample Campaign
 
