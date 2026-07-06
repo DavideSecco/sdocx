@@ -27,6 +27,7 @@ try:
     from sdocx_note import SdocxNote
     from sdocx_object_header import SdocxObjectHeader
     from sdocx_page import SdocxPage
+    from sdocx_payload_geometry import SdocxPayloadGeometry
     from sdocx_page_id_info import SdocxPageIdInfo
     _KAITAI_AVAILABLE = True
 except ImportError as exc:  # pragma: no cover - environment dependent
@@ -36,6 +37,7 @@ except ImportError as exc:  # pragma: no cover - environment dependent
 from pysdocx.container import parse_end_tag, parse_media_info, parse_page_id_info  # noqa: E402
 from pysdocx.note import parse_note_metadata  # noqa: E402
 from pysdocx.page import (  # noqa: E402
+    _decode_payload_geometry,
     _iter_objects,
     _parse_object_header,
     parse_page,
@@ -163,6 +165,32 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                                 self.assertEqual(
                                     (k.hdr_ext.counter, k.hdr_ext.seq, k.hdr_ext.page_width, k.hdr_ext.page_height),
                                     (ex["counter"], ex["seq"], ex["page_width"], ex["page_height"]), f"{where}: hdr_ext")
+                            checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_payload_geometry(self) -> None:
+        checked = 0
+        for sample in _samples():
+            with zipfile.ZipFile(sample) as z:
+                for name in sorted(n for n in z.namelist() if n.endswith(".page")):
+                    data = z.read(name)
+                    try:
+                        base = parse_page(data)["base"]
+                    except ValueError:
+                        continue
+                    tree = parse_page_tree(data, 0, 0, base)
+                    for layer in tree["layers"]:
+                        for obj in _iter_objects(layer["objects"]):
+                            blob = data[obj["blob_off"]:obj["end"]]
+                            header = _parse_object_header(blob)
+                            ref = _decode_payload_geometry(blob, header)
+                            if ref is None:
+                                continue
+                            k = SdocxPayloadGeometry.from_bytes(blob[header["total_size"]:])
+                            where = f"{sample.name}/{name[:12]} obj@{obj['blob_off']}"
+                            self.assertEqual((k.l0, k.tag, k.l1), (ref["l0"], ref["tag"], ref["l1"]), f"{where}: lengths")
+                            self.assertEqual(k.point_count, ref["point_count"], f"{where}: point_count")
+                            self.assertEqual([(p.x, p.y) for p in k.points], ref["points"], f"{where}: points")
                             checked += 1
         self.assertGreater(checked, 0)
 

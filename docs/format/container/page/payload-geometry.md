@@ -5,6 +5,9 @@ payload — right after the common object header — with a small geometry wrapp
 Decoded corpus-wide (**412/412** wrapper-bearing objects), so it is a first-class
 parser field (`obj["payload_geometry"]`).
 
+- **Formal spec:** [`spec/ksy/sdocx_payload_geometry.ksy`](../../../../spec/ksy/sdocx_payload_geometry.ksy)
+  — fed the payload slice (object blob from `total_size`). Validated against
+  pysdocx on **412/412** wrapper-bearing objects by the test gate.
 - **Reference parser:** `_decode_payload_geometry`, `_shape_payload_geometry_role`
   in [`pysdocx/page.py`](../../../../pysdocx/page.py).
 - **Status:** wrapper layout + point geometry **Decoded**; per-shape point role

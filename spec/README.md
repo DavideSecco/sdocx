@@ -64,3 +64,4 @@ Expected validator output:
 | `note.note` (header) | `ksy/sdocx_note.ksy` | `tools/validate_note.py` | 13/13 ✅ |
 | `<uuid>.page` (header) | `ksy/sdocx_page.ksy` | `tools/validate_page.py` | 48/48 pages ✅ |
 | `.page` object header | `ksy/sdocx_object_header.ksy` | `tools/validate_object_header.py` | 11788/11788 objects ✅ |
+| `.page` payload geometry | `ksy/sdocx_payload_geometry.ksy` | `tools/validate_payload_geometry.py` | 412/412 wrappers ✅ |
