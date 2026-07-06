@@ -60,17 +60,20 @@ Two complementary layers; consult both, don't re-derive from raw bytes:
 
 - **Python env is uv-managed and has no `pip`.** Use `uv pip install <pkg>`.
   Run everything with `.venv/bin/python` (system `python` lacks matplotlib etc.).
-- **pysdocx regression tests** (there is no `pytest` in the venv):
-  `.venv/bin/python -m unittest tests.test_pysdocx_regressions`
+- **Tests** (there is no `pytest` in the venv; use unittest):
+  `.venv/bin/python -m unittest discover -s tests`. This includes
+  `test_kaitai_spec` — the gate that asserts every `spec/ksy/` definition still
+  agrees with `pysdocx` on the corpus (via the vendored `spec/generated/`
+  parsers; needs only the `kaitaistruct` runtime).
 - **pysdocx CLI:** `.venv/bin/python -m pysdocx <cmd> <file>` where `<cmd>` is one
   of `dump stroke-table render text objects inventory media-info end-tag
   page-id-info`. Render/CLI need `.venv/bin/python`.
 - **Rust:** `cargo nextest run --profile ci` (CI) or `cargo test`.
-- **Kaitai validation** (the spec cross-check): install the toolchain once
-  (`npm i kaitai-struct-compiler js-yaml` into a scratch dir; `uv pip install
-  kaitaistruct`), then compile with `spec/tools/compile_ksy.js` and run the
-  `spec/tools/validate_*.py`. Full recipe in `spec/README.md`. Generated parsers
-  are scratch-only; never commit them.
+- **Editing a `.ksy`:** the generated parsers are vendored in `spec/generated/`.
+  After changing a spec, regenerate them (needs the Kaitai compiler:
+  `npm i kaitai-struct-compiler js-yaml` into a scratch dir, then
+  `NODE_PATH=<scratch>/node_modules spec/tools/regenerate.sh`) and re-run
+  `test_kaitai_spec`. Full recipe in `spec/README.md`.
 
 ## Notes
 
