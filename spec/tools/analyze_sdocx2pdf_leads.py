@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT))
 
 from pysdocx.container import list_end_tag, list_media_info, list_pages, load_note, raster_media_indices  # noqa: E402
 from pysdocx.note import _find_text_field, parse_note_metadata, parse_typed_text  # noqa: E402
+from pysdocx.note_doc import find_common_frames  # noqa: E402
 from pysdocx.page import parse_page  # noqa: E402
 
 
@@ -75,6 +76,44 @@ def _common_text_frame_candidates(blob: bytes, text: str) -> list[dict]:
                 "trailing_bytes_in_frame": off + 4 + frame_size - text_end,
             })
     return candidates
+
+
+def _text_box_structural_frame(blob: bytes, text: str, format_version: int) -> dict | None:
+    """The text box's own `text_core::Common` frame, parsed structurally.
+
+    The frame text keeps the trailing empty-paragraph newlines that the marker
+    scan strips, so the match is prefix + trailing-newline-only.
+    """
+    for frame in find_common_frames(blob, format_version):
+        tail = frame["text"][len(text):]
+        if frame["text"].startswith(text) and set(tail) <= {"\n"}:
+            return frame
+    return None
+
+
+def _text_box_span_agreement(frame: dict, text_box: dict) -> bool:
+    """Structural enabled bold/italic/underline spans == the scanned runs.
+
+    Structural spans use raw frame coordinates (trailing newlines included);
+    the scan clamps to the visible text, so rebase before comparing.
+    """
+    visible_len = len(text_box["text"])
+    for span_type, style in ((5, "bold"), (6, "italic"), (7, "underline")):
+        structural = set()
+        for span in frame["spans"]:
+            if span["span_type"] != span_type or not span["extra"].startswith("01"):
+                continue
+            start, end = span["start"], min(span["end"], visible_len)
+            if start < end:
+                structural.add((start, end))
+        scanned = {
+            (run["start"], run["end"])
+            for run in text_box.get("runs", ())
+            if run["style"] == style
+        }
+        if structural != scanned:
+            return False
+    return True
 
 
 def _u32_offsets(blob: bytes, value: int) -> list[int]:
@@ -203,6 +242,9 @@ def collect(paths: list[Path]) -> dict:
         if end_tag_row is not None:
             end_tag_rows.append(end_tag_row)
         note_text_rows.extend(_note_text_rows(path))
+        note = load_note(path)
+        note_meta = parse_note_metadata(note) if note else None
+        format_version = (note_meta or {}).get("format_version", 5400)
         page_object_type_counts = Counter()
         with zipfile.ZipFile(path) as z:
             for page_name in list_pages(path):
@@ -218,6 +260,7 @@ def collect(paths: list[Path]) -> dict:
                         continue
                     blob = data[obj["blob_off"] : obj["end"]]
                     candidates = _common_text_frame_candidates(blob, text_box["text"])
+                    frame = _text_box_structural_frame(blob, text_box["text"], format_version)
                     text_rows.append({
                         "file": path.name,
                         "page": page_name,
@@ -225,6 +268,19 @@ def collect(paths: list[Path]) -> dict:
                         "text_len": len(text_box["text"]),
                         "candidate_count": len(candidates),
                         "candidates": candidates,
+                        "structural_frame_off": frame["off"] if frame else None,
+                        "structural_frame": {
+                            "frame_size": frame["frame_size"],
+                            "trailing_newlines": len(frame["text"]) - len(text_box["text"]),
+                            "spans": len(frame["spans"]),
+                            "paragraphs": len(frame["paragraphs"]),
+                            "margins": frame["margins"],
+                            "gravity": frame["gravity"],
+                            "sections": frame["sections"],
+                        } if frame else None,
+                        "structural_spans_match_scan":
+                            _text_box_span_agreement(frame, text_box) if frame else None,
+                        "angle_deg": text_box.get("angle_deg"),
                     })
                 for kind in ("images", "drawings"):
                     for item in page[kind]:
@@ -278,6 +334,18 @@ def collect(paths: list[Path]) -> dict:
             "note_text_common_frame_hits": sum(1 for row in note_text_rows if row["candidate_count"]),
             "text_boxes": len(text_rows),
             "text_common_frame_hits": sum(1 for row in text_rows if row["candidate_count"]),
+            "text_structural_frames_found": sum(
+                1 for row in text_rows if row["structural_frame_off"] is not None),
+            "text_structural_spans_match": sum(
+                1 for row in text_rows if row["structural_spans_match_scan"]),
+            "text_structural_frame_offs": {
+                f"rotated={rotated}:off={off}": count
+                for (rotated, off), count in Counter(
+                    (row["angle_deg"] not in (None, 0.0), row["structural_frame_off"])
+                    for row in text_rows
+                    if row["structural_frame_off"] is not None
+                ).items()
+            },
             "media_objects": len(media_rows),
             "media_known_ref_u32_hits": sum(1 for row in media_rows if row["known_ref_is_u32"]),
             "media_by_kind": dict(Counter(row["kind"] for row in media_rows)),
@@ -315,7 +383,10 @@ def main() -> int:
     )
     print(
         f"text_core candidates: text_boxes={summary['text_boxes']} "
-        f"common_frame_hits={summary['text_common_frame_hits']}"
+        f"common_frame_hits={summary['text_common_frame_hits']} "
+        f"structural_frames={summary['text_structural_frames_found']} "
+        f"structural_spans_match={summary['text_structural_spans_match']} "
+        f"frame_offs(rotated,off)={summary['text_structural_frame_offs']}"
     )
     print(
         f"media object refs: objects={summary['media_objects']} "

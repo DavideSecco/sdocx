@@ -62,7 +62,7 @@ we copy logic closely, add MIT attribution.
 
 | Surface | Verdict | Why |
 |---|---|---|
-| `text` / `text_core` | **PROMOSSO (note-level)** | Their `Common` frame (text, spans, paragraphs, margins, gravity, sections, inline objects) is now decoded and validated corpus-wide for note title/body + table cells (`pysdocx/note_doc.py`, `docs/format/container/note-note/typed-text.md`). Page text boxes remain a separate variant (frame visible on only 2/8 blobs). |
+| `text` / `text_core` | **PROMOSSO (note-level)** | Their `Common` frame (text, spans, paragraphs, margins, gravity, sections, inline objects) is now decoded and validated corpus-wide for note title/body + table cells (`pysdocx/note_doc.py`, `docs/format/container/note-note/typed-text.md`). Page text boxes carry the same frame at blob offset 386 (406 when rotated): structural parse + span agreement 8/8 (`docs/format/container/page/object-types.md`). |
 | `shape` | **NUOVO** | They model formal shape/type/fill/template/control-point fields and a much broader shape enum; we decode rendered outline well but not full payload schema. |
 | `shape_base` / `line` | **NUOVO** | They decode line colour/style effects, caps, joins, arrows, connection points, slave UUIDs; we infer arrow/line geometry from markers. |
 | `painting` / drawing | **NUOVO** | They decode object type 14 as attached file, thumbnail, ratio, crop/original rect; we scan media index/hash/bbox. |
@@ -115,8 +115,12 @@ here: the inline-object tail (`u32 position` = U+FFFC anchor index + 8 unknown
 bytes) and paragraph types 8/9/10 (space-before/after, style) missing from
 their enum.
 
-Next step (still open): page text boxes expose the frame on only 2/8 blobs at
-the raw blob level — find the wrapper variant, then reuse `parse_common_frame`.
+Page text boxes are promoted too: the same frame parses structurally on 8/8
+text-box blobs (the old 2/8 figure was an artifact of demanding an exact text
+match — the frame keeps trailing empty-paragraph newlines the scan strips) at
+blob offset 386, or 406 on rotated boxes, with enabled bold/italic/underline
+spans equal to the scanned runs and stored inner margins `[8, 4, 8, 4]`.
+Remaining: the wrapper bytes before the frame and the 48-byte post-frame tail.
 
 ### Shape / shape payload — NUOVO
 
@@ -437,8 +441,8 @@ tail-record scans map one-for-one onto flex fields
 
 1. ~~Note-level `text_core::Common` payload parsing~~ — **done** (promoted
    with the full sequential `note_doc` schema, 2026-07-08).
-2. Page text-box `Common` variant: find the wrapper offset so the promoted
-   frame parser also covers the 6/8 text-box blobs that hide it.
+2. ~~Page text-box `Common` variant~~ — **done** (frame at 386/406, 8/8
+   structural + span agreement, 2026-07-08).
 3. `Image` / `Painting` flex-field alignment, because media refs are confirmed
    as `u32` on 60/60 objects but crop/original/thumbnail fields are not isolated.
 4. Targeted audio-object samples, because current voice clips link to `.m4a`

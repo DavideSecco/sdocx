@@ -55,13 +55,26 @@ type-specific.
   rotation angle, and `frame_midpoints` for rotated boxes (from the
   [payload-geometry wrapper](./payload-geometry.md), text marker at
   `total + L1 + 172`).
+- **Decoded — the box's `text_core::Common` frame (8/8):** every text-box blob
+  carries the same rich-text frame as the note body
+  ([typed-text](../note-note/typed-text.md#the-text_corecommon-frame--decoded)),
+  parsed structurally by `pysdocx.note_doc.find_common_frames` and
+  cross-checked by `spec/tools/analyze_sdocx2pdf_leads.py`: the frame text is
+  the scanned text plus its trailing empty-paragraph newlines, and the
+  enabled bold/italic/underline spans equal the scanned runs on 8/8 boxes.
+  The frame sits at blob offset **386** on every non-rotated box and **406**
+  on every rotated one (the 20 extra bytes appear earlier in the wrapper —
+  rotation-related fields, shifting the payload-geometry block by the same
+  amount). Frame margins are `[8, 4, 8, 4]` (left/top/right/bottom) on 8/8 —
+  the box's stored inner text padding; gravity is 0 (top). After the frame,
+  a fixed 48-byte tail: 16 structured bytes + what looks like a 32-byte
+  object hash (Unknown).
 - **Heuristic (not format):** how a rotated box wraps its text — the 90° and 16°
-  boxes are laid out with a calibrated inner-wrap inset, not a decoded padding
-  field. See [`../../heuristics.md`](../../heuristics.md) and `future_todo.md`.
-- `sdocx2pdf`'s `text_core::Common` frame is visible in 1/7 current text-box
-  blobs (`[u32 frame_size][u32 char_count][UTF-16 text]` matching our text
-  extraction). The other 6/7 text boxes do not expose that simple frame at the
-  same level, so `Common` is a useful lead but not yet promoted here.
+  boxes are laid out with a calibrated inner-wrap inset, not the decoded
+  `[8, 4, 8, 4]` margins above (the renderer has not been reconciled with them
+  yet). See [`../../heuristics.md`](../../heuristics.md) and `future_todo.md`.
+- Unknown: the Text/Shape wrapper fields before the frame (incl. the 20-byte
+  rotated-box extra), and the 48-byte post-frame tail.
 
 ## Attachments on a page — Marker / Inferred
 

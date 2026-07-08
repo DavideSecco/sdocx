@@ -151,10 +151,13 @@ inner schema remain procedural.
 
 ## Next tasks
 
-- **Page text-box `text_core::Common` variant:** the note-level Common frame
-  is fully decoded; page text-box blobs expose the same frame on only 2/8 at
-  the raw blob level. Find the wrapper offset/variant (likely the same
-  Text/Shape wrapper with extra fields) and reuse `parse_common_frame`.
+- **Page text-box `text_core::Common`: DONE (2026-07-08).** The frame parses
+  structurally on 8/8 text-box blobs at offset 386 (406 on rotated boxes —
+  the 20 extra bytes are rotation-related wrapper fields), spans equal the
+  scanned runs, stored inner margins are `[8,4,8,4]`. The old 2/8 figure was
+  an exact-text-match artifact (the frame keeps trailing newlines).
+  Follow-up: reconcile the renderer's rotated-wrap inset heuristic with the
+  decoded margins; decode the wrapper prefix + 48-byte post-frame tail.
 - **Type-22 table inline object schema:** cells are nested Common frames; the
   surrounding block schema (cell records `06 00 <kind>`, f64 anchors, borders,
   widths, the trailing `(3,2)` pair) is the next bounded target — 2 corpus

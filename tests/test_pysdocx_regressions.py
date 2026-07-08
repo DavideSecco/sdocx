@@ -42,6 +42,12 @@ class InventoryRegressionTest(unittest.TestCase):
         self.assertEqual(summary["note_text_common_frame_hits"], 20)
         self.assertEqual(summary["text_boxes"], 8)
         self.assertEqual(summary["text_common_frame_hits"], 2)
+        self.assertEqual(summary["text_structural_frames_found"], 8)
+        self.assertEqual(summary["text_structural_spans_match"], 8)
+        self.assertEqual(
+            summary["text_structural_frame_offs"],
+            {"rotated=False:off=386": 4, "rotated=True:off=406": 4},
+        )
         self.assertEqual(summary["media_objects"], 59)
         self.assertEqual(summary["media_known_ref_u32_hits"], 59)
         self.assertEqual(summary["media_by_kind"], {"image": 58, "painting": 1})

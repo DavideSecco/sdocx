@@ -68,8 +68,12 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   crop rect, and original rect; our diagnostic confirms the known media ref as a
   `u32` on the only corpus drawing object, but a larger corpus is needed before
   promoting the rest.
-- **Text-box `text_core::Common`:** a Common-like length frame is visible on 1/7
-  text-box blobs only; the other text boxes still rely on marker scans.
+- **Text-box wrapper residue:** the box's `text_core::Common` frame is now
+  decoded on 8/8 blobs (offset 386 non-rotated / 406 rotated, margins
+  `[8,4,8,4]`, spans equal to the scans); what remains Unknown is the
+  Text/Shape wrapper bytes before the frame (incl. the rotated boxes'
+  20-byte extra) and the fixed 48-byte post-frame tail (16 structured bytes +
+  a 32-byte hash-like value).
 - **Attachment placement:** structural page-object model when the object tree is
   empty (sticky/audio pages); recursive decode of nested sticky-note `.sdocx`.
 - **Layer/content flags:** full semantics of all layer `content_flags` and
