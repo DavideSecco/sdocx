@@ -523,7 +523,7 @@ def cmd_media_info(args: argparse.Namespace) -> None:
         print("mediaInfo: none")
         return
     print(
-        f"mediaInfo magic=0x{media['magic']:x} count={media['count']} "
+        f"mediaInfo format_version={media['format_version']} count={media['count']} "
         f"eof={media['eof']!r} valid_eof={media['valid_eof']}"
     )
     for record in media["records"]:
@@ -535,8 +535,8 @@ def cmd_media_info(args: argparse.Namespace) -> None:
         print(
             f"  [{record['media_index']:>2}] off=0x{record['off']:x} size={record['payload_size']:<3} "
             f"exists={record['exists']} index_name={record['index_matches_name']} "
-            f"zip_size={record.get('zip_size')} tail_tag={record.get('tail_tag')} "
-            f"time_candidate={record.get('time_candidate')} marker={record.get('tail_marker')} "
+            f"zip_size={record.get('zip_size')} ref_count={record.get('ref_count')} "
+            f"modified_time={record.get('modified_time')} is_attached={record.get('is_attached')} "
             f"sha256={sha_part}{hash_part} name={record['name']!r}"
         )
         if args.raw_tail:
@@ -573,16 +573,24 @@ def cmd_end_tag(args: argparse.Namespace) -> None:
         return
     print(
         f"end_tag size={end_tag['payload_size']} valid_size={end_tag['valid_size']} "
-        f"fmt={end_tag['format_version']} fmt_dup={end_tag['format_version_dup']} "
-        f"modified={end_tag['modified_time']} page_width={end_tag['page_width']} "
-        f"doc_height={end_tag['document_height']:.1f} "
+        f"fmt={end_tag['format_version']} min_fmt={end_tag['min_format_version']} "
+        f"modified={end_tag['modified_time']} note_width={end_tag['note_width']} "
+        f"note_height={end_tag['note_height']:.1f} page_model={end_tag['page_model']} "
         f"signature_off={end_tag['signature_off']} valid_signature={end_tag['valid_signature']}"
     )
     print(
-        f"  created_header={end_tag['created_time_header']} "
-        f"created_a={end_tag['created_time_a']} created_b={end_tag['created_time_b']} "
-        f"extra_time={end_tag['extra_time_candidate']} footer_u32={end_tag['footer_u32']} "
-        f"footer_sentinel={end_tag['footer_sentinel']} signature={end_tag['signature']!r}"
+        f"  created={end_tag['created_time_header']} "
+        f"display_created={end_tag['display_created_time']} "
+        f"display_modified={end_tag['display_modified_time']} "
+        f"last_recognised={end_tag['last_recognised_data_modified_time']} "
+        f"text_dir={end_tag['fixed_text_direction']} bg_theme={end_tag['fixed_background_theme']} "
+        f"orientation={end_tag['new_orientation']} signature={end_tag['signature']!r}"
+    )
+    print(
+        f"  app={end_tag['app_name']!r} version="
+        f"{end_tag['app_version_major']}.{end_tag['app_version_minor']}:{end_tag['app_version_patch_name']!r} "
+        f"cover={end_tag['cover_image']!r} owner={end_tag['owner_id']!r} "
+        f"custom={end_tag['app_custom_data']!r}"
     )
     if args.raw:
         print(f"  raw_mid={end_tag['raw_mid_hex']}")
@@ -729,13 +737,17 @@ def cmd_inventory(args: argparse.Namespace) -> None:
         f"sha_mismatches={media.get('sha_mismatches', 0)} missing_media={media.get('missing_media', 0)} "
         f"unlisted_media={media.get('unlisted_media', 0)} bad_eof={media.get('bad_eof', 0)}"
     )
-    if media.get("magic"):
-        print("mediaInfo magic:")
-        for key, count in sorted(media["magic"].items()):
+    if media.get("format_versions"):
+        print("mediaInfo format versions:")
+        for key, count in sorted(media["format_versions"].items()):
             print(f"  {key:<8} count={count}")
-    if media.get("tail_tags"):
-        print("mediaInfo tail tags:")
-        for key, count in sorted(media["tail_tags"].items()):
+    if media.get("ref_counts"):
+        print("mediaInfo ref counts:")
+        for key, count in sorted(media["ref_counts"].items()):
+            print(f"  {key:<8} count={count}")
+    if media.get("is_attached"):
+        print("mediaInfo attached flags:")
+        for key, count in sorted(media["is_attached"].items()):
             print(f"  {key:<8} count={count}")
     end_tag = report.get("end_tag_profiles") or {}
     print(

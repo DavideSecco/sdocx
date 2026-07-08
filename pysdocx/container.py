@@ -135,14 +135,14 @@ def parse_media_info(data: bytes) -> dict | None:
     """Parse Samsung's media manifest.
 
     The manifest is:
-    `[u32 magic][u16 count]` followed by `count` records and the ASCII trailer `EOFX`.
+    `[u32 format_version][u16 count]` followed by `count` records and the ASCII trailer `EOFX`.
     Each record starts with `u32 payload_size`, where the payload excludes that size field:
-    `[u32 media_index][u16 filename_chars][UTF-16LE filename][64 ASCII SHA-256 hex][raw tail]`.
+    `[u32 media_index][u16 filename_chars][UTF-16LE filename][64 ASCII SHA-256 hex][tail]`.
     The filename already includes the `<index>@...` prefix used under `media/`.
     """
     if len(data) < 10:
         return None
-    magic = struct.unpack_from("<I", data, 0)[0]
+    format_version = struct.unpack_from("<I", data, 0)[0]
     count = struct.unpack_from("<H", data, 4)[0]
     off = 6
     records = []
@@ -164,13 +164,13 @@ def parse_media_info(data: bytes) -> dict | None:
             name = data[name_start:name_end].decode("utf-16-le")
             sha256 = data[name_end:digest_end].decode("ascii")
             raw_tail = data[digest_end:end]
-            tail_tag = struct.unpack_from("<H", raw_tail, 0)[0] if len(raw_tail) >= 2 else None
-            time_candidate = (
+            ref_count = struct.unpack_from("<H", raw_tail, 0)[0] if len(raw_tail) >= 2 else None
+            modified_time = (
                 struct.unpack_from("<Q", raw_tail, 2)[0]
                 if len(raw_tail) >= 10
                 else None
             )
-            tail_marker = raw_tail[10] if len(raw_tail) >= 11 else None
+            is_attached = bool(raw_tail[10]) if len(raw_tail) >= 11 else None
             records.append({
                 "off": off,
                 "end": end,
@@ -181,16 +181,22 @@ def parse_media_info(data: bytes) -> dict | None:
                 "name_chars": name_chars,
                 "sha256": sha256,
                 "raw_tail": raw_tail.hex(),
-                "tail_tag": tail_tag,
-                "time_candidate": time_candidate,
-                "tail_marker": tail_marker,
+                "ref_count": ref_count,
+                "modified_time": modified_time,
+                "is_attached": is_attached,
+                # Back-compat aliases for older diagnostics and tests.
+                "tail_tag": ref_count,
+                "time_candidate": modified_time,
+                "tail_marker": int(is_attached) if is_attached is not None else None,
             })
             off = end
     except (UnicodeDecodeError, struct.error):
         return None
 
     return {
-        "magic": magic,
+        "format_version": format_version,
+        # Back-compat alias for older diagnostics and tests.
+        "magic": format_version,
         "count": count,
         "records": records,
         "eof_off": off,
@@ -237,12 +243,41 @@ def load_end_tag(path: Path) -> bytes | None:
         return z.read("end_tag.bin")
 
 
+def _read_short_u16_string(data: bytes, off: int) -> tuple[str, int] | None:
+    if off + 2 > len(data):
+        return None
+    n_chars = struct.unpack_from("<H", data, off)[0]
+    start = off + 2
+    end = start + n_chars * 2
+    if end > len(data):
+        return None
+    try:
+        return data[start:end].decode("utf-16-le"), end
+    except UnicodeDecodeError:
+        return None
+
+
+def _read_long_u16_string_before(data: bytes, off: int, limit: int) -> tuple[str, int] | None:
+    if off + 4 > limit:
+        return None
+    n_chars = struct.unpack_from("<I", data, off)[0]
+    start = off + 4
+    end = start + n_chars * 2
+    if end > limit:
+        return None
+    try:
+        return data[start:end].decode("utf-16-le"), end
+    except UnicodeDecodeError:
+        return None
+
+
 def parse_end_tag(data: bytes) -> dict | None:
     """Parse the fixed footer record stored in `end_tag.bin`.
 
-    Stable corpus fields: the first u16 is the byte count after that size field; the next u16 matches
-    note format version; offset +8 is the note modified time; offset +72/+80 are creation-ish time
-    candidates; the tail carries two u32(2), i64(-1), zero padding, then `Document for S-Pen SDK`.
+    Stable corpus fields: the first u16 is the byte count after that size field; the next u32
+    matches note format version; offset +8 is the note modified time; the tail carries the SDK
+    display timestamps, fixed text/theme settings, server checkpoint, orientation, optional custom
+    data, then `Document for S-Pen SDK`.
     """
     if len(data) < 96:
         return None
@@ -251,15 +286,66 @@ def parse_end_tag(data: bytes) -> dict | None:
         return None
     try:
         payload_size = struct.unpack_from("<H", data, 0)[0]
-        format_version = struct.unpack_from("<H", data, 2)[0]
+        format_version = struct.unpack_from("<I", data, 2)[0]
+        note_uuid_result = _read_short_u16_string(data, 6)
+        if note_uuid_result is None:
+            return None
+        note_uuid, off = note_uuid_result
         modified_time = struct.unpack_from("<q", data, 8)[0]
+        property_flags = struct.unpack_from("<I", data, 16)[0]
+        cover_image_result = _read_short_u16_string(data, 20)
+        if cover_image_result is None:
+            return None
+        cover_image, off = cover_image_result
         page_width = struct.unpack_from("<H", data, 22)[0]
+        note_width = struct.unpack_from("<I", data, 22)[0]
         document_height = struct.unpack_from("<f", data, 26)[0]
-        format_version_dup = struct.unpack_from("<H", data, 42)[0]
+        app_name_result = _read_short_u16_string(data, 30)
+        if app_name_result is None:
+            return None
+        app_name, off = app_name_result
+        app_version_major = struct.unpack_from("<I", data, off)[0]
+        app_version_minor = struct.unpack_from("<I", data, off + 4)[0]
+        patch_name_result = _read_short_u16_string(data, off + 8)
+        if patch_name_result is None:
+            return None
+        app_version_patch_name, off = patch_name_result
+        min_format_version = struct.unpack_from("<I", data, off)[0]
+        format_version_dup = min_format_version
+        off += 4
         created_time_header = struct.unpack_from("<q", data, 46)[0]
-        created_time_a = struct.unpack_from("<q", data, 72)[0]
-        created_time_b = struct.unpack_from("<q", data, 80)[0]
-        extra_time_candidate = struct.unpack_from("<q", data, 88)[0]
+        off += 8
+        last_viewed_page_index = struct.unpack_from("<I", data, off)[0]
+        page_model = struct.unpack_from("<H", data, off + 4)[0]
+        document_type = struct.unpack_from("<H", data, off + 6)[0]
+        owner_id_result = _read_short_u16_string(data, off + 8)
+        if owner_id_result is None:
+            return None
+        owner_id, off = owner_id_result
+        skipped_size = struct.unpack_from("<I", data, off)[0]
+        off += 4 + skipped_size
+        encryption_data_size = struct.unpack_from("<I", data, off)[0]
+        off += 4 + encryption_data_size
+        display_created_time = struct.unpack_from("<q", data, off)[0]
+        display_modified_time = struct.unpack_from("<q", data, off + 8)[0]
+        last_recognised_data_modified_time = struct.unpack_from("<q", data, off + 16)[0]
+        off += 24
+        fixed_font_result = _read_short_u16_string(data, off)
+        if fixed_font_result is None:
+            return None
+        fixed_font, off = fixed_font_result
+        fixed_text_direction = struct.unpack_from("<I", data, off)[0]
+        fixed_background_theme = struct.unpack_from("<I", data, off + 4)[0]
+        server_checkpoint = struct.unpack_from("<q", data, off + 8)[0]
+        new_orientation = struct.unpack_from("<I", data, off + 16)[0]
+        min_unknown_version = struct.unpack_from("<I", data, off + 20)[0]
+        off += 24
+        app_custom_data = ""
+        if off < signature_off:
+            custom_result = _read_long_u16_string_before(data, off, signature_off)
+            if custom_result is None:
+                return None
+            app_custom_data, off = custom_result
     except struct.error:
         return None
     footer_off = data.rfind(END_TAG_FOOTER_PATTERN, 0, signature_off)
@@ -272,14 +358,43 @@ def parse_end_tag(data: bytes) -> dict | None:
     return {
         "payload_size": payload_size,
         "format_version": format_version,
+        "note_uuid": note_uuid,
+        "property_flags": property_flags,
+        "is_landscape": bool(property_flags & 0x2),
+        "cover_image": cover_image,
         "format_version_dup": format_version_dup,
         "modified_time": modified_time,
+        "note_width": note_width,
         "page_width": page_width,
         "document_height": document_height,
+        "note_height": document_height,
+        "app_name": app_name,
+        "app_version_major": app_version_major,
+        "app_version_minor": app_version_minor,
+        "app_version_patch_name": app_version_patch_name,
+        "min_format_version": min_format_version,
         "created_time_header": created_time_header,
-        "created_time_a": created_time_a,
-        "created_time_b": created_time_b,
-        "extra_time_candidate": extra_time_candidate,
+        "last_viewed_page_index": last_viewed_page_index,
+        "page_model": page_model,
+        "document_type": document_type,
+        "owner_id": owner_id,
+        "skipped_size": skipped_size,
+        "encryption_data_size": encryption_data_size,
+        "display_created_time": display_created_time,
+        "display_modified_time": display_modified_time,
+        "last_recognised_data_modified_time": last_recognised_data_modified_time,
+        # Back-compat aliases for older diagnostics and tests.
+        "created_time_a": display_created_time,
+        "created_time_b": display_modified_time,
+        "extra_time_candidate": last_recognised_data_modified_time,
+        "fixed_font": fixed_font,
+        "fixed_text_direction": fixed_text_direction,
+        "fixed_background_theme": fixed_background_theme,
+        "server_checkpoint": server_checkpoint,
+        "new_orientation": new_orientation,
+        "min_unknown_version": min_unknown_version,
+        "app_custom_data": app_custom_data,
+        "sdk_struct_end_off": off,
         "footer_u32": [footer_a, footer_b],
         "footer_sentinel": footer_sentinel,
         "footer_off": footer_off,
@@ -368,8 +483,8 @@ def list_attachments(path: Path) -> list[dict]:
                 "kind": kind,
                 "size": info.file_size,
                 "sha256": manifest.get("sha256"),
-                "media_info_tail_tag": manifest.get("tail_tag"),
-                "media_info_time_candidate": manifest.get("time_candidate"),
+                "media_info_ref_count": manifest.get("ref_count"),
+                "media_info_modified_time": manifest.get("modified_time"),
             })
     return attachments
 

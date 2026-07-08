@@ -30,6 +30,7 @@ todo checked state. Confirmed on samples/OnlyTextTypeWritten_260701_180427.sdocx
 kind 8=bullet, kind 2=todo; tag 0x03=alignment, tag 0x02=indent, tag 0x0a=heading/body style.
 """
 
+import hashlib
 import re
 import struct
 
@@ -860,6 +861,8 @@ def parse_note_metadata(note_bytes: bytes) -> dict | None:
         if title_size is not None and 0 < title_size <= len(note_bytes) - pos:
             title = _extract_title_from_blob(note_bytes[pos : pos + title_size])
 
+        trailing_hash = note_bytes[-32:] if len(note_bytes) >= 32 else b""
+        calculated_trailing_hash = hashlib.sha256(note_bytes[:-32]).digest() if len(note_bytes) >= 32 else b""
         tail_records = scan_note_tail_records(note_bytes, offset_to_data)
         return {
             "offset_to_data": offset_to_data,
@@ -878,6 +881,9 @@ def parse_note_metadata(note_bytes: bytes) -> dict | None:
             "title_size": title_size,
             "title_off": title_off,
             "title": title,
+            "trailing_hash": trailing_hash.hex(),
+            "trailing_hash_algorithm": "sha256(note.note[:-32])",
+            "trailing_hash_matches_sha256_prefix": calculated_trailing_hash == trailing_hash,
             "voice_clips": _scan_voice_clip_metadata(note_bytes),
             "tail_records": tail_records,
         }

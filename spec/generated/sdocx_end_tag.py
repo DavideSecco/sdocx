@@ -9,18 +9,13 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class SdocxEndTag(KaitaiStruct):
-    """The `end_tag.bin` member of a Samsung Notes `.sdocx` archive: a fixed-shape
-    footer record that closes the document. Two size families are seen in the
-    corpus: a 148-byte footer (payload_size = 146) on newer notes, and a
-    144-byte footer (payload_size = 142) on `handwritten.sdocx`.
-
-    Only the byte ranges named below are decoded with zero counterexamples across
-    the 13-sample corpus. The gaps between them (documented as `*_raw` islands in
-    the companion Markdown) are structurally bounded but not yet semantically
-    named, so they are deliberately left unmodeled here rather than given
-    speculative field names. The trailing footer constants and the ASCII
-    signature are located from the end of the stream so both size families parse
-    with one definition.
+    """The `end_tag.bin` member of a Samsung Notes `.sdocx` archive: a sequential
+    S Pen SDK document footer. The field names are independently cross-checked
+    against `sdocx2pdf` and validated on the 13-sample corpus. Two size families
+    are seen: a 148-byte footer (payload_size = 146) on newer notes, and a
+    144-byte footer (payload_size = 142) on `handwritten.sdocx`; the shorter
+    legacy footer omits the zero-length `app_custom_data` field before the
+    signature.
     """
     def __init__(self, _io, _parent=None, _root=None):
         super(SdocxEndTag, self).__init__(_io)
@@ -30,27 +25,66 @@ class SdocxEndTag(KaitaiStruct):
 
     def _read(self):
         self.payload_size = self._io.read_u2le()
-        self.format_version = self._io.read_u2le()
-        self.reserved_at_4 = self._io.read_u4le()
+        self.format_version = self._io.read_u4le()
+        self.note_uuid_len = self._io.read_u2le()
+        self.note_uuid = (self._io.read_bytes(self.note_uuid_len * 2)).decode(u"UTF-16LE")
         self.modified_time = self._io.read_s8le()
+        self.property_flags = self._io.read_u4le()
+        self.cover_image_len = self._io.read_u2le()
+        self.cover_image = (self._io.read_bytes(self.cover_image_len * 2)).decode(u"UTF-16LE")
+        self.note_width = self._io.read_u4le()
+        self.document_height = self._io.read_f4le()
+        self.app_name_len = self._io.read_u2le()
+        self.app_name = (self._io.read_bytes(self.app_name_len * 2)).decode(u"UTF-16LE")
+        self.app_version_major = self._io.read_u4le()
+        self.app_version_minor = self._io.read_u4le()
+        self.app_version_patch_name_len = self._io.read_u2le()
+        self.app_version_patch_name = (self._io.read_bytes(self.app_version_patch_name_len * 2)).decode(u"UTF-16LE")
+        self.min_format_version = self._io.read_u4le()
+        self.created_time_header = self._io.read_s8le()
+        self.last_viewed_page_index = self._io.read_u4le()
+        self.page_model = self._io.read_u2le()
+        self.document_type = self._io.read_u2le()
+        self.owner_id_len = self._io.read_u2le()
+        self.owner_id = (self._io.read_bytes(self.owner_id_len * 2)).decode(u"UTF-16LE")
+        self.skipped_size = self._io.read_u4le()
+        self.skipped_data = self._io.read_bytes(self.skipped_size)
+        self.encryption_data_size = self._io.read_u4le()
+        self.encryption_data = self._io.read_bytes(self.encryption_data_size)
+        self.display_created_time = self._io.read_s8le()
+        self.display_modified_time = self._io.read_s8le()
+        self.last_recognised_data_modified_time = self._io.read_s8le()
+        self.fixed_font_len = self._io.read_u2le()
+        self.fixed_font = (self._io.read_bytes(self.fixed_font_len * 2)).decode(u"UTF-16LE")
+        self.fixed_text_direction = self._io.read_u4le()
+        self.fixed_background_theme = self._io.read_u4le()
+        self.server_checkpoint = self._io.read_s8le()
+        self.new_orientation = self._io.read_u4le()
+        self.min_unknown_version = self._io.read_u4le()
+        if self._io.pos() < self._io.size() - 22:
+            pass
+            self.app_custom_data_len = self._io.read_u4le()
+
+        if self._io.pos() < self._io.size() - 22:
+            pass
+            self.app_custom_data = (self._io.read_bytes(self.app_custom_data_len * 2)).decode(u"UTF-16LE")
+
 
 
     def _fetch_instances(self):
         pass
+        if self._io.pos() < self._io.size() - 22:
+            pass
+
+        if self._io.pos() < self._io.size() - 22:
+            pass
+
         _ = self.created_time_a
         if hasattr(self, '_m_created_time_a'):
             pass
 
         _ = self.created_time_b
         if hasattr(self, '_m_created_time_b'):
-            pass
-
-        _ = self.created_time_header
-        if hasattr(self, '_m_created_time_header'):
-            pass
-
-        _ = self.document_height
-        if hasattr(self, '_m_document_height'):
             pass
 
         _ = self.extra_time_candidate
@@ -72,9 +106,7 @@ class SdocxEndTag(KaitaiStruct):
 
     @property
     def created_time_a(self):
-        """Creation-time candidate. Exact note created_time on the 10 newer samples;
-        a millisecond-close value on the 3 older imported samples.
-        """
+        """Back-compat alias for display_created_time."""
         if hasattr(self, '_m_created_time_a'):
             return self._m_created_time_a
 
@@ -86,9 +118,7 @@ class SdocxEndTag(KaitaiStruct):
 
     @property
     def created_time_b(self):
-        """Second creation-time candidate; identical to created_time_a on the 10
-        newer samples, a different ms-like time on the older imports.
-        """
+        """Back-compat alias for display_modified_time."""
         if hasattr(self, '_m_created_time_b'):
             return self._m_created_time_b
 
@@ -99,32 +129,8 @@ class SdocxEndTag(KaitaiStruct):
         return getattr(self, '_m_created_time_b', None)
 
     @property
-    def created_time_header(self):
-        """Creation-time candidate carried in the header region."""
-        if hasattr(self, '_m_created_time_header'):
-            return self._m_created_time_header
-
-        _pos = self._io.pos()
-        self._io.seek(46)
-        self._m_created_time_header = self._io.read_s8le()
-        self._io.seek(_pos)
-        return getattr(self, '_m_created_time_header', None)
-
-    @property
-    def document_height(self):
-        """Document/note height; equals note.note height on the current corpus."""
-        if hasattr(self, '_m_document_height'):
-            return self._m_document_height
-
-        _pos = self._io.pos()
-        self._io.seek(26)
-        self._m_document_height = self._io.read_f4le()
-        self._io.seek(_pos)
-        return getattr(self, '_m_document_height', None)
-
-    @property
     def extra_time_candidate(self):
-        """Additional timestamp-like value; non-zero on only 2 samples."""
+        """Back-compat alias for last_recognised_data_modified_time."""
         if hasattr(self, '_m_extra_time_candidate'):
             return self._m_extra_time_candidate
 
@@ -136,19 +142,19 @@ class SdocxEndTag(KaitaiStruct):
 
     @property
     def format_version_dup(self):
-        """Duplicate of format_version; equal to it on every sample."""
+        """Back-compat alias for min_format_version."""
         if hasattr(self, '_m_format_version_dup'):
             return self._m_format_version_dup
 
         _pos = self._io.pos()
         self._io.seek(42)
-        self._m_format_version_dup = self._io.read_u2le()
+        self._m_format_version_dup = self._io.read_u4le()
         self._io.seek(_pos)
         return getattr(self, '_m_format_version_dup', None)
 
     @property
     def page_width(self):
-        """Page width; equals the page header width on the current corpus."""
+        """Low 16 bits of note_width; equals the page header width on the current corpus."""
         if hasattr(self, '_m_page_width'):
             return self._m_page_width
 

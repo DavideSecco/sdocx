@@ -28,22 +28,50 @@ COVERAGE_MATRIX = [
             "title",
             "voice_clip_labels_durations",
             "tail_record_boundaries",
+            "trailing_sha256_hash",
             "pen_preload_paths",
             "tail_hash_page_id_info_relation",
         ],
-        "unknown": ["full_note_note_schema", "raw_tail_record_field_semantics", "remaining_metadata_flags"],
+        "unknown": ["full_note_note_schema", "tail_record_prefix_u32_semantics", "remaining_metadata_flags"],
     },
     {
         "surface": "zip_container.mediaInfo.dat",
         "status": ["Structural", "Semantic"],
-        "decoded": ["manifest_records", "media_index", "filename", "sha256", "eof_marker"],
-        "unknown": ["manifest_tail_field_semantics"],
+        "decoded": [
+            "manifest_records",
+            "format_version",
+            "media_index",
+            "filename",
+            "sha256",
+            "ref_count",
+            "modified_time",
+            "is_attached",
+            "eof_marker",
+        ],
+        "unknown": ["ref_count_semantic_edge_cases", "is_attached_false_semantics"],
     },
     {
         "surface": "zip_container.end_tag.bin",
         "status": ["Structural", "Semantic"],
-        "decoded": ["payload_size", "format_version", "modified_time", "created_time_candidates", "sdk_signature"],
-        "unknown": ["middle_raw_fields", "older_timestamp_unit_semantics"],
+        "decoded": [
+            "payload_size",
+            "format_version",
+            "note_uuid",
+            "modified_time",
+            "page_size",
+            "app_version",
+            "created_time",
+            "page_model",
+            "document_type",
+            "display_timestamps",
+            "fixed_text_direction",
+            "fixed_background_theme",
+            "server_checkpoint",
+            "orientation",
+            "app_custom_data",
+            "sdk_signature",
+        ],
+        "unknown": ["older_display_timestamp_unit_semantics", "nonzero_property_flag_semantics"],
     },
     {
         "surface": "page.layer_object_tree",
@@ -261,8 +289,9 @@ def build_inventory(targets: list[Path]) -> dict:
     attachment_keys = Counter()
     attachment_kind_counts = Counter()
     attachment_examples: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
-    media_info_magic = Counter()
-    media_info_tail_tags = Counter()
+    media_info_format_versions = Counter()
+    media_info_ref_counts = Counter()
+    media_info_is_attached = Counter()
     media_info_name_kinds = Counter()
     media_info_records = 0
     media_info_parsed_files = 0
@@ -317,13 +346,14 @@ def build_inventory(targets: list[Path]) -> dict:
         media_info = list_media_info(path, verify_hash=True)
         if media_info is not None:
             media_info_parsed_files += 1
-            media_info_magic[f"0x{media_info['magic']:x}"] += 1
+            media_info_format_versions[str(media_info["format_version"])] += 1
             if not media_info.get("valid_eof"):
                 media_info_bad_eof += 1
             media_info_unlisted_media.extend(f"{path.name}:{name}" for name in media_info.get("unlisted_media", ()))
             for record in media_info.get("records", ()):
                 media_info_records += 1
-                media_info_tail_tags[str(record.get("tail_tag"))] += 1
+                media_info_ref_counts[str(record.get("ref_count"))] += 1
+                media_info_is_attached[str(record.get("is_attached"))] += 1
                 media_info_name_kinds[Path(record["name"]).suffix.lower() or "(none)"] += 1
                 if not record.get("exists"):
                     media_info_missing_media.append(f"{path.name}:{record['archive_name']}")
@@ -358,14 +388,23 @@ def build_inventory(targets: list[Path]) -> dict:
                 note_created = note_meta.get("created_time")
                 if end_tag.get("created_time_header") == note_created:
                     end_tag_time_relations["created_time_header_exact"] += 1
+                for key in ("display_created_time", "display_modified_time"):
+                    value = end_tag.get(key)
+                    if value == note_created:
+                        end_tag_time_relations[f"{key}_exact"] += 1
+                    elif isinstance(value, int) and isinstance(note_created, int) and abs(value * 1000 - note_created) < 5_000_000:
+                        end_tag_time_relations[f"{key}_millis_close"] += 1
+                # Back-compat aliases for older regression expectations and reports.
                 for key in ("created_time_a", "created_time_b"):
                     value = end_tag.get(key)
                     if value == note_created:
                         end_tag_time_relations[f"{key}_exact"] += 1
                     elif isinstance(value, int) and isinstance(note_created, int) and abs(value * 1000 - note_created) < 5_000_000:
                         end_tag_time_relations[f"{key}_millis_close"] += 1
-                extra = end_tag.get("extra_time_candidate")
+                extra = end_tag.get("last_recognised_data_modified_time")
                 if extra:
+                    end_tag_time_relations["last_recognised_data_modified_time_nonzero"] += 1
+                    # Back-compat alias.
                     end_tag_time_relations["extra_time_nonzero"] += 1
         page_id_info = load_page_id_info(path)
         note_meta = annotate_note_tail_with_page_id_info(note_meta, page_id_info)
@@ -717,8 +756,12 @@ def build_inventory(targets: list[Path]) -> dict:
         "media_info_profiles": {
             "parsed_files": media_info_parsed_files,
             "records": media_info_records,
-            "magic": dict(sorted(media_info_magic.items())),
-            "tail_tags": dict(sorted(media_info_tail_tags.items())),
+            "format_versions": dict(sorted(media_info_format_versions.items())),
+            "ref_counts": dict(sorted(media_info_ref_counts.items())),
+            "is_attached": dict(sorted(media_info_is_attached.items())),
+            # Back-compat aliases for older regression expectations and reports.
+            "magic": {f"0x{int(k):x}": v for k, v in sorted(media_info_format_versions.items())},
+            "tail_tags": dict(sorted(media_info_ref_counts.items())),
             "name_kinds": dict(sorted(media_info_name_kinds.items())),
             "bad_eof": media_info_bad_eof,
             "sha_mismatches": len(media_info_sha_mismatches),

@@ -1,8 +1,8 @@
 """Corpus diagnostics for media/mediaInfo.dat record tails.
 
-The tail structure is decoded as `[u16 tag][u64 time_candidate][u8 marker]`.
-This tool explores the remaining semantic questions: tag meaning and whether
-the timestamp-like value matches other container times.
+The tail structure is decoded as
+`[u16 ref_count][u64 modified_time][u8 is_attached]`. This tool explores how
+the media modified-time value relates to other container times.
 """
 from __future__ import annotations
 
@@ -53,14 +53,14 @@ def collect_rows(paths: list[Path]) -> list[dict]:
                 "media_index": record["media_index"],
                 "name": record["name"],
                 "extension": Path(record["name"]).suffix.lower() or "(none)",
-                "tag": record["tail_tag"],
-                "time_candidate": record["time_candidate"],
-                "marker": record["tail_marker"],
+                "ref_count": record["ref_count"],
+                "modified_time": record["modified_time"],
+                "is_attached": record["is_attached"],
                 "tail_len": len(bytes.fromhex(record["raw_tail"])),
-                "note_created_delta": record["time_candidate"] - note["created_time"],
-                "note_modified_delta": record["time_candidate"] - note["modified_time"],
+                "note_created_delta": record["modified_time"] - note["created_time"],
+                "note_modified_delta": record["modified_time"] - note["modified_time"],
                 "zip_time_delta": (
-                    record["time_candidate"] - _zip_us(info)
+                    record["modified_time"] - _zip_us(info)
                     if _zip_us(info) is not None
                     else None
                 ),
@@ -74,11 +74,11 @@ def summarize(rows: list[dict]) -> dict:
     by_file = []
     for file_name in sorted({row["file"] for row in rows}):
         file_rows = [row for row in rows if row["file"] == file_name]
-        latest = max(file_rows, key=lambda row: row["time_candidate"])
+        latest = max(file_rows, key=lambda row: row["modified_time"])
         by_file.append({
             "file": file_name,
             "count": len(file_rows),
-            "tags": dict(sorted(Counter(row["tag"] for row in file_rows).items())),
+            "ref_counts": dict(sorted(Counter(row["ref_count"] for row in file_rows).items())),
             "extensions": dict(sorted(Counter(row["extension"] for row in file_rows).items())),
             "latest_media_index": latest["media_index"],
             "latest_extension": latest["extension"],
@@ -87,11 +87,11 @@ def summarize(rows: list[dict]) -> dict:
     return {
         "count": len(rows),
         "tail_lengths": dict(sorted(Counter(row["tail_len"] for row in rows).items())),
-        "markers": dict(sorted(Counter(row["marker"] for row in rows).items())),
-        "tags": dict(sorted(Counter(row["tag"] for row in rows).items())),
-        "tag_extension_matrix": {
-            str(tag): dict(sorted(counter.items()))
-            for tag, counter in sorted(_matrix(rows, "tag", "extension").items())
+        "is_attached": dict(sorted(Counter(row["is_attached"] for row in rows).items())),
+        "ref_counts": dict(sorted(Counter(row["ref_count"] for row in rows).items())),
+        "ref_count_extension_matrix": {
+            str(ref_count): dict(sorted(counter.items()))
+            for ref_count, counter in sorted(_matrix(rows, "ref_count", "extension").items())
         },
         "exact_matches": {
             "note_created": sum(1 for row in rows if row["note_created_delta"] == 0),
@@ -121,12 +121,15 @@ def main() -> int:
         print(json.dumps({"summary": summary, "rows": rows}, indent=2, ensure_ascii=False))
         return 0
     print(f"media tail rows={summary['count']}")
-    print(f"tail_lengths={summary['tail_lengths']} markers={summary['markers']} tags={summary['tags']}")
-    print(f"tag_extension_matrix={summary['tag_extension_matrix']}")
+    print(
+        f"tail_lengths={summary['tail_lengths']} "
+        f"is_attached={summary['is_attached']} ref_counts={summary['ref_counts']}"
+    )
+    print(f"ref_count_extension_matrix={summary['ref_count_extension_matrix']}")
     print(f"exact_matches={summary['exact_matches']}")
     for row in summary["by_file"]:
         print(
-            f"  {row['file']:<58} n={row['count']:<3} tags={row['tags']} "
+            f"  {row['file']:<58} n={row['count']:<3} ref_counts={row['ref_counts']} "
             f"latest={row['latest_media_index']}:{row['latest_extension']} "
             f"delta_to_note_modified={row['latest_delta_to_note_modified']}"
         )

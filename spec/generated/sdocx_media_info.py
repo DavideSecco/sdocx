@@ -13,7 +13,7 @@ class SdocxMediaInfo(KaitaiStruct):
     attachment under `media/`, closed by the ASCII trailer `EOFX`.
 
     Fully decoded with zero counterexamples across the 13-sample corpus: a `u32`
-    magic, a `u16` record count, then that many length-prefixed records. Each
+    format version, a `u16` record count, then that many length-prefixed records. Each
     record's `payload_size` counts the bytes after itself and frames a body of
     `[u32 media_index][u16 name_chars][UTF-16LE filename][64-byte ASCII SHA-256
     hex][raw tail]`. The filename already includes the `<index>@...` prefix used
@@ -21,9 +21,9 @@ class SdocxMediaInfo(KaitaiStruct):
     and every SHA-256 verifies.
 
     The record's 11-byte tail is structurally modeled as
-    `[u16 tag][u64 time_candidate][u8 marker]`. The boundaries are decoded with
-    zero counterexamples; the tag/time semantics remain deliberately conservative
-    (see the companion Markdown).
+    `[u16 ref_count][u64 modified_time][u8 is_attached]`. The names are
+    independently cross-checked against `sdocx2pdf`; the boundaries are decoded
+    with zero counterexamples.
     """
     def __init__(self, _io, _parent=None, _root=None):
         super(SdocxMediaInfo, self).__init__(_io)
@@ -32,7 +32,7 @@ class SdocxMediaInfo(KaitaiStruct):
         self._read()
 
     def _read(self):
-        self.magic = self._io.read_u4le()
+        self.format_version = self._io.read_u4le()
         self.record_count = self._io.read_u2le()
         self.records = []
         for i in range(self.record_count):
@@ -97,9 +97,9 @@ class SdocxMediaInfo(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.tag = self._io.read_u2le()
-            self.time_candidate = self._io.read_u8le()
-            self.marker = self._io.read_u1()
+            self.ref_count = self._io.read_u2le()
+            self.modified_time = self._io.read_u8le()
+            self.is_attached = self._io.read_u1()
 
 
         def _fetch_instances(self):

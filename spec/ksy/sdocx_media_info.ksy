@@ -10,7 +10,7 @@ doc: |
   attachment under `media/`, closed by the ASCII trailer `EOFX`.
 
   Fully decoded with zero counterexamples across the 13-sample corpus: a `u32`
-  magic, a `u16` record count, then that many length-prefixed records. Each
+  format version, a `u16` record count, then that many length-prefixed records. Each
   record's `payload_size` counts the bytes after itself and frames a body of
   `[u32 media_index][u16 name_chars][UTF-16LE filename][64-byte ASCII SHA-256
   hex][raw tail]`. The filename already includes the `<index>@...` prefix used
@@ -18,13 +18,13 @@ doc: |
   and every SHA-256 verifies.
 
   The record's 11-byte tail is structurally modeled as
-  `[u16 tag][u64 time_candidate][u8 marker]`. The boundaries are decoded with
-  zero counterexamples; the tag/time semantics remain deliberately conservative
-  (see the companion Markdown).
+  `[u16 ref_count][u64 modified_time][u8 is_attached]`. The names are
+  independently cross-checked against `sdocx2pdf`; the boundaries are decoded
+  with zero counterexamples.
 seq:
-  - id: magic
+  - id: format_version
     type: u4
-    doc: Manifest magic. Corpus values 0x1518 (x12) and 0x1452 (x1).
+    doc: Manifest format version. Corpus values 5400 (x12) and 5202 (x1).
   - id: record_count
     type: u2
     doc: Number of media records that follow.
@@ -68,16 +68,15 @@ types:
         type: media_tail
         size-eos: true
         doc: |
-          Trailing 11-byte record tail. Structurally decoded; tag/time
-          semantics remain Unknown.
+          Trailing 11-byte record tail.
   media_tail:
     seq:
-      - id: tag
+      - id: ref_count
         type: u2
-        doc: Corpus values 1, 3, 5, 20; exact semantics Unknown.
-      - id: time_candidate
+        doc: Reference count candidate. Corpus values 1, 3, 5, 20.
+      - id: modified_time
         type: u8
-        doc: Timestamp-like value near note/media edit times; exact semantics Unknown.
-      - id: marker
+        doc: Media modified-time candidate, epoch milliseconds.
+      - id: is_attached
         type: u1
-        doc: Constant 1 on 60/60 corpus records.
+        doc: Boolean attached flag. Constant 1 on 60/60 corpus records.

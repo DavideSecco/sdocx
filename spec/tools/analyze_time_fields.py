@@ -40,10 +40,10 @@ def collect_rows(paths: list[Path]) -> list[dict]:
             "note_modified": note["modified_time"],
             "note_file_revision": note["file_revision"],
             "end_created_header_delta": None,
-            "end_created_a_delta": None,
-            "end_created_b_delta": None,
-            "end_extra_delta_to_note_modified": None,
-            "end_extra_nonzero": False,
+            "end_display_created_delta": None,
+            "end_display_modified_delta": None,
+            "end_last_recognised_delta_to_note_modified": None,
+            "end_last_recognised_nonzero": False,
             "tail_post_hash_matches_note_last_u32": [],
             "media_time_min_delta_to_note_modified": None,
             "media_time_max_delta_to_note_modified": None,
@@ -51,15 +51,20 @@ def collect_rows(paths: list[Path]) -> list[dict]:
         if end_tag is not None:
             row.update({
                 "end_created_header_delta": end_tag["created_time_header"] - note["created_time"],
-                "end_created_a_delta": end_tag["created_time_a"] - note["created_time"],
-                "end_created_b_delta": end_tag["created_time_b"] - note["created_time"],
-                "end_extra_nonzero": end_tag["extra_time_candidate"] != 0,
-                "end_extra_delta_to_note_modified": (
-                    end_tag["extra_time_candidate"] - note["modified_time"]
-                    if end_tag["extra_time_candidate"]
+                "end_display_created_delta": end_tag["display_created_time"] - note["created_time"],
+                "end_display_modified_delta": end_tag["display_modified_time"] - note["created_time"],
+                "end_last_recognised_nonzero": end_tag["last_recognised_data_modified_time"] != 0,
+                "end_last_recognised_delta_to_note_modified": (
+                    end_tag["last_recognised_data_modified_time"] - note["modified_time"]
+                    if end_tag["last_recognised_data_modified_time"]
                     else None
                 ),
             })
+            # Back-compat aliases for older JSON consumers.
+            row["end_created_a_delta"] = row["end_display_created_delta"]
+            row["end_created_b_delta"] = row["end_display_modified_delta"]
+            row["end_extra_nonzero"] = row["end_last_recognised_nonzero"]
+            row["end_extra_delta_to_note_modified"] = row["end_last_recognised_delta_to_note_modified"]
         if note_bytes:
             note_last_u32 = struct.unpack_from("<I", note_bytes, len(note_bytes) - 4)[0]
             row["tail_post_hash_matches_note_last_u32"] = [
@@ -68,9 +73,9 @@ def collect_rows(paths: list[Path]) -> list[dict]:
                 if record["kind"] == "tail_post_hash_u32"
             ]
         media_deltas = [
-            record["time_candidate"] - note["modified_time"]
+            record["modified_time"] - note["modified_time"]
             for record in media.get("records", ())
-            if record.get("time_candidate") is not None
+            if record.get("modified_time") is not None
         ]
         if media_deltas:
             row["media_time_min_delta_to_note_modified"] = min(media_deltas)
@@ -83,11 +88,11 @@ def summarize(rows: list[dict]) -> dict:
     return {
         "count": len(rows),
         "end_created_header_exact": sum(1 for row in rows if row["end_created_header_delta"] == 0),
-        "end_created_a_exact": sum(1 for row in rows if row["end_created_a_delta"] == 0),
-        "end_created_b_exact": sum(1 for row in rows if row["end_created_b_delta"] == 0),
-        "end_created_a_deltas": dict(sorted(Counter(row["end_created_a_delta"] for row in rows).items())),
-        "end_created_b_deltas": dict(sorted(Counter(row["end_created_b_delta"] for row in rows).items())),
-        "end_extra_nonzero": sum(1 for row in rows if row["end_extra_nonzero"]),
+        "end_display_created_exact": sum(1 for row in rows if row["end_display_created_delta"] == 0),
+        "end_display_modified_exact": sum(1 for row in rows if row["end_display_modified_delta"] == 0),
+        "end_display_created_deltas": dict(sorted(Counter(row["end_display_created_delta"] for row in rows).items())),
+        "end_display_modified_deltas": dict(sorted(Counter(row["end_display_modified_delta"] for row in rows).items())),
+        "end_last_recognised_nonzero": sum(1 for row in rows if row["end_last_recognised_nonzero"]),
         "tail_post_hash_copy_checks": {
             "total": sum(len(row["tail_post_hash_matches_note_last_u32"]) for row in rows),
             "matched": sum(sum(row["tail_post_hash_matches_note_last_u32"]) for row in rows),
@@ -109,17 +114,19 @@ def main() -> int:
     print(
         "end_tag created exact: "
         f"header={summary['end_created_header_exact']} "
-        f"a={summary['end_created_a_exact']} b={summary['end_created_b_exact']}"
+        f"display_created={summary['end_display_created_exact']} "
+        f"display_modified={summary['end_display_modified_exact']}"
     )
-    print(f"end_created_a_deltas={summary['end_created_a_deltas']}")
-    print(f"end_created_b_deltas={summary['end_created_b_deltas']}")
-    print(f"end_extra_nonzero={summary['end_extra_nonzero']}")
+    print(f"end_display_created_deltas={summary['end_display_created_deltas']}")
+    print(f"end_display_modified_deltas={summary['end_display_modified_deltas']}")
+    print(f"end_last_recognised_nonzero={summary['end_last_recognised_nonzero']}")
     print(f"tail_post_hash_copy_checks={summary['tail_post_hash_copy_checks']}")
     for row in rows:
         print(
             f"  {row['file']:<58} "
-            f"a_delta={row['end_created_a_delta']} b_delta={row['end_created_b_delta']} "
-            f"extra_delta_mod={row['end_extra_delta_to_note_modified']} "
+            f"display_created_delta={row['end_display_created_delta']} "
+            f"display_modified_delta={row['end_display_modified_delta']} "
+            f"last_recognised_delta_mod={row['end_last_recognised_delta_to_note_modified']} "
             f"media_delta_mod={row['media_time_min_delta_to_note_modified']}..{row['media_time_max_delta_to_note_modified']}"
         )
     return 0

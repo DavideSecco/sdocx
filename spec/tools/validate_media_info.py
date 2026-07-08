@@ -26,8 +26,8 @@ def main() -> int:
         ref = parse_media_info(data)
         k = SdocxMediaInfo.from_bytes(data)
         diffs = []
-        if k.magic != ref["magic"]:
-            diffs.append("magic")
+        if k.format_version != ref["format_version"]:
+            diffs.append("format_version")
         if k.record_count != ref["count"]:
             diffs.append("count")
         if k.eof != "EOFX":
@@ -40,12 +40,12 @@ def main() -> int:
                 diffs.append(f"records[{i}].name")
             if b.sha256 != rr["sha256"]:
                 diffs.append(f"records[{i}].sha256")
-            if b.tail.tag != rr["tail_tag"]:
-                diffs.append(f"records[{i}].tail.tag")
-            if b.tail.time_candidate != rr["time_candidate"]:
-                diffs.append(f"records[{i}].tail.time_candidate")
-            if b.tail.marker != rr["tail_marker"]:
-                diffs.append(f"records[{i}].tail.marker")
+            if b.tail.ref_count != rr["ref_count"]:
+                diffs.append(f"records[{i}].tail.ref_count")
+            if b.tail.modified_time != rr["modified_time"]:
+                diffs.append(f"records[{i}].tail.modified_time")
+            if b.tail.is_attached != int(rr["is_attached"]):
+                diffs.append(f"records[{i}].tail.is_attached")
         if diffs:
             failures += 1
             print(f"FAIL  {sample.name}: {diffs}")

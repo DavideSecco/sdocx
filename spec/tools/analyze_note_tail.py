@@ -47,9 +47,9 @@ def collect_rows(paths: list[Path]) -> list[dict]:
             if row["kind"] == "voice_clip":
                 media_record = media_by_index.get(row.get("media_index_candidate"))
                 row["media_name"] = media_record.get("name") if media_record else None
-                row["media_info_time_candidate"] = media_record.get("time_candidate") if media_record else None
+                row["media_info_modified_time"] = media_record.get("modified_time") if media_record else None
                 row["media_time_delta"] = (
-                    row.get("media_time_candidate") - media_record.get("time_candidate")
+                    row.get("media_time_candidate") - media_record.get("modified_time")
                     if media_record and row.get("media_time_candidate") is not None
                     else None
                 )
