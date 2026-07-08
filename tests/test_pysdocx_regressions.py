@@ -211,6 +211,12 @@ class NoteDocStructuralTest(unittest.TestCase):
         self.assertEqual(summary["inline_object_surfaces"], 3)
         self.assertEqual(summary["cell_texts_match_table_scan"], 2)
         self.assertEqual(summary["cell_text_surfaces"], 2)
+        # Type-22 table objects must parse byte-exactly and agree with the
+        # marker scan on grid shape, cell texts, anchors, widths, and bbox.
+        self.assertEqual(summary["tables_structural"], 2)
+        self.assertEqual(summary["tables_structural_all_checks"], 2)
+        self.assertEqual(summary["table_cells_structural"], 18)
+        self.assertEqual(summary["table_structural_errors"], 0)
         self.assertEqual(summary["voice_records"], 2)
         self.assertEqual(summary["voice_all_fields_match"], 2)
 

@@ -45,6 +45,7 @@ from pysdocx.note_doc import (  # noqa: E402
     FIELD_NAMES,
     NoteDocParseError,
     note_doc_common_frames,
+    note_doc_tables,
     parse_note_doc,
 )
 
@@ -157,30 +158,66 @@ def cross_check(path: Path, doc: dict, note: bytes) -> dict:
             else None
         )
 
-    # Cell record structure inside the type-22 table inline object: each cell
-    # Common frame is directly preceded by a u16 tag == 6 (the scan's "kind"
-    # byte is really the frame_size low byte) and, 16 bytes earlier, the f64
-    # anchor pair the table scan clusters into the grid.
-    if body_frame is not None and frames["cells"]:
-        import struct as _struct
-        body_blob = note[doc["body_off"] : doc["body_off"] + doc["body_size"]]
-        tag_ok = all(
-            c["off"] >= 18
-            and _struct.unpack_from("<H", body_blob, c["off"] - 2)[0] == 6
-            for c in frames["cells"]
-        )
-        anchors_ok = all(
-            0 <= _struct.unpack_from("<d", body_blob, c["off"] - 18)[0] <= 3000
-            and 0 <= _struct.unpack_from("<d", body_blob, c["off"] - 10)[0] <= 400000
-            for c in frames["cells"]
-        )
-        gaps = [
-            b["off"] - (a["off"] + 4 + a["frame_size"])
-            for a, b in zip(frames["cells"], frames["cells"][1:])
-        ]
-        checks["cell_tag_is_6"] = tag_ok
-        checks["cell_anchors_plausible"] = anchors_ok
-        checks["cell_gap_hist"] = dict(Counter(gaps))
+    # Full structural parse of every type-22 table inline object, cross-checked
+    # against the marker scan (parse_tables): grid shape, per-position cell
+    # text, the scan's anchor == the last cell-outline path point, stored
+    # column widths == the anchor-derived column pitch, and the table bbox ==
+    # the union of the cell bboxes.
+    tables_structural = []
+    try:
+        structural_tables = note_doc_tables(note, doc)
+    except NoteDocParseError as exc:
+        structural_tables = None
+        checks["table_structural_error"] = f"{type(exc).__name__}: {exc}"
+    if structural_tables:
+        scan_tables = parse_tables(note)
+        for i, t in enumerate(structural_tables):
+            scan = scan_tables[i] if i < len(scan_tables) else None
+            scan_by_pos = {
+                (c["row"], c["col"]): c for c in (scan or {}).get("cells", ())
+            }
+            cell_rows = t["rows"]
+            texts_ok = anchors_ok = True
+            for r, row in enumerate(cell_rows):
+                for c in row["cells"]:
+                    sc = scan_by_pos.get((r, c["col"]))
+                    # scan texts stop at the first non-BMP-printable char
+                    if sc is None or not c["frame"]["text"].startswith(sc["text"]):
+                        texts_ok = False
+                    if sc is None or c["outline"][-1] != sc["anchor"]:
+                        anchors_ok = False
+            col_x = [c["bbox"][0] for c in cell_rows[0]["cells"]]
+            pitch_ok = all(
+                abs((col_x[k + 1] - col_x[k]) - t["col_widths"][k]) < 0.5
+                for k in range(len(col_x) - 1)
+            )
+            union = (
+                min(c["bbox"][0] for r in cell_rows for c in r["cells"]),
+                min(c["bbox"][1] for r in cell_rows for c in r["cells"]),
+                max(c["bbox"][2] for r in cell_rows for c in r["cells"]),
+                max(c["bbox"][3] for r in cell_rows for c in r["cells"]),
+            )
+            bbox_ok = all(abs(a - b) < 1.0 for a, b in zip(union, t["bbox"]))
+            tables_structural.append({
+                "n_rows": t["n_rows"], "n_cols": t["n_cols"],
+                "cells": sum(len(r["cells"]) for r in cell_rows),
+                "grid_matches_scan": bool(
+                    scan and scan["rows"] == t["n_rows"]
+                    and scan["cols"] == t["n_cols"]),
+                "texts_match_scan": texts_ok,
+                "anchors_are_outline_points": anchors_ok,
+                "widths_match_pitch": pitch_ok,
+                "bbox_is_cell_union": bbox_ok,
+                "page_width_matches_note": t["page_width"] == doc["width"],
+                "ts_us": (t["ts1_us"], t["ts2_us"]),
+                "col_widths": [round(w, 2) for w in t["col_widths"]],
+                "row_heights": [round(r["height"], 2) for r in cell_rows],
+                "borders_a": [(f"{b['argb']:08x}",
+                               tuple(round(f, 2) for f in b["floats"]))
+                              for b in t["borders_a"]],
+                "final_argb": f"{t['final_argb']:08x}",
+            })
+    checks["tables_structural"] = tables_structural
 
     # Voice recordings vs the tail-record scans.
     voice_checks = []
@@ -298,10 +335,20 @@ def collect(paths: list[Path]) -> dict:
         "cell_texts_match_table_scan": sum(
             1 for r in rows
             if r.get("checks", {}).get("cell_texts_match_table_scan")),
-        "cell_tag_is_6": sum(
-            1 for r in rows if r.get("checks", {}).get("cell_tag_is_6")),
-        "cell_anchors_plausible": sum(
-            1 for r in rows if r.get("checks", {}).get("cell_anchors_plausible")),
+        "tables_structural": sum(
+            len(r.get("checks", {}).get("tables_structural", ())) for r in rows),
+        "tables_structural_all_checks": sum(
+            1 for r in rows
+            for t in r.get("checks", {}).get("tables_structural", ())
+            if t["grid_matches_scan"] and t["texts_match_scan"]
+            and t["anchors_are_outline_points"] and t["widths_match_pitch"]
+            and t["bbox_is_cell_union"] and t["page_width_matches_note"]),
+        "table_cells_structural": sum(
+            t["cells"] for r in rows
+            for t in r.get("checks", {}).get("tables_structural", ())),
+        "table_structural_errors": sum(
+            1 for r in rows
+            if r.get("checks", {}).get("table_structural_error")),
         "cell_text_surfaces": sum(
             1 for r in rows
             if r.get("checks", {}).get("cell_texts_match_table_scan") is not None),
@@ -343,8 +390,10 @@ def main() -> int:
     print(f"body common-frame text match:  {s['body_text_matches']}/{s['body_text_surfaces']}")
     print(f"span families equal-to-scan: {s['span_families_equal']} of {s['span_families_total']}")
     print(f"inline objects anchor-match: {s['inline_objects_with_anchor_match']}/{s['inline_object_surfaces']} "
-          f"cell texts match table scan: {s['cell_texts_match_table_scan']}/{s['cell_text_surfaces']} "
-          f"cell tag6/anchors: {s['cell_tag_is_6']}/{s['cell_anchors_plausible']}")
+          f"cell texts match table scan: {s['cell_texts_match_table_scan']}/{s['cell_text_surfaces']}")
+    print(f"tables structural: {s['tables_structural_all_checks']}/{s['tables_structural']} "
+          f"all-checks (cells={s['table_cells_structural']}, "
+          f"errors={s['table_structural_errors']})")
     print(f"voice records: {s['voice_records']} all-fields-match={s['voice_all_fields_match']}")
     for row in report["rows"]:
         if not row.get("parse_ok"):
@@ -370,6 +419,16 @@ def main() -> int:
             print(f"     VOICE {v['name']!r} file_id={v['file_id']} media={v['media_name']!r} "
                   f"name_ok={v['name_matches_scan']} dur_ok={v['duration_matches_scan']} "
                   f"ms_ok={v['precise_ms_matches_scan']} events={v['event_count']}")
+        for t in checks.get("tables_structural", ()):
+            print(f"     TABLE {t['n_rows']}x{t['n_cols']} cells={t['cells']} "
+                  f"grid_ok={t['grid_matches_scan']} texts_ok={t['texts_match_scan']} "
+                  f"anchors_ok={t['anchors_are_outline_points']} "
+                  f"widths_ok={t['widths_match_pitch']} bbox_ok={t['bbox_is_cell_union']} "
+                  f"page_w_ok={t['page_width_matches_note']}")
+            print(f"       widths={t['col_widths']} heights={t['row_heights']} "
+                  f"borders_a={t['borders_a'][0]} final={t['final_argb']}")
+        if checks.get("table_structural_error"):
+            print(f"     TABLE-ERROR {checks['table_structural_error']}")
         for key, pen in checks.get("pens", {}).items():
             print(f"     PEN {key}: name={pen['name']!r} preload_scan_hit={pen['name_in_preload_scan']} "
                   f"size={pen['size']:.2f} color={pen['color']} adv={pen['advanced_settings']!r}")

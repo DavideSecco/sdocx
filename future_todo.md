@@ -37,6 +37,16 @@ executable spec:
   U+FFFC char (anchor == `position` 3/3); an inline image is object type 3.
   Structural-vs-scan equality holds corpus-wide (zero counterexamples).
 
+- **Type-22 table object (NEW, 2026-07-08):** the table object's body is now
+  decoded **byte-exactly end-to-end** (`parse_table_object` in
+  `pysdocx/note_doc.py`): sized wrapper/midpoints/outline records, column
+  widths, length-chained rows and cells with page-coords bboxes, per-cell
+  uuid + outline path + nested Common frame, and a style tail (border blocks,
+  per-column arrays, colors — positions decoded, semantics pending a styled
+  table family). The old scan's "anchor + u16 6" marker = the cell outline's
+  last path point + the path closepath opcode. Validated 2/2 notes, 18/18
+  cells (`analyze_note_doc.py`, regression-gated).
+
 - **Kaitai spec + test gate** ([`spec/`](./spec/), `tests/test_kaitai_spec.py`):
   each `spec/ksy/*.ksy` is compiled to a Python parser (vendored in
   `spec/generated/`) and cross-checked field-by-field against `pysdocx` on the
@@ -146,8 +156,9 @@ models the whole member sequentially (flex fields gated by `field_flags`);
 the old tail anchors (`tail_sentinel`, EOF-relative `tail_hash_block`
 windows, `tail_post_hash_u32`) are decoded/superseded — see
 `docs/format/container/note-note/tail-records.md`. Only the Text/Shape
-wrapper around the `text_core::Common` frames and the type-22 table object's
-inner schema remain procedural.
+wrapper around the `text_core::Common` frames remains procedural; the type-22
+table object's inner schema is now decoded too (see Next tasks), likewise
+procedural pending the wrapper decode.
 
 ## Next tasks
 
@@ -158,13 +169,33 @@ inner schema remain procedural.
   an exact-text-match artifact (the frame keeps trailing newlines).
   Follow-up: reconcile the renderer's rotated-wrap inset heuristic with the
   decoded margins; decode the wrapper prefix + 48-byte post-frame tail.
-- **Type-22 table inline object schema:** cells are nested Common frames; the
-  surrounding block schema (cell records `06 00 <kind>`, f64 anchors, borders,
-  widths, the trailing `(3,2)` pair) is the next bounded target — 2 corpus
-  notes carry it.
+- **Type-22 table inline object schema: DONE (2026-07-08).** The whole object
+  body parses **byte-exactly**: wrapper (uuid, 2 µs timestamps, page bbox,
+  n_rows−1) + edge-midpoints + outline-path records, then a content region
+  with `u32 n_cols + f32 col_widths`, length-chained rows (f32 height, index,
+  n_cols) and cells (col index, page bbox, per-cell wrapper/midpoints/outline
+  + the nested Common frame), and a style tail (bbox, 2 border blocks
+  `4×[ARGB + 3f32]`, per-column f32 arrays, final ARGB). The legacy scan
+  marker is fully explained: the "f64 anchor pair + u16 6" is the cell
+  outline's last path point + the closepath opcode (paths: `01` moveto /
+  `02` lineto / `06` close). Parser `parse_table_object`/`note_doc_tables`
+  in `pysdocx/note_doc.py`; cross-check `spec/tools/analyze_note_doc.py`
+  (`tables structural: 2/2 all-checks, 18/18 cells`, gated in
+  `tests/test_pysdocx_regressions.py`); docs
+  `docs/format/container/note-note/tables.md`. No `.ksy` change: the table
+  lives inside the body blob, which stays opaque in Kaitai until the
+  Text/Shape wrapper is decoded (same boundary as the Common frames).
+  Follow-ups: style-tail *semantics* (borders/floats/arrays) need a
+  **styled-table sample family** (custom borders, widths, merged cells,
+  shading); the renderer can now take grid geometry from the structural
+  parse instead of anchor clustering.
 - **Targeted samples for unexercised flex fields:** a note with a template,
   a shared/authored note, and an attached (non-image) file would exercise
   `template_uri`, `author_info`/`app_name`, `attached_files`.
+- **Styled-table sample family** (unlocks the table style-tail semantics —
+  the framing is done, only the defaults never varied): vs a plain grid, one
+  change per sample — merged cells; custom border color/thickness; different
+  column widths / row heights; cell background shading. Only-table, no audio.
 - Keep expanding only zero-counterexample structural fields in Kaitai; marker
   scans stay in `pysdocx` + docs until a fixed boundary is proven.
 - When the user wants a targeted sample campaign, isolate `HDR_EXT.counter` with
