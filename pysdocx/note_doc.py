@@ -320,11 +320,12 @@ def parse_common_frame(blob: bytes, off: int, format_version: int) -> dict:
                 obj_win = win.sub(obj_frame)
                 obj_size = obj_win.u32()
                 obj_type = obj_win.u32()
-                # The object body consumes exactly obj_size bytes (its inner
-                # schema — e.g. the type-22 table — is not modeled here), then
-                # a u32 char position (the U+FFFC anchor index in the frame
-                # text), then 8 trailing bytes of Unknown semantics (observed
-                # (3,2) on tables, (0,0) on images).
+                # The object body consumes exactly obj_size bytes (the type-22
+                # table body parses with parse_table_object), then a u32 char
+                # position (the U+FFFC anchor index in the frame text), then 8
+                # trailing bytes of Unknown semantics (observed (3,2) on
+                # tables, (0,0) on images).
+                body_off = obj_win.pos
                 obj_win.bytes_(obj_size)
                 position = obj_win.u32()
                 tail = obj_win.bytes_(obj_win.remaining).hex()
@@ -334,7 +335,7 @@ def parse_common_frame(blob: bytes, off: int, format_version: int) -> dict:
                     "object_type": obj_type,
                     "position": position,
                     "tail_hex": tail,
-                    "body_off": None,  # filled by find_common_frames callers if needed
+                    "body_off": body_off,  # offset into `blob`
                 })
     _ensure_eof(win, "common frame")
 
@@ -367,6 +368,291 @@ def find_common_frames(blob: bytes, format_version: int) -> list[dict]:
         except (NoteDocParseError, UnicodeDecodeError, struct.error):
             continue
     return frames
+
+
+# --- type-22 table inline object ------------------------------------------
+#
+# The body of a type-22 inline object (a table) is itself a sequential
+# structure of sized sub-records. Two size conventions coexist: header-style
+# records ("self-sized") whose u32 size counts from the size field's own
+# offset, and chain records (rows/cells/paths/border blocks) whose u32 size
+# counts the bytes *after* the field. Recurring tokens:
+#
+#   T5     = 01 00 02 00 00            (serialization preamble, Marker)
+#   PRE9   = u32 0 + T5
+#   TOKEN15= 0f 00 00 00 02 00 00 00 00 00 + T5   (record terminator, Marker)
+#
+# Object layout (validated byte-exact, zero counterexamples, on every type-22
+# object in the corpus — see spec/tools/analyze_note_doc.py):
+#
+#   wrap      [self-sized] uuid, ts1_us, ts2_us, page-coords bbox, n_rows-1
+#   midpoints [self-sized] the 4 edge midpoints of the table rect (text coords)
+#   outline   [self-sized] path of the table rect (text coords)
+#   content   [self-sized] col widths, n_rows, the row chain, then the style
+#             tail (page bbox again, 2 border blocks, per-column f32 arrays,
+#             a final ARGB color)
+#   row       [chain] f32 height, u32 row_index, u32 n_cols, the cell chain
+#   cell      [chain] u32 col_index, page-coords bbox, then an inner group:
+#             wrap (cell uuid, bbox again) + midpoints + outline; the cell's
+#             outline record *also* carries the cell's Common frame right
+#             after the path, then TOKEN15 closes the cell.
+#
+# The legacy marker scan's "cell record" `[f64 x][f64 y][u16 6]` is explained
+# exactly: (x, y) is the *last path point* (bottom-left corner) of the cell's
+# outline, `06` is the path close opcode, `00` a pad byte, and the "kind" that
+# follows is the cell frame's own frame_size.
+
+_T5 = bytes.fromhex("0100020000")
+_PRE9 = b"\x00\x00\x00\x00" + _T5
+_TOKEN15 = bytes.fromhex("0f0000000200000000000100020000")
+TABLE_OBJECT_TYPE = 22
+
+
+def _table_err(what: str, cur: _Cur) -> NoteDocParseError:
+    return NoteDocParseError(f"table object: {what} at {cur.pos}")
+
+
+def _expect(cur: _Cur, cond: bool, what: str) -> None:
+    if not cond:
+        raise _table_err(what, cur)
+
+
+def _rect(cur: _Cur) -> tuple[float, float, float, float]:
+    return (cur.f64(), cur.f64(), cur.f64(), cur.f64())
+
+
+def _parse_table_wrap(cur: _Cur, table_level: bool) -> dict:
+    """The self-sized wrapper record heading the table and each cell."""
+    start = cur.pos
+    size = cur.u32()
+    _expect(cur, cur.u16() == 0, "wrap pad")
+    _expect(cur, cur.u32() == 105, "wrap tag != 105")
+    head = cur.bytes_(8).hex()  # u8 + u16 + 5 bytes, semantics Unknown
+    version = cur.u32()  # 5400 on tables, 4000 on cells (corpus)
+    _expect(cur, cur.u16() == 36, "wrap uuid length != 36")
+    uuid = cur.bytes_(36).decode("ascii")
+    ts1_us = cur.i64()  # epoch us on the table wrap, 0 on cell wraps
+    bbox = _rect(cur)  # page coordinates
+    _expect(cur, cur.bytes_(5) == b"\0" * 5, "wrap zeros5")
+    out = {"size": size, "head_hex": head, "version": version, "uuid": uuid,
+           "ts1_us": ts1_us, "bbox": bbox}
+    if table_level:
+        out["ts2_us"] = cur.i64()  # epoch us, <= ts1_us on the corpus
+    out["page_width"] = cur.u32()  # 1600 on the corpus == note width
+    _expect(cur, cur.u32() == 0, "wrap trailing zero")
+    if table_level:
+        _expect(cur, cur.u8() == 3, "wrap b3 != 3")
+        out["rows_minus_1"] = cur.u32()
+    _expect(cur, cur.pos == start + size, "wrap size mismatch")
+    return out
+
+
+def _parse_table_midpoints(cur: _Cur, cell_level: bool) -> dict:
+    """Self-sized record: the 4 edge midpoints of a rect in text coords.
+
+    Cell-level instances carry two extra sub-records of Unknown semantics
+    (a 19-byte record whose payload holds a u32 255, and a 16-byte tail
+    starting with u32 12).
+    """
+    start = cur.pos
+    size = cur.u32()
+    _expect(cur, cur.u16() == 6, "midpoints tag != 6")
+    base = cur.u32()  # 0 at table level, 91 at cell level (Unknown semantics)
+    _expect(cur, base == (91 if cell_level else 0), "midpoints base")
+    _expect(cur, cur.u16() == 1, "midpoints one")
+    flags = cur.u16()  # 1 at table level, 0x0c01 at cell level (Unknown)
+    npts = cur.u32()
+    _expect(cur, npts == 4, "midpoints count != 4")
+    pts = [(cur.f64(), cur.f64()) for _ in range(npts)]
+    _expect(cur, cur.u32() == 4, "midpoints four")
+    _expect(cur, cur.bytes_(5) == b"\0" * 5, "midpoints zeros5")
+    out = {"size": size, "flags": flags, "points": pts}
+    if cell_level:
+        _expect(cur, cur.u32() == 19, "cell rec19 size")
+        _expect(cur, cur.bytes_(5) == _T5, "cell rec19 T5")
+        out["rec19_hex"] = cur.bytes_(14).hex()  # holds a u32 255 (Unknown)
+        tail16 = cur.bytes_(16)
+        _expect(cur, tail16 == bytes.fromhex("0c000000") + b"\0" * 12,
+                "cell midpoints tail16")
+    _expect(cur, cur.pos == start + size, "midpoints size mismatch")
+    return out
+
+
+def _parse_table_path(cur: _Cur) -> list[tuple[float, float]]:
+    """Chain-sized path record: u32 n_ops, then opcodes.
+
+    Opcodes: 1 = moveto (f64 x, f64 y), 2 = lineto (f64 x, f64 y),
+    6 = closepath (no point). Corpus paths are all closed rectangles.
+    """
+    size = cur.u32()
+    end = cur.pos + size
+    n_ops = cur.u32()
+    _expect(cur, n_ops <= 4096, "path op count implausible")
+    pts = []
+    for i in range(n_ops):
+        op = cur.u8()
+        if op == 6:
+            continue
+        _expect(cur, op in (1, 2), f"path opcode {op}")
+        _expect(cur, (op == 1) == (i == 0), "path moveto position")
+        pts.append((cur.f64(), cur.f64()))
+    _expect(cur, cur.pos == end, "path size mismatch")
+    return pts
+
+
+def _parse_table_outline(cur: _Cur, cell_level: bool,
+                         format_version: int) -> dict:
+    """Self-sized outline record: flags, a rect, and the outline path.
+
+    At cell level the record additionally embeds the cell's Common frame
+    right after the path (plus a 2-byte 00 02 trailer).
+    """
+    start = cur.pos
+    size = cur.u32()
+    _expect(cur, cur.u16() == 7, "outline tag != 7")
+    base = cur.u32()  # 0 at table level, 135 at cell level (Unknown semantics)
+    _expect(cur, base == (135 if cell_level else 0), "outline base")
+    flags = cur.bytes_(7).hex()
+    _expect(cur, cur.u32() == 4, "outline four")
+    pad_a = cur.bytes_(2).hex()
+    rect = _rect(cur)  # (0,0,0,0) on the corpus
+    pad_b = cur.bytes_(2).hex()
+    pts = _parse_table_path(cur)
+    _expect(cur, cur.u8() == 0, "outline pad")
+    out = {"size": size, "flags_hex": flags, "rect": rect, "points": pts,
+           "pads_hex": pad_a + pad_b}
+    if cell_level:
+        frame = parse_common_frame(cur.data, cur.pos, format_version)
+        cur.pos += 4 + frame["frame_size"]
+        _expect(cur, cur.bytes_(2) == b"\x00\x02", "outline frame trailer")
+        out["frame"] = frame
+    _expect(cur, cur.pos == start + size, "outline size mismatch")
+    return out
+
+
+def _parse_table_borders(cur: _Cur) -> list[dict]:
+    """Chain-sized block of 4 (ARGB color, 3×f32) entries — border styles.
+
+    Which entry is which border, and the meaning of the three floats
+    (width + two more), are Unknown pending a styled-table sample family.
+    """
+    size = cur.u32()
+    end = cur.pos + size
+    _expect(cur, cur.u32() == 0, "borders zero")
+    _expect(cur, cur.bytes_(5) == _T5, "borders T5")
+    items = [{"argb": cur.u32(), "floats": (cur.f32(), cur.f32(), cur.f32())}
+             for _ in range(4)]
+    _expect(cur, cur.pos == end, "borders size mismatch")
+    return items
+
+
+def parse_table_object(blob: bytes, off: int, size: int,
+                       format_version: int) -> dict:
+    """Parse one type-22 table inline object body at `blob[off:off+size]`.
+
+    Raises NoteDocParseError unless the whole body parses byte-exactly.
+    """
+    cur = _Cur(blob, off, off + size)
+    wrap = _parse_table_wrap(cur, table_level=True)
+    midpoints = _parse_table_midpoints(cur, cell_level=False)
+    outline = _parse_table_outline(cur, cell_level=False,
+                                   format_version=format_version)
+
+    content_start = cur.pos
+    content_size = cur.u32()
+    _expect(cur, content_start + content_size == off + size,
+            "content size does not land on object end")
+    _expect(cur, cur.u16() == TABLE_OBJECT_TYPE, "content tag != 22")
+    _expect(cur, cur.u16() == 15, "content u16 != 15")
+    _expect(cur, cur.u16() == 0, "content pad")
+    content_head = cur.bytes_(3).hex()  # 01 04 02 on the corpus (Unknown)
+    content_u16 = cur.u16()  # 7612 on the corpus (Unknown)
+    n_cols = cur.u32()
+    _expect(cur, 1 <= n_cols <= 64, "column count implausible")
+    col_widths = [cur.f32() for _ in range(n_cols)]
+    n_rows = cur.u32()
+    _expect(cur, 1 <= n_rows <= 4096, "row count implausible")
+    _expect(cur, n_rows == wrap["rows_minus_1"] + 1, "row count vs wrap")
+
+    rows = []
+    for r in range(n_rows):
+        row_size = cur.u32()
+        row_end = cur.pos + row_size
+        _expect(cur, cur.bytes_(9) == _PRE9, "row preamble")
+        height = cur.f32()
+        _expect(cur, cur.u32() == r, "row index")
+        _expect(cur, cur.u32() == n_cols, "row column count")
+        cells = []
+        for k in range(n_cols):
+            cell_size = cur.u32()
+            cell_end = cur.pos + cell_size
+            _expect(cur, cur.bytes_(9) == _PRE9, "cell preamble")
+            _expect(cur, cur.u32() == k, "cell column index")
+            _expect(cur, cur.u32() == 1, "cell one_a")
+            _expect(cur, cur.u32() == 1, "cell one_b")
+            _expect(cur, cur.u32() == 0, "cell zero")
+            bbox = _rect(cur)  # page coordinates
+            _expect(cur, cur.u8() == 1, "cell b1")
+            inner_size = cur.u32()
+            _expect(cur, cur.pos + inner_size == cell_end, "cell inner size")
+            cwrap = _parse_table_wrap(cur, table_level=False)
+            _expect(cur, cwrap["ts1_us"] == 0, "cell wrap timestamp")
+            _expect(cur, cwrap["bbox"] == bbox, "cell wrap bbox mismatch")
+            cmid = _parse_table_midpoints(cur, cell_level=True)
+            coutline = _parse_table_outline(cur, cell_level=True,
+                                            format_version=format_version)
+            _expect(cur, cur.bytes_(15) == _TOKEN15, "cell terminator")
+            _expect(cur, cur.pos == cell_end, "cell size mismatch")
+            cells.append({
+                "col": k, "bbox": bbox, "uuid": cwrap["uuid"],
+                "version": cwrap["version"],
+                "midpoints": cmid["points"], "outline": coutline["points"],
+                "frame": coutline["frame"],
+            })
+        _expect(cur, cur.pos == row_end, "row size mismatch")
+        rows.append({"height": height, "cells": cells})
+
+    tail_bbox = _rect(cur)  # page coordinates
+    _expect(cur, tail_bbox == wrap["bbox"], "tail bbox != table bbox")
+    borders_a = _parse_table_borders(cur)
+    _expect(cur, cur.u32() == n_cols, "arr1 count")
+    arr1 = [cur.f32() for _ in range(n_cols)]  # 291.2 each (Unknown)
+    _expect(cur, cur.u32() == n_cols, "arr2 count")
+    arr2 = [cur.f32() for _ in range(n_cols)]  # 1456.0 each (Unknown)
+    scalar = cur.f32()  # 1456.0 == table width (Unknown semantics)
+    borders_b = _parse_table_borders(cur)
+    final_argb = cur.u32()  # 0xffeeebe7 on the corpus (Unknown semantics)
+    _ensure_eof(cur, "table object")
+
+    return {
+        "uuid": wrap["uuid"], "version": wrap["version"],
+        "ts1_us": wrap["ts1_us"], "ts2_us": wrap["ts2_us"],
+        "bbox": wrap["bbox"], "page_width": wrap["page_width"],
+        "text_midpoints": midpoints["points"],
+        "text_outline": outline["points"],
+        "content_head_hex": content_head, "content_u16": content_u16,
+        "n_rows": n_rows, "n_cols": n_cols,
+        "col_widths": col_widths, "rows": rows,
+        "borders_a": borders_a, "borders_b": borders_b,
+        "arr1": arr1, "arr2": arr2, "scalar": scalar,
+        "final_argb": final_argb,
+    }
+
+
+def note_doc_tables(note: bytes, doc: dict) -> list[dict]:
+    """Parse every type-22 table object in the note's body frame."""
+    frames = note_doc_common_frames(note, doc)
+    body = frames["body"]
+    if body is None or not body.get("inline"):
+        return []
+    blob = note[doc["body_off"] : doc["body_off"] + doc["body_size"]]
+    tables = []
+    for obj in body["inline"]["objects"]:
+        if obj["object_type"] != TABLE_OBJECT_TYPE:
+            continue
+        tables.append(parse_table_object(
+            blob, obj["body_off"], obj["obj_size"], doc["format_version"]))
+    return tables
 
 
 def parse_note_doc(note: bytes) -> dict:

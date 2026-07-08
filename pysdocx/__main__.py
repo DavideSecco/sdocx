@@ -24,6 +24,7 @@ from pysdocx.note_doc import (
     SPAN_TYPE_NAMES,
     NoteDocParseError,
     note_doc_common_frames,
+    note_doc_tables,
     parse_note_doc,
 )
 from pysdocx.page import parse_page
@@ -668,6 +669,15 @@ def cmd_note_doc(args: argparse.Namespace) -> None:
             )
     for cell in frames["cells"]:
         print(f"  cell frame: text={cell['text']!r} spans={len(cell['spans'])}")
+    for table in note_doc_tables(note, doc):
+        print(
+            f"  table: {table['n_rows']}x{table['n_cols']} uuid={table['uuid']} "
+            f"bbox={tuple(round(v, 2) for v in table['bbox'])} "
+            f"col_widths={[round(w, 2) for w in table['col_widths']]}"
+        )
+        for r, row in enumerate(table["rows"]):
+            texts = [c["frame"]["text"] for c in row["cells"]]
+            print(f"    row {r} h={row['height']:.1f}: {texts}")
 
 
 def cmd_inventory(args: argparse.Namespace) -> None:
