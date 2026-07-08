@@ -3,7 +3,8 @@ use std::io::{Read, Seek};
 use crate::error::{Error, Result};
 use crate::page::parse_page;
 use crate::types::{
-    BoundingBox, Color, Document, DocumentMetadata, MediaAsset, Page, RichTextBox, RichTextRun,
+    BoundingBox, Color, Document, DocumentMetadata, MediaAsset, Page, PageElement, RichTextBox,
+    RichTextRun,
 };
 
 /// Parse a `.sdocx` ZIP archive from a reader.
@@ -54,13 +55,21 @@ pub fn parse_from_reader<R: Read + Seek>(reader: R) -> Result<Document> {
     }
 
     metadata.media_assets = parse_media_assets(&mut archive)?;
+    let media_map = media_index_positions(
+        &metadata
+            .media_assets
+            .iter()
+            .map(|a| a.name.clone())
+            .collect::<Vec<_>>(),
+    );
 
     let mut pages: Vec<Page> = Vec::with_capacity(page_names.len());
     for name in &page_names {
         let mut entry = archive.by_name(name)?;
         let mut buf = Vec::with_capacity(entry.size() as usize);
         entry.read_to_end(&mut buf)?;
-        let page = parse_page(&buf)?;
+        let mut page = parse_page(&buf)?;
+        remap_media_indices(&mut page, &media_map);
         pages.push(page);
     }
 
@@ -118,17 +127,18 @@ fn parse_note_note(data: &[u8], metadata: &mut DocumentMetadata) {
     }
 }
 
-fn parse_media_assets<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Result<Vec<MediaAsset>> {
+/// Collect image media member names, ordered by their numeric index prefix.
+fn media_member_names<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Vec<String> {
     let mut names: Vec<String> = (0..archive.len())
         .filter_map(|i| {
-            let entry = archive.by_index(i).ok()?;
-            let name = entry.name().to_string();
+            let name = archive.by_index(i).ok()?.name().to_string();
             let lower = name.to_ascii_lowercase();
+            // Renderable media members are `media/<index>@...`. Extensions are
+            // unreliable — pasted images are extensionless JPEGs — so filter by
+            // the indexed prefix and exclude Samsung-internal `.spi` previews.
             if name.starts_with("media/")
-                && (lower.ends_with(".jpg")
-                    || lower.ends_with(".jpeg")
-                    || lower.ends_with(".png")
-                    || lower.ends_with(".webp"))
+                && media_archive_index(&name).is_some()
+                && !lower.ends_with(".spi")
             {
                 Some(name)
             } else {
@@ -136,34 +146,102 @@ fn parse_media_assets<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Resul
             }
         })
         .collect();
-    names.sort_by_key(|name| {
-        name.rsplit('/')
-            .next()
-            .and_then(|file| file.split('@').next())
-            .and_then(|prefix| prefix.parse::<usize>().ok())
-            .unwrap_or(usize::MAX)
-    });
+    names.sort_by_key(|name| media_archive_index(name).unwrap_or(u32::MAX));
+    names
+}
 
+fn mime_for(name: &str) -> &'static str {
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with(".png") {
+        "image/png"
+    } else if lower.ends_with(".webp") {
+        "image/webp"
+    } else {
+        "image/jpeg"
+    }
+}
+
+fn parse_media_assets<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Result<Vec<MediaAsset>> {
+    let names = media_member_names(archive);
     let mut assets = Vec::with_capacity(names.len());
     for name in names {
         let mut entry = archive.by_name(&name)?;
         let mut data = Vec::with_capacity(entry.size() as usize);
         entry.read_to_end(&mut data)?;
-        let lower = name.to_ascii_lowercase();
-        let mime_type = if lower.ends_with(".png") {
-            "image/png"
-        } else if lower.ends_with(".webp") {
-            "image/webp"
-        } else {
-            "image/jpeg"
-        };
+        let mime_type = mime_for(&name).to_string();
         assets.push(MediaAsset {
             name,
-            mime_type: mime_type.to_string(),
+            mime_type,
             data,
         });
     }
     Ok(assets)
+}
+
+/// Numeric `<index>@` prefix of a media member's basename, when present. Image
+/// placements inside `.page` files reference media by this archive index, which
+/// is sparse — NOT the position in the ordered media list.
+fn media_archive_index(name: &str) -> Option<u32> {
+    let base = name.rsplit('/').next().unwrap_or(name);
+    base.split_once('@')?.0.parse().ok()
+}
+
+/// Position of each `<index>@` archive index within the ordered media list.
+/// Consumers index `media_assets` positionally, so parsed pages are remapped
+/// through this (see [`remap_media_indices`]).
+fn media_index_positions(names: &[String]) -> std::collections::HashMap<usize, usize> {
+    names
+        .iter()
+        .enumerate()
+        .filter_map(|(pos, n)| Some((media_archive_index(n)? as usize, pos)))
+        .collect()
+}
+
+/// Rewrite each image element's decoded archive index into a position within the
+/// ordered media list. Unknown indices are left untouched (callers treat an
+/// out-of-range index as "asset unavailable").
+pub fn remap_media_indices(page: &mut Page, map: &std::collections::HashMap<usize, usize>) {
+    for el in &mut page.elements {
+        if let PageElement::Image { media_index, .. } = el {
+            if let Some(&pos) = map.get(media_index) {
+                *media_index = pos;
+            }
+        }
+    }
+}
+
+/// A media manifest (names + mime, no bytes) for lazy loading.
+fn media_manifest<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> (Vec<String>, Vec<MediaAsset>) {
+    let names = media_member_names(archive);
+    let assets = names
+        .iter()
+        .map(|name| MediaAsset {
+            name: name.clone(),
+            mime_type: mime_for(name).to_string(),
+            data: Vec::new(),
+        })
+        .collect();
+    (names, assets)
+}
+
+/// Order the present `.page` member names by the `pageIdInfo` UUID order, keeping
+/// any unreferenced pages at the end (never dropping a page).
+fn order_pages(page_ids: &[String], present: &mut Vec<String>) -> Vec<String> {
+    if page_ids.is_empty() {
+        return std::mem::take(present);
+    }
+    let mut ordered = Vec::with_capacity(present.len());
+    for id in page_ids {
+        let target = format!("{id}.page");
+        if let Some(pos) = present
+            .iter()
+            .position(|n| *n == target || n.ends_with(&target) || n.contains(id.as_str()))
+        {
+            ordered.push(present.remove(pos));
+        }
+    }
+    ordered.append(present);
+    ordered
 }
 
 fn parse_note_text(data: &[u8]) -> Option<RichTextBox> {
@@ -323,6 +401,160 @@ fn parse_page_id_info(data: &[u8], metadata: &mut DocumentMetadata) {
             .collect();
         metadata.page_ids.push(uuid);
         offset += char_len * 2;
+    }
+}
+
+/// A lazily-parsed `.sdocx`.
+///
+/// [`parse`](crate::parse) reads the whole document (every page's geometry and
+/// every media blob) into memory up front — fine for small notes, but a 66-page
+/// note is hundreds of MB and can exhaust memory. `Reader` instead reads only the
+/// metadata and the page/media manifests on [`open`](Reader::open), then parses a
+/// single page or media blob on demand. Pages are returned in `pageIdInfo` order.
+pub struct Reader<R: Read + Seek> {
+    archive: zip::ZipArchive<R>,
+    metadata: DocumentMetadata,
+    page_names: Vec<String>,
+    media_names: Vec<String>,
+    /// Decoded `<index>@` archive index → position in `media_names`/`media_assets`.
+    media_index_map: std::collections::HashMap<usize, usize>,
+}
+
+impl<R: Read + Seek> Reader<R> {
+    /// Open an archive and read metadata + manifests only (no page/media decode).
+    pub fn open(reader: R) -> Result<Self> {
+        let mut archive = zip::ZipArchive::new(reader)?;
+        let mut metadata = DocumentMetadata::default();
+
+        if let Ok(mut entry) = archive.by_name("end_tag.bin") {
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf)?;
+            parse_end_tag(&buf, &mut metadata);
+        }
+        let mut note_text = None;
+        if let Ok(mut entry) = archive.by_name("note.note") {
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf)?;
+            parse_note_note(&buf, &mut metadata);
+            note_text = parse_note_text(&buf);
+        }
+        if let Ok(mut entry) = archive.by_name("pageIdInfo.dat") {
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf)?;
+            parse_page_id_info(&buf, &mut metadata);
+        }
+        metadata.note_text = note_text;
+
+        let mut present: Vec<String> = (0..archive.len())
+            .filter_map(|i| {
+                let name = archive.by_index(i).ok()?.name().to_string();
+                name.ends_with(".page").then_some(name)
+            })
+            .collect();
+        if present.is_empty() {
+            return Err(Error::Format("no .page files found in archive".into()));
+        }
+        let page_names = order_pages(&metadata.page_ids, &mut present);
+
+        let (media_names, media_assets) = media_manifest(&mut archive);
+        metadata.media_assets = media_assets;
+        let media_index_map = media_index_positions(&media_names);
+
+        Ok(Reader {
+            archive,
+            metadata,
+            page_names,
+            media_names,
+            media_index_map,
+        })
+    }
+
+    /// Decoded media archive index → position in `media_assets`. Needed by callers
+    /// that parse page bytes outside the Reader (see [`Reader::page_bytes`]) and
+    /// must then apply [`remap_media_indices`] themselves.
+    pub fn media_index_map(&self) -> &std::collections::HashMap<usize, usize> {
+        &self.media_index_map
+    }
+
+    /// Document-level metadata (media assets carry names/mime but no bytes here).
+    pub fn metadata(&self) -> &DocumentMetadata {
+        &self.metadata
+    }
+
+    /// Number of pages.
+    pub fn page_count(&self) -> usize {
+        self.page_names.len()
+    }
+
+    /// Parse a single page by index (in `pageIdInfo` order).
+    /// Extract one page's raw bytes from the archive without parsing. Parsing
+    /// (`parse_page`) is a pure function of these bytes, so callers that hold a
+    /// lock around the `Reader` can extract under the lock and parse outside it,
+    /// letting page parses run in parallel.
+    pub fn page_bytes(&mut self, index: usize) -> Result<Vec<u8>> {
+        let name = self
+            .page_names
+            .get(index)
+            .ok_or_else(|| Error::Format("page index out of range".into()))?
+            .clone();
+        let mut entry = self.archive.by_name(&name)?;
+        let mut buf = Vec::with_capacity(entry.size() as usize);
+        entry.read_to_end(&mut buf)?;
+        Ok(buf)
+    }
+
+    pub fn page(&mut self, index: usize) -> Result<Page> {
+        let buf = self.page_bytes(index)?;
+        let mut page = parse_page(&buf)?;
+        remap_media_indices(&mut page, &self.media_index_map);
+        // The typed note body is rendered as the first page's text layer, matching
+        // `parse_from_reader`.
+        if index == 0 {
+            if let Some(text) = self.metadata.note_text.clone() {
+                page.elements.push(crate::types::PageElement::TextBox(text));
+            }
+        }
+        Ok(page)
+    }
+
+    /// Read a page's pixel dimensions from its header alone — cheap (only the
+    /// first ~30 bytes are decompressed), for laying out a continuous scroll view
+    /// without parsing every page's strokes.
+    pub fn page_size(&mut self, index: usize) -> Result<(u32, u32)> {
+        let name = self
+            .page_names
+            .get(index)
+            .ok_or_else(|| Error::Format("page index out of range".into()))?
+            .clone();
+        let mut entry = self.archive.by_name(&name)?;
+        let mut hdr = [0u8; 0x1E];
+        let mut read = 0;
+        while read < hdr.len() {
+            let n = entry.read(&mut hdr[read..])?;
+            if n == 0 {
+                break;
+            }
+            read += n;
+        }
+        if read < 0x1E {
+            return Err(Error::Format("page header too short".into()));
+        }
+        let w = u32::from_le_bytes(hdr[0x16..0x1A].try_into().unwrap());
+        let h = u32::from_le_bytes(hdr[0x1A..0x1E].try_into().unwrap());
+        Ok((w, h))
+    }
+
+    /// Read one media blob's raw bytes by index (parallel to `metadata().media_assets`).
+    pub fn media_bytes(&mut self, index: usize) -> Result<Vec<u8>> {
+        let name = self
+            .media_names
+            .get(index)
+            .ok_or_else(|| Error::Format("media index out of range".into()))?
+            .clone();
+        let mut entry = self.archive.by_name(&name)?;
+        let mut data = Vec::with_capacity(entry.size() as usize);
+        entry.read_to_end(&mut data)?;
+        Ok(data)
     }
 }
 

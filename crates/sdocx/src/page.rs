@@ -5,9 +5,14 @@ use crate::types::{
     RichTextRun, Stroke,
 };
 
-const PRE_STROKE_RECORD_LEN: usize = 71;
-const STROKE_HEADER_LEN: usize = 89; // bbox(32) + meta(41) + start(16)
-const EXTRA_LEN_BIAS: u8 = 0x79; // byte value at record+3 when no extras are present
+// Layer/object tree constants (mirror pysdocx page.py):
+const OBJECT_ENTRY_LEN: usize = 7; // raw_type(u8) + child_count(i16) + blob_size(u32)
+const OBJECT_BASE_HEADER_LEN: usize = 105; // common object header before variable data
+const OBJECT_BBOX_OFFSET: usize = 68; // stroke record starts here within a type-1 blob
+const STROKE_OBJECT_BASE_TOTAL_SIZE: u32 = 121; // header total_size minus this = extra_len
+/// Sanity cap for the recovered-bbox acceptance path ONLY — a trusted header
+/// bbox is allowed any point count (real 23k-point strokes exist; see pysdocx).
+const STROKE_MAX_POINTS: usize = 4000;
 
 // Strokes with extra_len == 48 are a distinct "flat synthetic line" variant
 // (confirmed on samples/Allsamsungnotes_260630_113259.sdocx, page e9561382,
@@ -40,11 +45,157 @@ fn looks_like_flat_synthetic_line(stroke: &Stroke, extra_len: usize) -> bool {
 
 struct ParsedStroke {
     stroke: Stroke,
-    next_record_off: usize,
     /// Whether the decoded points actually lie within the stroke's bounding box.
     /// A misread start-point offset (wrong layout variant) scatters points far
     /// outside the box, so this tells a correct decode from a garbage one.
     fits_bbox: bool,
+    /// Raw point count read from the record (pre-decode), for the sanity cap.
+    n_points_field: usize,
+}
+
+/// One object from the layer/object tree, flattened depth-first.
+struct PageObject {
+    raw_type: u8,
+    blob_off: usize,
+    blob_end: usize,
+}
+
+/// Walk the page's layer table at `base` and every layer's object tree,
+/// returning all objects flattened depth-first (parent before children).
+fn parse_object_tree(data: &[u8], base: usize) -> Vec<PageObject> {
+    let mut out = Vec::new();
+    let Some(layer_count) = read_u16(data, base) else {
+        return out;
+    };
+    let mut pos = base + 4; // u16 layer_count + u16 current_layer_index
+
+    'layers: for _ in 0..layer_count {
+        // u32 layer prefix
+        if pos + 4 > data.len() {
+            break;
+        }
+        pos += 4;
+        // u32 next_offset + 4 flag bytes + u32 layer_flags
+        if pos + 12 > data.len() {
+            break;
+        }
+        let content_flags = data[pos + 7];
+        pos += 12;
+
+        if content_flags & 0x01 != 0 {
+            pos += 1;
+        }
+        if content_flags & 0x02 != 0 {
+            pos += 4;
+        }
+        for bit in [0x04u8, 0x08] {
+            if content_flags & bit != 0 {
+                match skip_utf16_string(data, pos) {
+                    Some(next) => pos = next,
+                    None => break 'layers,
+                }
+            }
+        }
+        if content_flags & 0x10 != 0 {
+            if pos + 8 > data.len() {
+                break;
+            }
+            pos += 8; // modified_time
+        }
+        if content_flags & 0x20 != 0 {
+            pos += 4;
+        }
+
+        let Some(object_count) = read_u32(data, pos) else {
+            break;
+        };
+        pos += 4;
+        pos = parse_objects_into(data, pos, object_count as usize, 0, &mut out);
+        pos += 32; // layer content hash
+    }
+    out
+}
+
+fn parse_objects_into(
+    data: &[u8],
+    mut pos: usize,
+    count: usize,
+    depth: usize,
+    out: &mut Vec<PageObject>,
+) -> usize {
+    for _ in 0..count {
+        if pos + OBJECT_ENTRY_LEN > data.len() {
+            break;
+        }
+        let raw_type = data[pos];
+        let child_count = i16::from_le_bytes(data[pos + 1..pos + 3].try_into().unwrap());
+        let blob_size = u32::from_le_bytes(data[pos + 3..pos + 7].try_into().unwrap()) as usize;
+        let blob_off = pos + OBJECT_ENTRY_LEN;
+        let Some(blob_end) = blob_off.checked_add(blob_size).filter(|&e| e <= data.len()) else {
+            break;
+        };
+        out.push(PageObject {
+            raw_type,
+            blob_off,
+            blob_end,
+        });
+        pos = blob_end;
+        if child_count > 0 && depth < 16 {
+            pos = parse_objects_into(data, pos, child_count as usize, depth + 1, out);
+        }
+    }
+    pos
+}
+
+/// Skip a length-prefixed UTF-16 string: i16 char count, then chars.
+fn skip_utf16_string(data: &[u8], offset: usize) -> Option<usize> {
+    let char_len = read_i16(data, offset)?;
+    if char_len < 0 {
+        return None;
+    }
+    let end = offset + 2 + char_len as usize * 2;
+    (end <= data.len()).then_some(end)
+}
+
+/// Validate the common object header at the start of a blob and return its
+/// `total_size` field (mirrors pysdocx `_parse_object_header`; only total_size
+/// is needed for stroke decoding — it yields `extra_len`).
+fn object_header_total_size(blob: &[u8]) -> Option<u32> {
+    if blob.len() < OBJECT_BASE_HEADER_LEN {
+        return None;
+    }
+    let total_size = read_u32(blob, 0)?;
+    let mut pos = 4 + 2 + 4; // total_size + data_type + var_data_offset
+    let flag_len = *blob.get(pos)? as usize;
+    pos += 1 + flag_len;
+    let field_len = *blob.get(pos)? as usize;
+    pos += 1 + field_len;
+    pos += 4; // format_version
+    let uuid_byte_len = read_i16(blob, pos)?;
+    if uuid_byte_len < 0 {
+        return None;
+    }
+    pos += 2 + uuid_byte_len as usize;
+    pos += 8 + 32 + 4 + 1; // modified_time + bbox + timestamp + resizable
+    (pos <= blob.len()).then_some(total_size)
+}
+
+/// The stroke-header bbox itself is a plausible page-sized rectangle (generous
+/// 2x margin). `points_fit_bbox` only checks containment, so an astronomically
+/// large garbage bbox (seen: ~1e150) trivially "contains" any points — this
+/// closes that loophole.
+fn bbox_is_page_scaled(bbox: &BoundingBox, width: u32, height: u32) -> bool {
+    let (mx, my) = (width as f64 * 2.0, height as f64 * 2.0);
+    bbox.x_min.is_finite()
+        && bbox.y_min.is_finite()
+        && bbox.x_max.is_finite()
+        && bbox.y_max.is_finite()
+        && -mx <= bbox.x_min
+        && bbox.x_min <= bbox.x_max
+        && bbox.x_max <= width as f64 + mx
+        && -my <= bbox.y_min
+        && bbox.y_min <= bbox.y_max
+        && bbox.y_max <= height as f64 + my
 }
 
 /// A correctly-decoded stroke's points fall inside its bounding box, which
@@ -149,37 +300,33 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
     let background_color = page_background_color(data, base);
     let template = background_color.and_then(|_| page_template(data, base));
 
-    // Stroke count at base + 0x66
-    let sc_off = base + 0x66;
-    if sc_off + 4 > data.len() {
-        return Err(Error::Format("page file too short for stroke count".into()));
-    }
-    let stroke_count = u32::from_le_bytes(data[sc_off..sc_off + 4].try_into().unwrap()) as usize;
+    // Walk the layer/object tree (deterministic `type, child_count, size, blob`
+    // boundaries) and decode only raw type-1 objects as strokes. The old flat
+    // stroke walk derailed at the first interleaved non-stroke object and lost
+    // every stroke after it — up to ~75% of a mixed page (see pysdocx
+    // parse_page, which this mirrors).
+    let objects = parse_object_tree(data, base);
+    let mut strokes = Vec::new();
 
-    let mut strokes = Vec::with_capacity(stroke_count);
-    // base + 0xB5 - 71 = base + 0x6E; byte 3 of that record is base + 0x71.
-    let mut record_off = base + 0xB5 - PRE_STROKE_RECORD_LEN;
-
-    for _ in 0..stroke_count {
-        let extra_len = data
-            .get(record_off + 3)
-            .copied()
-            .unwrap_or(EXTRA_LEN_BIAS)
-            .saturating_sub(EXTRA_LEN_BIAS) as usize;
-
-        let off = record_off + PRE_STROKE_RECORD_LEN;
-        if off + STROKE_HEADER_LEN + extra_len > data.len() {
-            break;
+    for obj in &objects {
+        if obj.raw_type != 1 {
+            continue;
         }
+        let blob = &data[obj.blob_off..obj.blob_end];
+        let Some(total_size) = object_header_total_size(blob) else {
+            continue;
+        };
+        let extra_len = total_size.saturating_sub(STROKE_OBJECT_BASE_TOTAL_SIZE) as usize;
+        let stroke_off = obj.blob_off + OBJECT_BBOX_OFFSET;
 
-        let current = parse_stroke(data, off, extra_len, StrokeLayout::Current);
-        let shifted = parse_stroke(data, off, extra_len, StrokeLayout::StartPointMinusThree);
+        let current = parse_stroke(data, stroke_off, extra_len, StrokeLayout::Current);
+        let shifted = parse_stroke(data, stroke_off, extra_len, StrokeLayout::StartPointMinusThree);
 
         // Pick the layout whose decoded points are consistent with the stroke's
         // bounding box, not the one that merely yields more points — a garbage
         // decode can read a larger (bogus) point count and win the old tiebreak.
-        let mut parsed = match (current, shifted) {
-            (Some(current), Some(shifted)) => match (current.fits_bbox, shifted.fits_bbox) {
+        let parsed = match (current, shifted) {
+            (Some(current), Some(shifted)) => Some(match (current.fits_bbox, shifted.fits_bbox) {
                 (true, false) => current,
                 (false, true) => shifted,
                 // Both consistent: keep the legacy "more points" tiebreak.
@@ -187,17 +334,19 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
                     shifted
                 }
                 (true, true) => current,
-                // Neither consistent: advance the stream with `current`; the
-                // stroke itself is dropped below rather than rendered as garbage.
                 (false, false) => current,
-            },
-            (Some(current), None) => current,
-            (None, Some(shifted)) => shifted,
-            (None, None) => break,
+            }),
+            (current, shifted) => current.or(shifted),
         };
+        let Some(mut parsed) = parsed else { continue };
 
-        record_off = parsed.next_record_off;
-        if parsed.fits_bbox {
+        // `points_fit_bbox` alone is loopholed by a garbage header bbox so huge it
+        // trivially contains anything — require the bbox itself to be page-scaled.
+        let trusted_bbox =
+            parsed.fits_bbox && bbox_is_page_scaled(&parsed.stroke.bbox, width, height);
+        if trusted_bbox {
+            // No point cap here: a trusted bbox with a big count is a real,
+            // detailed stroke (see pysdocx quiz.sdocx handoff note).
             if looks_like_flat_synthetic_line(&parsed.stroke, extra_len) {
                 let bbox = parsed.stroke.bbox;
                 parsed.stroke.points = vec![
@@ -206,19 +355,21 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
                 ];
             }
             strokes.push(parsed.stroke);
-        } else if within_page_bounds(&parsed.stroke.points, width, height) {
-            // The 32 bytes at off+0..32 aren't this stroke's real bounding box
-            // (some strokes — e.g. ruler lines — store a different rectangle
-            // there), so the bbox test rejected a good decode. The points form
-            // a coherent on-page path, so keep the real geometry and recompute
-            // the bbox to match.
+        } else if parsed.n_points_field <= STROKE_MAX_POINTS
+            && within_page_bounds(&parsed.stroke.points, width, height)
+        {
+            // The header bbox isn't trustworthy (e.g. ruler lines store a
+            // different rectangle), but the decoded points form a coherent
+            // on-page path — keep the geometry and recompute the bbox. The
+            // point cap guards this evidence-from-points-alone path against a
+            // misaligned decode fabricating a huge plausible-looking cloud.
             parsed.stroke.bbox = bbox_of(&parsed.stroke.points);
             strokes.push(parsed.stroke);
         }
         // else: genuinely off-page/garbage → drop
     }
 
-    let elements = parse_page_elements(data, record_off, width, height);
+    let elements = parse_page_elements(data, &objects, width, height);
 
     Ok(Page {
         uuid,
@@ -251,9 +402,9 @@ fn parse_stroke(
         y_max: read_f64(data, off + 24)?,
     };
 
-    let (meta_off, n_points_off, sp_off, next_record_adjust) = match layout {
-        StrokeLayout::Current => (off + 32 + extra_len, 39, off + 73 + extra_len, 0),
-        StrokeLayout::StartPointMinusThree => (off + 32, 36, off + 70, 3),
+    let (meta_off, n_points_off, sp_off) = match layout {
+        StrokeLayout::Current => (off + 32 + extra_len, 39, off + 73 + extra_len),
+        StrokeLayout::StartPointMinusThree => (off + 32, 36, off + 70),
     };
 
     let data_len = read_u32(data, meta_off + 21)? as usize;
@@ -297,9 +448,15 @@ fn parse_stroke(
             tool_id: trailing.tool_id,
             tapered: trailing.tapered,
         },
-        next_record_off: data_end + next_record_adjust,
         fits_bbox,
+        n_points_field: n_points,
     })
+}
+
+fn read_i16(data: &[u8], offset: usize) -> Option<i16> {
+    Some(i16::from_le_bytes(
+        data.get(offset..offset + 2)?.try_into().ok()?,
+    ))
 }
 
 fn read_u16(data: &[u8], offset: usize) -> Option<u16> {
@@ -374,47 +531,50 @@ fn is_builtin_template_id(id: u32) -> bool {
     id != 0 && id <= 0xFFFF
 }
 
-fn parse_page_elements(data: &[u8], start: usize, width: u32, height: u32) -> Vec<PageElement> {
-    let mut elements = Vec::new();
-    let mut image_count = 0;
+/// Upper bound on an object record so `parse_text_box_record`/`looks_like_image_record`
+/// never scan into the next object (or the whole rest of a multi-MB page).
+const MAX_OBJECT_RECORD_LEN: usize = 16 * 1024;
 
-    for uuid_off in find_ascii_uuid_offsets(data, start) {
+fn parse_page_elements(
+    data: &[u8],
+    objects: &[PageObject],
+    width: u32,
+    height: u32,
+) -> Vec<PageElement> {
+    let mut elements = Vec::new();
+
+    for obj in objects {
+        // Type-1 objects are strokes; their coordinate streams could otherwise
+        // produce false marker/bbox matches, so never scan them for elements.
+        if obj.raw_type == 1 {
+            continue;
+        }
+        // Anchor on the object's ascii UUID (inside the common header), keeping
+        // the uuid-relative record logic identical to the old whole-buffer scan
+        // — just scoped to this object's blob.
+        let Some(uuid_off) = find_uuid_in(data, obj.blob_off, obj.blob_off + 96) else {
+            continue;
+        };
         let Some(bbox) = find_object_bbox(data, uuid_off, width, height) else {
             continue;
         };
-
-        let next_uuid = find_ascii_uuid_offsets(data, uuid_off + 36)
-            .into_iter()
-            .next()
-            .unwrap_or(data.len());
-        let record = &data[uuid_off..next_uuid];
+        let record_end = obj.blob_end.min(uuid_off + MAX_OBJECT_RECORD_LEN);
+        let record = &data[uuid_off..record_end];
 
         if let Some(text_box) = parse_text_box_record(record, bbox) {
             elements.push(PageElement::TextBox(text_box));
-        } else if looks_like_image_record(record) {
-            elements.push(PageElement::Image {
-                bbox,
-                media_index: image_count,
-            });
-            image_count += 1;
+        } else if let Some(media_index) = image_media_index(record) {
+            elements.push(PageElement::Image { bbox, media_index });
         }
     }
 
     elements
 }
 
-fn find_ascii_uuid_offsets(data: &[u8], start: usize) -> Vec<usize> {
-    let mut offsets = Vec::new();
-    let mut offset = start;
-    while offset + 36 <= data.len() {
-        if is_ascii_uuid(&data[offset..offset + 36]) {
-            offsets.push(offset);
-            offset += 36;
-        } else {
-            offset += 1;
-        }
-    }
-    offsets
+/// First ascii UUID starting in `[start, end)` (the UUID may extend past `end`).
+fn find_uuid_in(data: &[u8], start: usize, end: usize) -> Option<usize> {
+    let last = end.min(data.len().saturating_sub(36));
+    (start..last).find(|&off| is_ascii_uuid(&data[off..off + 36]))
 }
 
 fn is_ascii_uuid(bytes: &[u8]) -> bool {
@@ -457,11 +617,34 @@ fn plausible_bbox(bbox: BoundingBox, width: u32, height: u32) -> bool {
         && bbox.y_max - bbox.y_min > 8.0
 }
 
-fn looks_like_image_record(record: &[u8]) -> bool {
-    record.windows(4).any(|window| window == b"Re")
-        || record
-            .windows(4)
-            .any(|window| window == b"\x01\x00\x04\x20")
+/// Imported-image placement marker inside an object record (see pysdocx
+/// `scan_images`: `01 00 04 20`, u16 media index 6 bytes before, 4 x f64 bbox
+/// 11 bytes after).
+const IMAGE_MARKER: &[u8] = b"\x01\x00\x04\x20";
+/// Preferred media reference: a u32 archive index right after this marker,
+/// searched within 180 bytes of the placement marker (pysdocx
+/// `_image_media_index`).
+const IMAGE_MEDIA_REF_MARKER: &[u8] = b"\x06\x00\x3e\x00\x00\x00\x02\x00";
+
+fn find_sub(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    hay.windows(needle.len()).position(|w| w == needle)
+}
+
+/// Decode the GLOBAL media archive index referenced by an image record — the
+/// `<index>@` prefix of the media member's basename. Returns `None` when the
+/// record has no image placement marker (i.e. it is not an image record).
+fn image_media_index(record: &[u8]) -> Option<usize> {
+    let marker = find_sub(record, IMAGE_MARKER)?;
+    let search_end = (marker + 180).min(record.len());
+    if let Some(rel) = find_sub(&record[marker..search_end], IMAGE_MEDIA_REF_MARKER) {
+        let off = marker + rel + IMAGE_MEDIA_REF_MARKER.len();
+        if off + 4 <= record.len() {
+            let idx = u32::from_le_bytes(record[off..off + 4].try_into().unwrap());
+            return Some(idx as usize);
+        }
+    }
+    let off = marker.checked_sub(6)?;
+    Some(u16::from_le_bytes(record[off..off + 2].try_into().unwrap()) as usize)
 }
 
 fn parse_text_box_record(record: &[u8], bbox: BoundingBox) -> Option<RichTextBox> {
@@ -490,42 +673,49 @@ fn parse_text_box_record(record: &[u8], bbox: BoundingBox) -> Option<RichTextBox
 fn first_utf16_text(data: &[u8]) -> Option<(String, usize)> {
     let mut offset = 0;
     while offset + 6 <= data.len() {
+        // Decode the maximal printable run [offset, end) once. The printable set
+        // is BMP-only (0x0A + 0x20..=0xD7FF, no surrogates), so one u16 == one
+        // char and code-unit indexes are char indexes.
+        let mut units: Vec<u16> = Vec::new();
         let mut end = offset;
-        let mut units = Vec::new();
         while end + 2 <= data.len() {
-            let unit = u16::from_le_bytes(data[end..end + 2].try_into().ok()?);
-            let printable = unit == 0x0A || (0x20..=0xD7FF).contains(&unit);
-            if !printable {
+            let unit = u16::from_le_bytes([data[end], data[end + 1]]);
+            if unit != 0x0A && !(0x20..=0xD7FF).contains(&unit) {
                 break;
             }
             units.push(unit);
             end += 2;
         }
-        let text = String::from_utf16(&units).ok()?;
-        let trimmed = text.trim();
-        if trimmed.chars().filter(|c| !c.is_whitespace()).count() >= 3
-            && looks_like_note_text(trimmed)
-        {
-            return Some((text, end));
+        // Find the earliest start within the run whose text is note-like (>=3
+        // non-whitespace chars, >=75% ASCII alnum/punct). Suffix counts make this
+        // O(run) — the old code re-decoded + re-allocated a String for every start,
+        // which is O(run^2) and cost seconds on text-heavy pages.
+        let m = units.len();
+        if m >= 3 {
+            let mut nonws = 0i64;
+            let mut common = 0i64;
+            let mut first_ok: Option<usize> = None;
+            for k in (0..m).rev() {
+                if let Some(c) = char::from_u32(units[k] as u32) {
+                    if !c.is_whitespace() {
+                        nonws += 1;
+                        if c.is_ascii_alphanumeric() || c.is_ascii_punctuation() {
+                            common += 1;
+                        }
+                    }
+                }
+                if nonws >= 3 && common * 4 >= nonws * 3 {
+                    first_ok = Some(k);
+                }
+            }
+            if let Some(k) = first_ok {
+                let text = String::from_utf16(&units[k..]).ok()?;
+                return Some((text, end));
+            }
         }
-        offset += 2;
+        offset = if end > offset { end } else { offset + 2 };
     }
     None
-}
-
-fn looks_like_note_text(text: &str) -> bool {
-    let mut total = 0;
-    let mut common = 0;
-    for ch in text.chars() {
-        if ch.is_whitespace() {
-            continue;
-        }
-        total += 1;
-        if ch.is_ascii_alphanumeric() || ch.is_ascii_punctuation() {
-            common += 1;
-        }
-    }
-    total >= 3 && common * 4 >= total * 3
 }
 
 fn tlv_color(data: &[u8], tag: u16) -> Option<Color> {
