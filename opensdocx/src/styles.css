@@ -52,19 +52,32 @@ body {
 
 .stage {
   flex: 1 1 auto;
+  position: relative;
   overflow: auto;
+}
+
+#doc {
+  position: relative;
+  margin: 0 auto;
+}
+
+.pagecanvas {
+  position: absolute;
+  background: #ffffff;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
-  padding: 16px;
+  color: #888;
+  font-size: 15px;
+  pointer-events: none;
 }
-
-.empty { color: #888; font-size: 15px; }
 .empty code { background: rgba(0, 0, 0, 0.06); padding: 1px 5px; border-radius: 4px; }
 
-#page {
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
-  background: #fff;
-}
 
 @media (prefers-color-scheme: dark) {
   :root {

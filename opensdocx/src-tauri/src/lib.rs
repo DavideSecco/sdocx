@@ -14,15 +14,7 @@ use tauri::State;
 /// request pages lazily without re-parsing.
 #[derive(Default)]
 struct AppState {
-    doc: Mutex<Option<sdocx::Document>>,
-}
-
-#[derive(Serialize)]
-struct PageMeta {
-    width: u32,
-    height: u32,
-    stroke_count: usize,
-    element_count: usize,
+    reader: Mutex<Option<sdocx::Reader<std::fs::File>>>,
 }
 
 #[derive(Serialize)]
@@ -30,17 +22,20 @@ struct DocMeta {
     page_count: usize,
     dark_mode: bool,
     background: Option<[u8; 3]>,
-    pages: Vec<PageMeta>,
 }
 
 #[derive(Serialize)]
 struct SceneStroke {
     points: Vec<[f64; 2]>,
-    pressures: Vec<f64>,
     color: Option<[u8; 3]>,
     width: f32,
     tapered: bool,
     tool_id: Option<u8>,
+    /// Per-point pressure quantized to 0..=255, present only for tapered
+    /// (ink-pen-category) strokes — flat tools render at constant width, so
+    /// shipping their pressure channel would be dead payload.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pressures: Option<Vec<u8>>,
 }
 
 #[derive(Serialize)]
@@ -91,38 +86,22 @@ fn color_arr(c: &sdocx::Color) -> [u8; 3] {
     [c.r, c.g, c.b]
 }
 
-impl DocMeta {
-    fn build(doc: &sdocx::Document) -> Self {
-        let pages = doc
-            .pages
-            .iter()
-            .map(|p| PageMeta {
-                width: p.width,
-                height: p.height,
-                stroke_count: p.strokes.len(),
-                element_count: p.elements.len(),
-            })
-            .collect();
-        DocMeta {
-            page_count: doc.pages.len(),
-            dark_mode: doc.metadata.dark_mode_compatibility.unwrap_or(false),
-            background: doc.metadata.background_color.as_ref().map(color_arr),
-            pages,
-        }
-    }
-}
-
 fn build_page_scene(page: &sdocx::Page) -> PageScene {
     let strokes = page
         .strokes
         .iter()
         .map(|s| SceneStroke {
             points: s.points.iter().map(|p| [p.x, p.y]).collect(),
-            pressures: s.pressures.clone(),
             color: s.color.as_ref().map(color_arr),
             width: s.pen_width,
             tapered: s.tapered,
             tool_id: s.tool_id,
+            pressures: (s.tapered && !s.pressures.is_empty()).then(|| {
+                s.pressures
+                    .iter()
+                    .map(|&p| (p.clamp(0.0, 1.0) * 255.0).round() as u8)
+                    .collect()
+            }),
         })
         .collect();
 
@@ -169,37 +148,84 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
     }
 }
 
-/// Parse a `.sdocx` from a path, cache it in state, and return page metadata.
+/// Open a `.sdocx` lazily (metadata + manifests only), cache the reader in state,
+/// and return document metadata. Pages/media are decoded on demand below, so even
+/// huge multi-page notes open instantly and cheaply.
 #[tauri::command]
-fn open_document(path: String, state: State<AppState>) -> Result<DocMeta, String> {
-    let doc = sdocx::parse(&path).map_err(|e| e.to_string())?;
-    let meta = DocMeta::build(&doc);
-    *state.doc.lock().unwrap() = Some(doc);
+async fn open_document(path: String, state: State<'_, AppState>) -> Result<DocMeta, String> {
+    let reader = sdocx::open(&path).map_err(|e| e.to_string())?;
+    let meta = DocMeta {
+        page_count: reader.page_count(),
+        dark_mode: reader.metadata().dark_mode_compatibility.unwrap_or(false),
+        background: reader.metadata().background_color.as_ref().map(color_arr),
+    };
+    *state.reader.lock().unwrap() = Some(reader);
     Ok(meta)
 }
 
-/// Return the lightweight render scene for one page of the loaded document.
+/// Parse and return the lightweight render scene for a single page (on demand).
+///
+/// The Reader mutex is held only while extracting the page's bytes from the ZIP;
+/// the parse itself runs outside the lock, so concurrent page requests (scroll,
+/// prefetch) parse in parallel instead of queueing on one page at a time.
 #[tauri::command]
-fn get_page_scene(index: usize, state: State<AppState>) -> Result<PageScene, String> {
-    let guard = state.doc.lock().unwrap();
-    let doc = guard.as_ref().ok_or("no document loaded")?;
-    let page = doc.pages.get(index).ok_or("page index out of range")?;
-    Ok(build_page_scene(page))
+async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<PageScene, String> {
+    let (bytes, note_text, media_map) = {
+        let mut guard = state.reader.lock().unwrap();
+        let reader = guard.as_mut().ok_or("no document loaded")?;
+        let bytes = reader.page_bytes(index).map_err(|e| e.to_string())?;
+        // The typed note body renders as page 0's text layer (as Reader::page does).
+        let note_text = (index == 0)
+            .then(|| reader.metadata().note_text.clone())
+            .flatten();
+        (bytes, note_text, reader.media_index_map().clone())
+    };
+    let mut page = sdocx::parse_page(&bytes).map_err(|e| e.to_string())?;
+    sdocx::remap_media_indices(&mut page, &media_map);
+    if let Some(text) = note_text {
+        page.elements.push(sdocx::PageElement::TextBox(text));
+    }
+    Ok(build_page_scene(&page))
 }
 
-/// Return one embedded media asset as a base64 blob (for images/audio).
+/// Read every page's pixel size cheaply (headers only) for continuous-scroll layout.
 #[tauri::command]
-fn get_media(index: usize, state: State<AppState>) -> Result<MediaOut, String> {
-    let guard = state.doc.lock().unwrap();
-    let doc = guard.as_ref().ok_or("no document loaded")?;
-    let asset = doc
-        .metadata
+async fn get_page_sizes(state: State<'_, AppState>) -> Result<Vec<[u32; 2]>, String> {
+    let mut guard = state.reader.lock().unwrap();
+    let reader = guard.as_mut().ok_or("no document loaded")?;
+    let n = reader.page_count();
+    let mut sizes = Vec::with_capacity(n);
+    for i in 0..n {
+        let (w, h) = reader.page_size(i).map_err(|e| e.to_string())?;
+        sizes.push([w, h]);
+    }
+    Ok(sizes)
+}
+
+/// Read one embedded media blob (on demand) and return it base64-encoded.
+#[tauri::command]
+async fn get_media(index: usize, state: State<'_, AppState>) -> Result<MediaOut, String> {
+    let mut guard = state.reader.lock().unwrap();
+    let reader = guard.as_mut().ok_or("no document loaded")?;
+    let mime = reader
+        .metadata()
         .media_assets
         .get(index)
+        .map(|a| a.mime_type.clone())
         .ok_or("media index out of range")?;
+    let bytes = reader.media_bytes(index).map_err(|e| e.to_string())?;
+    // Pasted images are extensionless, so the name-derived mime can be wrong —
+    // trust the magic bytes when they identify a known image format.
+    let sniffed = match bytes.as_slice() {
+        [0xFF, 0xD8, ..] => Some("image/jpeg"),
+        [0x89, b'P', b'N', b'G', ..] => Some("image/png"),
+        [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => Some("image/webp"),
+        [b'G', b'I', b'F', b'8', ..] => Some("image/gif"),
+        _ => None,
+    };
     Ok(MediaOut {
-        mime: asset.mime_type.clone(),
-        base64: base64::engine::general_purpose::STANDARD.encode(&asset.data),
+        mime: sniffed.map(str::to_string).unwrap_or(mime),
+        base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
     })
 }
 
@@ -250,6 +276,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             open_document,
+            get_page_sizes,
             get_page_scene,
             get_media
         ])

@@ -276,6 +276,27 @@ Append-only; newest last. Record what changed and why.
   kept open (risk ⑦). **Principle adopted now: the parser preserves opaque/unknown
   byte spans** so future editing (writer/round-trip) stays feasible (risk ⑧).
 
+## 10b. Rendering architecture (decided 2026-07-07)
+
+The viewer is a **continuous, virtualized, worker-rendered document** (PDF.js-style),
+not a single-page view — chosen so it never dead-ends when continuous scroll is
+needed:
+
+- **Continuous scroll**: all pages stacked vertically; page-nav = "jump to page".
+- **Virtualized**: only pages in/near the viewport are rendered; others are
+  correctly-sized placeholders → scales to 66+ page notes.
+- **Exact layout up front**: all page sizes are read cheaply from each `.page`
+  header (~30 bytes, no stroke parse) via `Reader::page_size` / a `get_page_sizes`
+  command, so the scroll column has no reflow jumps.
+- **Rasterize in a Web Worker (OffscreenCanvas)**: scene→bitmap happens off the
+  main thread, so scroll/zoom never freeze; neighbours are pre-rasterized.
+- Reused unchanged: the Rust lazy `Reader` + `Scene` + parser (incl. the O(n²)
+  fix), async commands, scene cache, and the Scene→canvas drawing logic (which
+  moves into the worker). Only the frontend *view layer* is rebuilt.
+
+Lesson driving this: don't ship half-measures that win now but block the
+continuous view later (user, 2026-07-07).
+
 ## 11. Open decisions (to resolve as we hit them)
 
 1. **Perf-spike verdict** → confirm Tauri, or switch frontend to Slint+wgpu.
@@ -330,6 +351,11 @@ disposition; we address them in the phase noted, not all now.
    *Disposition:* principle adopted now — **the parser preserves opaque/unknown
    byte spans** (cheap today) so a future writer can round-trip. The editable
    document model itself is future work (north star).
+
+   *Update 2026-07-07:* stroke **Catmull-Rom smoothing + pressure-width** was first
+   implemented in the canvas frontend (`opensdocx/src/main.ts`) for the visual win;
+   per the risk ② decision it will be centralized into the shared render logic when
+   the SVG/diff-harness path is built (Phase 1).
 9. 🟡 **Touch-SCREEN pinch still zooms the whole UI** (Linux/WebKitGTK). The Rust
    fix (opensdocx/src-tauri/src/lib.rs) pins the WebKit zoom level (Ctrl+scroll,
    Ctrl +/-) and swallows *touchpad* pinch (GDK `TouchpadPinch`), but a
