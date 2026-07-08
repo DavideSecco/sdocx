@@ -7,7 +7,9 @@ interface DocMeta { page_count: number; dark_mode: boolean; background: RGB | nu
 interface Stroke { points: [number, number][]; color: RGB | null; width: number; tapered: boolean; tool_id: number | null; pressures?: number[] }
 interface SImage { x: number; y: number; w: number; h: number; media_index: number }
 interface SText { x: number; y: number; w: number; h: number; text: string; color: RGB | null; font_size: number | null; rotation: number | null }
-interface PageScene { width: number; height: number; background: RGB | null; template: { id: number; kind: string } | null; strokes: Stroke[]; images: SImage[]; texts: SText[] }
+interface STemplate { id: number; kind: string; spacing?: number; origin?: [number, number]; color?: RGB; line_width?: number }
+interface SShape { kind: string; points: [number, number][]; color: RGB | null; width: number; closed: boolean; ellipse?: unknown; round_rect?: unknown; outline?: unknown[]; heads?: [number, number][][] }
+interface PageScene { width: number; height: number; background: RGB | null; template: STemplate | null; strokes: Stroke[]; images: SImage[]; shapes: SShape[]; texts: SText[] }
 
 const GAP = 16;
 const MAX_BITMAP_DIM = 8192; // cap the offscreen raster per page (webview canvas limit)
@@ -340,6 +342,10 @@ function setZoom(newZoom: number): void {
 async function openFile(): Promise<void> {
   const selected = await open({ multiple: false, filters: [{ name: "Samsung Notes", extensions: ["sdocx"] }] });
   if (!selected || Array.isArray(selected)) return;
+  await loadDocument(selected);
+}
+
+async function loadDocument(selected: string): Promise<void> {
   meta = await invoke<DocMeta>("open_document", { path: selected });
   sizes = await invoke<[number, number][]>("get_page_sizes");
   sceneCache.clear();
@@ -362,6 +368,20 @@ nextBtn.addEventListener("click", () => scrollToPage(curPage + 1));
 fitBtn.addEventListener("click", () => { if (meta) { fitZoom(); setZoom(zoom); } });
 
 stage.addEventListener("scroll", scheduleVisible);
+
+// Dev affordance: `VITE_OPEN_FILE=/abs/path.sdocx npm run tauri dev` auto-opens a
+// file at startup (optionally jumping to 1-based page VITE_OPEN_PAGE), so the
+// render-verification workflow can drive the app without clicking through the
+// dialog. Unset in production builds; the dialog stays the normal path.
+const autoOpen = import.meta.env.VITE_OPEN_FILE as string | undefined;
+if (autoOpen) {
+  loadDocument(autoOpen)
+    .then(() => {
+      const page = Number(import.meta.env.VITE_OPEN_PAGE ?? "");
+      if (page >= 2) scrollToPage(page - 1);
+    })
+    .catch((err) => alert(String(err)));
+}
 
 // Ctrl/Cmd + wheel = zoom; plain wheel scrolls natively.
 window.addEventListener("wheel", (e) => {
