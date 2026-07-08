@@ -22,7 +22,7 @@ A `.sdocx` file is a ZIP archive. Its members:
 | Member | Role | Doc | Spec |
 |---|---|---|---|
 | `pageIdInfo.dat` | True page order + per-page hashes | [`container/pageIdInfo.md`](./container/pageIdInfo.md) | [`sdocx_page_id_info.ksy`](../../spec/ksy/sdocx_page_id_info.ksy) ✅ |
-| `note.note` | Typed text, tables, metadata, tail records | [`container/note-note/`](./container/note-note/) | [`sdocx_note.ksy`](../../spec/ksy/sdocx_note.ksy) ✅ (header) |
+| `note.note` | Typed text, tables, metadata, pen/voice flex fields | [`container/note-note/`](./container/note-note/) | [`sdocx_note.ksy`](../../spec/ksy/sdocx_note.ksy) ✅ (whole member) |
 | `<uuid>.page` | Per-page layer/object tree (strokes, shapes, images, text) | [`container/page/`](./container/page/) | [`sdocx_page.ksy`](../../spec/ksy/sdocx_page.ksy) ✅ (header) |
 | `media/mediaInfo.dat` | Media manifest (index, name, SHA-256) | [`container/mediaInfo.md`](./container/mediaInfo.md) | [`sdocx_media_info.ksy`](../../spec/ksy/sdocx_media_info.ksy) ✅ |
 | `media/*` | Attachments: images, audio, sticky-memos | `container/attachments.md` *(todo)* | — |

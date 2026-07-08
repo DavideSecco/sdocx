@@ -62,7 +62,7 @@ we copy logic closely, add MIT attribution.
 
 | Surface | Verdict | Why |
 |---|---|---|
-| `text` / `text_core` | **NUOVO** | They provide a framed schema for common text, spans, paragraphs, margins, gravity, sections, inline objects; we mostly scan TLV markers. |
+| `text` / `text_core` | **PROMOSSO (note-level)** | Their `Common` frame (text, spans, paragraphs, margins, gravity, sections, inline objects) is now decoded and validated corpus-wide for note title/body + table cells (`pysdocx/note_doc.py`, `docs/format/container/note-note/typed-text.md`). Page text boxes remain a separate variant (frame visible on only 2/8 blobs). |
 | `shape` | **NUOVO** | They model formal shape/type/fill/template/control-point fields and a much broader shape enum; we decode rendered outline well but not full payload schema. |
 | `shape_base` / `line` | **NUOVO** | They decode line colour/style effects, caps, joins, arrows, connection points, slave UUIDs; we infer arrow/line geometry from markers. |
 | `painting` / drawing | **NUOVO** | They decode object type 14 as attached file, thumbnail, ratio, crop/original rect; we scan media index/hash/bbox. |
@@ -73,7 +73,7 @@ we copy logic closely, add MIT attribution.
 | `stroke` pressure/tilt | **CONFERMA** | Their compressed/uncompressed event layouts match our pressure/tilt/timestamp model; they also name more stroke flex fields. |
 | `mediaInfo.dat` | **CONFERMA + PROMOSSO** | Our former `magic/tag/time_candidate/marker` correspond to their `format_version/ref_count/modified_time/is_attached`; parser/spec/docs now use the new names with compatibility aliases. |
 | `end_tag.bin` | **CONFERMA + PROMOSSO** | Their richer SDK struct explains our former raw islands; parser/spec/docs now expose the sequential footer with compatibility aliases. |
-| `note.note` | **NUOVO + HASH CONFERMATO** | They parse title/body `Text`, string registry, pen info, voice records, attached files. Their SHA-256 lead is confirmed here as `note.note[-32:] == sha256(note.note[:-32])` on 13/13. |
+| `note.note` | **PROMOSSO** | Their sequential `note_doc` schema (bitfields, header, title/body blobs, flag-gated flex fields: string registry, pen info, voice records, attached files, …) is now decoded end-to-end and validates on 14/14, landing exactly on the trailing hash (`pysdocx/note_doc.py`, `spec/ksy/sdocx_note.ksy`). Two local improvements over their parser: the 8-byte pre-flex gap decodes as a `(width, round(width*sqrt(2)))` pair, and inline objects carry `position` + 8 trailing bytes they don't model. |
 
 ## Detailed gaps
 
@@ -103,21 +103,20 @@ Ours:
 - Text boxes reuse local style scans and expose text/bbox/angle/frame geometry
   (`pysdocx/page.py:1466-1495`).
 
-Diagnostic result: `spec/tools/analyze_sdocx2pdf_leads.py` finds Common-like
-frames on 19/21 note title/body diagnostic surfaces (including every title blob
-and body raw text field), but only 1/7 page text-box blobs. The other 6/7 text
-boxes do not expose that simple frame at the same blob level.
+Verdict: **PROMOSSO for note-level text (title/body/table cells).** The full
+`Common` frame — text, span vector, paragraph vector, margins, gravity,
+section data, inline objects — is decoded in `pysdocx/note_doc.py` and
+validated with zero counterexamples against the TLV scans
+(`spec/tools/analyze_note_doc.py`; docs in
+`docs/format/container/note-note/typed-text.md`). The TLV families are exactly
+serialized span/paragraph records; table cells are nested Common frames inside
+a type-22 inline object. Two things their parser does not model were decoded
+here: the inline-object tail (`u32 position` = U+FFFC anchor index + 8 unknown
+bytes) and paragraph types 8/9/10 (space-before/after, style) missing from
+their enum.
 
-Verdict: **NUOVO hypothesis, not promoted.** Their schema likely explains some
-TLV families as serialized span/paragraph records, plus margins/gravity that may
-address rotated text-box padding/layout unknowns (`docs/format/unknowns.md:28-32`),
-but current corpus alignment is not sufficient for promotion.
-
-Next step: parse the payload after the matched note-level text inside each
-Common-like frame as spans, paragraphs, margins, gravity, sections, and optional
-inline-object flags. Promote only subfields that match existing style/paragraph
-scans with zero counterexamples. Keep page text boxes as a separate variant
-because 6/7 do not align with the simple frame at the current blob level.
+Next step (still open): page text boxes expose the frame on only 2/8 blobs at
+the raw blob level — find the wrapper variant, then reuse `parse_common_frame`.
 
 ### Shape / shape payload — NUOVO
 
@@ -420,19 +419,27 @@ Ours:
 - Unknowns include title object inner schema, tail records, voice clip post
   fields, and tail hash block prefix values (`docs/format/unknowns.md:19-32`).
 
-Verdict: **NUOVO hypothesis for the broader note schema; HASH PROMOSSO.**
-The hash lead validates on our corpus as `sha256(note.note[:-32]) ==
-note.note[-32:]` on 13/13. The page footer hash remains a separate unresolved
-construction.
+Verdict: **PROMOSSO.** The whole sequential `note_doc` schema now validates on
+14/14 with the positional hash gate: header + bitfields (our `flags` /
+`meta_flags` are their property/field flags), title/body blobs, string
+registry, pen info (simple + full), voice recordings with events, and the
+enum-valued fixed fields (`pysdocx/note_doc.py`, `spec/ksy/sdocx_note.ksy`,
+`spec/tools/validate_note.py`). The page footer hash remains a separate
+unresolved construction.
 
-Next step: build read-only diagnostics for the broader `note_doc` schema:
-string registry, title/body `Text`, pen info, voice records, and attached files.
+Local additions beyond their parser: the sometimes-8-byte pre-flex gap (their
+"fixme: eight-byte underread") decodes as a u32 pair
+`(width, round(width*sqrt(2)))` on 12/12 occurrences, and the legacy
+tail-record scans map one-for-one onto flex fields
+(`docs/format/container/note-note/tail-records.md`).
 
 ## What is worth porting first
 
-1. Note-level `text_core::Common` payload parsing, because title/body frame
-   detection now hits 19/21 diagnostic surfaces.
-2. `Image` / `Painting` flex-field alignment, because media refs are confirmed
-   as `u32` on 16/16 objects but crop/original/thumbnail fields are not isolated.
-3. Targeted audio-object samples, because current voice clips link to `.m4a`
-   2/2 but page object type 10 is absent 0/13.
+1. ~~Note-level `text_core::Common` payload parsing~~ — **done** (promoted
+   with the full sequential `note_doc` schema, 2026-07-08).
+2. Page text-box `Common` variant: find the wrapper offset so the promoted
+   frame parser also covers the 6/8 text-box blobs that hide it.
+3. `Image` / `Painting` flex-field alignment, because media refs are confirmed
+   as `u32` on 60/60 objects but crop/original/thumbnail fields are not isolated.
+4. Targeted audio-object samples, because current voice clips link to `.m4a`
+   2/2 but page object type 10 is absent 0/14.

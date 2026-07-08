@@ -1,77 +1,52 @@
-# `note.note` → tail records
+# `note.note` → tail region (flex fields)
 
-The region of `note.note` beginning at the header's `offset_to_data`. It is a
-sequence of small records (a sentinel, a hash block, pen-preload paths and
-their preludes, pen-style blocks, and voice-clip records) located mostly by
-**markers**, not fixed offsets.
+The region of `note.note` beginning at the header's `flex_offset` (alias
+`offset_to_data`). Historically this was decoded bottom-up as a sequence of
+marker-scanned "tail records"; it is now **Decoded top-down** as the flex
+fields gated by `field_flags` — see the field table in [README](./README.md).
+Corpus byte-coverage of the tail is 100% with exact boundaries (the sequential
+parse must land on the trailing hash).
 
-Only the fixed-boundary anchors are modeled in
-[`spec/ksy/sdocx_note.ksy`](../../../../spec/ksy/sdocx_note.ksy): the 16-byte
-`tail_sentinel` at `offset_to_data`, the note's trailing 32-byte hash
-(`note.note[-32:]`), and two EOF-relative candidate windows for the
-`tail_hash_block` shape observed in the corpus (40 bytes ending at EOF, or 40
-bytes followed by a 4-byte `tail_post_hash_u32`). Marker-scanned pen and voice
-records remain procedural here.
-
-- **Reference parser:** `scan_note_tail_records` /
+- **Formal spec:** [`spec/ksy/sdocx_note.ksy`](../../../../spec/ksy/sdocx_note.ksy).
+- **Reference parser:** `parse_note_doc` in
+  [`pysdocx/note_doc.py`](../../../../pysdocx/note_doc.py).
+- **Legacy scans (still used by the renderer):** `scan_note_tail_records` /
   `annotate_note_tail_with_page_id_info` in
-  [`pysdocx/note.py`](../../../../pysdocx/note.py).
-- **Tail diagnostic:** [`spec/tools/analyze_note_tail.py`](../../../../spec/tools/analyze_note_tail.py)
-  summarizes pen preload/style, voice, and post-hash relations.
-- **Status:** boundaries **Structural**; several fields **Semantic**; residual
-  fields **Unknown**. Corpus byte-coverage of the tail is **100% structurally
-  accounted** (no unexplained bytes), but "accounted" ≠ "semantically named".
+  [`pysdocx/note.py`](../../../../pysdocx/note.py), cross-checked against the
+  structural parse by
+  [`spec/tools/analyze_note_doc.py`](../../../../spec/tools/analyze_note_doc.py).
 
-## Record kinds — corpus counts
+## Legacy record kinds → structural fields
 
-| Kind | Count | Status |
-|---|---|---|
-| `tail_sentinel` | 13 | starts exactly at `offset_to_data` on 13/13 |
-| `tail_hash_block` | 13 | one per note; linked to `pageIdInfo.dat` head |
-| `pen_preload_path` | 38 | `u16 char_len + UTF-16LE` resource path |
-| `pen_preload_prelude` / `_raw` | 24 / 13 | bounded blocks before paths |
-| `pen_style_tail` | 10 | leading `f32` width + ARGB color + optional param |
-| `voice_clip` / `_header` / `_post` | 2 / 2 / 2 | audio metadata (2 audio notes) |
-| `tail_post_hash_u32` | 3 | 4 bytes after some hash blocks |
+Every marker-scanned record kind is explained by a flex field:
 
-## Decoded / Semantic
+| Legacy scan kind | Structural decode |
+|---|---|
+| `tail_sentinel` (16 bytes `00000000 ffffffff 00000000 00000000`) | the first three flex fields: `last_edited_page_index = 0` (u32) + `last_edited_page_image_id = -1` (i32) + `last_edited_page_time_us = 0` (i64) |
+| `pen_preload_path` (UTF-16 resource paths) | `pen_info.name` (in `last_pen_info` / `compatible_last_pen_info`) and `string_registry` values |
+| preload parameter hints (`8;`, `14;`, `18;0;100;`, …) | `pen_info.advanced_settings` and `string_registry` values — the registry pairs each pen resource name with its parameter string |
+| `pen_preload_prelude` / `_raw` | the fixed pen-record fields around the strings (`size` f32, `color` ARGB, `is_curvable`, `is_eraser_enabled`, `size_level`, `particle_density`, `ui_color_hsv`, `ui_color_info`, and in the full record `particle_size`, `is_fixed_width`, optional `is_fixed_opacity` / `is_auto_size_enabled` / `fit_ratio`) |
+| `pen_style_tail` (leading f32 width + ARGB) | `pen_info.size` + `pen_info.color` |
+| `voice_clip` / `_header` / `_post` | `voice_data` records: `[u32 size][u32 file_id][short-utf16 name][short-utf16 duration_str][i64 created_time_us][u32 event_count × (u32 action, i64 time_us)][i64 precise_duration_ms]`; `file_id` is the `.m4a` mediaInfo index, `action` is 0 none / 1 start / 2 pause / 3 resume / 4 stop, `precise_duration_ms` is the previously scanned actual-duration candidate |
+| `tail_hash_block.prefix_u32` (two u32s before the hash) | `fixed_text_direction` + `fixed_background_theme` (both `2` = default on the corpus) — the last two flex fields before the trailing hash |
+| `tail_hash_block` boundary variants / `tail_post_hash_u32` | scan artifacts: the hash is always exactly `note.note[-32:]`; the "shifted" candidate windows and the copied post-hash u32 were mis-anchored heuristics, superseded by the exact structural boundary |
 
-- **`tail_sentinel`** — the fixed pattern `00000000 ffffffff 0000000000000000`
-  marks the start of the tail; it begins exactly at `offset_to_data` on 13/13.
-- **`tail_hash_block`** — appears once per note. The note's **trailing 32 bytes**
-  are exactly `pageIdInfo.dat`'s `head_hash` (`note.note[-32:] == head_hash` on
-  13/13; the test gate cross-checks it). So the manifest head is a copy of this
-  note tail hash. What the hash is computed over is still Unknown (see
-  [pageIdInfo unknowns](../pageIdInfo.md#unknown-regions)).
-  Structurally, 10/13 corpus notes store the 40-byte block at EOF
-  (`u32,u32,hash32`); 3/13 store that block immediately before a 4-byte
-  `tail_post_hash_u32`, so the trailing 32 bytes overlap the latter part of the
-  block plus the post field rather than being identical to `hash32`.
-- **`pen_preload_path`** — decoded as `u16 char_len + UTF-16LE path`, e.g.
-  `com.samsung.android.sdk.pen.pen.preload.InkPen2`. Reading it as a
-  length-prefixed string (not null-terminated) fixed a false leading slash and a
-  CJK-looking suffix, and raised the corpus hit count from 19 to 38.
-- **`pen_style_tail`** — a recurring block with a leading `f32` pen width and an
-  ARGB color, plus an optional digit/semicolon parameter string.
-- **Voice linkage** — `voice_clip_header.raw_u32[3]` matches the `.m4a`
-  `mediaInfo.dat` media index on both audio samples; `voice_clip_post` exposes an
-  actual-duration-ms candidate (`5760`, `12053`). Promoted as **diagnostic**
-  linkage, not a complete audio schema.
-- **`tail_post_hash_u32`** — appears on 3/13 notes, immediately after a shifted
-  `tail_hash_block`. Its `u32` value is exactly the little-endian value of
-  `note.note[-4:]` on all 3 occurrences. This is a copied trailing fragment, not
-  evidence for an independent checksum.
+All of the above validate with zero counterexamples on the corpus
+(`analyze_note_doc.py`: voice names/durations/file-ids/precise-ms 2/2, pen
+names 11/11 against the preload scans, string registry parsed on 11/11 files
+that set bit 10).
 
-## Unknown (bounded, not named)
+## Still Unknown
 
-- Exact semantics of the raw fields immediately around preload paths, and of the
-  preload parameter hints (`8;`, `14;`, `18;0;100;`, …) — these do **not** map
-  one-to-one to pen tool names on the current corpus.
-- `pen_style_tail.param` / `pen_style_tail.raw_u32`.
-- Exact meaning of why `tail_post_hash_u32` is emitted on only the three shifted
-  tail-hash samples.
-- `voice_clip.post_u32` semantics beyond the duration candidate.
-- The meaning of the `tail_hash_block` hash itself.
-
-These stay Unknown deliberately: the corpus bounds them structurally but cannot
-yet isolate their meaning without samples that vary one variable at a time.
+- **`pre_flex_gap`** (before the flex fields, not strictly part of them): 0 or
+  8 bytes; when 8, a u32 pair `(width, round(width*sqrt(2)))` — an
+  A4-proportioned default-page-size candidate. It does not always match the
+  real `.page` sizes (single-scroll notes differ), so it stays Unknown.
+- **Semantics of pen numeric fields** beyond their names (`size_level`,
+  `particle_density`, `ui_color_info`) — named from `sdocx2pdf`, values
+  bounded, effect untested.
+- **Unexercised flex fields** (corpus 0/14): `app_name`, `app_version`,
+  `author_info`, `latitude_longitude`, `template_uri`,
+  `compatible_last_pen_info`, `attached_files`, `server_check_point`,
+  `fixed_font`, `text_summarisation`, `stroke_group_size`,
+  `app_custom_data` — structurally modeled, need targeted samples.

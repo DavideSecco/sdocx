@@ -2,12 +2,40 @@
 
 Start with [`CLAUDE.md`](./CLAUDE.md) (repo map, discipline, run commands) and
 [`docs/format/`](./docs/format/) (the format knowledge base). This file is the
-running "where we are + what's next". Last updated: 2026-07-06.
+running "where we are + what's next". Last updated: 2026-07-08.
+The corpus is now **14 samples** (a heavily-illustrated 14th sample joined; all
+hardcoded corpus counts in the regression tests were refreshed).
 
 ## Where we are
 
-The **outer/container format is essentially fully decoded**, and the decoded
-structure is now backed by an executable spec:
+The **outer/container format is essentially fully decoded**, and — new —
+**`note.note` is now sequentially decoded end-to-end**, backed by an
+executable spec:
+
+- **`note.note` note-doc structure (NEW, 2026-07-08):** the whole member
+  parses as one sequential structure — header, two variable-length bitfields
+  (`meta_flags` turned out to be the **field-flags bitfield** gating the tail
+  "flex fields"), title/body Text blobs, and flag-gated flex fields (string
+  registry, pen records, voice recordings, attached files, …) ending exactly
+  at the trailing hash on **14/14**. All legacy marker-scanned "tail records"
+  are explained as flex fields (pen preload paths = pen names + string
+  registry; param hints = `advanced_settings`; voice clips = structured voice
+  recordings with start/stop events; the tail sentinel = the first three flex
+  fields; the hash-block prefix pair = `fixed_text_direction` +
+  `fixed_background_theme`). **Correction:** `meta_flags 0x2000` is
+  `voice_data`, NOT has-tables. Reference parser `pysdocx/note_doc.py`
+  (+ CLI `note-doc`), spec `spec/ksy/sdocx_note.ksy`, validator
+  `spec/tools/validate_note.py`, cross-check diagnostic
+  `spec/tools/analyze_note_doc.py`, docs `docs/format/container/note-note/`.
+- **`text_core::Common` rich-text frames (NEW, 2026-07-08):** the title/body
+  blobs carry an exactly-sized frame: text, span vector, paragraph vector,
+  margins, gravity, section data, inline objects. The TLV style/paragraph
+  scans are these records byte-for-byte (`18 00 <tag> 00` = 24-byte span,
+  strikethrough = 20-byte span type 20, `1c 00 05 00` = bullet paragraph);
+  span payloads carry the color/f32/bool + a constant zero u32. Table cells
+  are **nested Common frames** inside a type-22 inline object anchored at a
+  U+FFFC char (anchor == `position` 3/3); an inline image is object type 3.
+  Structural-vs-scan equality holds corpus-wide (zero counterexamples).
 
 - **Kaitai spec + test gate** ([`spec/`](./spec/), `tests/test_kaitai_spec.py`):
   each `spec/ksy/*.ksy` is compiled to a Python parser (vendored in
@@ -16,41 +44,60 @@ structure is now backed by an executable spec:
 
   | Surface | Coverage |
   |---|---|
-  | end_tag / pageIdInfo / mediaInfo / note-header | 13/13 |
-  | end_tag document_height == note.note height | 13/13 |
-  | mediaInfo record tail structure | 60/60 records |
-  | `.page` header | 48/48 pages |
-  | `.page` layer/object tree | 48/48 pages, 11788/11788 objects |
-  | object header (field_flags additive model) | 11788/11788 objects |
-  | payload-geometry wrapper | 412/412 |
-  | page-footer-hash == pageIdInfo manifest hash | 48/48 |
-  | head_hash == note.note[-32:] | 13/13 |
-  | note.note fixed tail anchors | 13/13 |
+  | end_tag / pageIdInfo / mediaInfo / note-doc | 14/14 |
+  | end_tag document_height == note.note height | 14/14 |
+  | mediaInfo record tail structure | 222/222 records |
+  | `.page` header / layer-object tree | all pages/objects |
+  | payload-geometry wrapper | 490/490 |
+  | page-footer-hash == pageIdInfo manifest hash | all pages |
+  | head_hash == note.note[-32:] | 14/14 |
+  | note.note full sequential structure | 14/14 |
 
-- **Recent decodes:** `sdocx_page.ksy` now models the `.page` layer/object tree
+- **Recent decodes:** `sdocx_page.ksy` models the `.page` layer/object tree
   structurally (layers, optional content fields, recursive object entries,
   object blob substreams, and layer hashes) and validates all object boundaries
-  against `parse_page_tree`. `sdocx_note.ksy` now models only the fixed
-  `note.note` tail anchors: the `offset_to_data` sentinel, the EOF-relative
-  tail-hash-block candidates, and `note.note[-32:]`.
+  against `parse_page_tree`. `sdocx_note.ksy` now models the **whole**
+  `note.note` member sequentially (see the note-doc bullet above).
 
 - `end_tag.bin` offset 26 is decoded as `document_height` (`f32`), matching
   `note.note.height` on 13/13 samples. This is the stacked document/note height,
   not a per-page height.
 
-- `mediaInfo.dat` record tails are now structurally decoded as
-  `[u16 tag][u64 time_candidate][u8 marker]` on 60/60 records; `marker == 1` on
-  all records. `tag` and `time_candidate` semantics remain Unknown: the time
-  candidate exactly matches neither note created/modified nor ZIP entry time.
+- `end_tag.bin` is now decoded as the sequential S Pen SDK footer cross-checked
+  against `sdocx2pdf`: note UUID, property flags, cover image, note size, app
+  version, min format version, created time, page model, document type, owner,
+  display timestamps, fixed text/theme settings, server checkpoint, orientation,
+  optional app custom data, and signature all validate on 13/13. The legacy
+  `handwritten.sdocx` footer omits the final zero-length app-custom-data field.
 
-- `note.note` `tail_post_hash_u32` is now decoded as a copy of the trailing
-  four bytes (`u32le(note.note[-4:])`) on all 3/3 occurrences; why only shifted
-  tail-hash samples carry it remains open.
+- `mediaInfo.dat` record tails are now decoded as
+  `[u16 ref_count][u64 modified_time][u8 is_attached]` on 60/60 records,
+  cross-checked against `sdocx2pdf`. `is_attached == true` on all records;
+  `modified_time` is timestamp-like but does not exactly match note
+  created/modified or ZIP entry time on the current corpus.
+
+- `note.note[-32:]` is now decoded as `sha256(note.note[:-32])` on 13/13
+  samples; `pageIdInfo.dat.head_hash` is a copy of that digest.
+
+- `note.note` `tail_post_hash_u32` / shifted tail-hash-block windows are
+  superseded: they were scan artifacts of what is now the exact flex-field +
+  trailing-hash structure (`docs/format/container/note-note/tail-records.md`).
 
 - Timestamp-ish diagnostics are captured in `spec/tools/analyze_time_fields.py`.
-  `end_tag.created_time_header` is exact on 13/13; `created_time_a/b` are exact
-  on 10/13 and divergent on the 3 older/imported samples; `extra_time_candidate`
-  is non-zero on only 2/13 and does not equal note modified time.
+  `end_tag.created_time_header` is exact on 13/13;
+  `display_created_time` / `display_modified_time` are exact on 10/13 and
+  divergent on the 3 older/imported samples;
+  `last_recognised_data_modified_time` is non-zero on only 2/13 and does not
+  equal note modified time.
+
+- `spec/tools/analyze_sdocx2pdf_leads.py` tracks not-yet-promoted
+  `sdocx2pdf` leads and sample gaps: `end_tag` variant gaps are all zero-hit
+  (no landscape, non-empty SDK strings, skipped/encryption blocks, or custom
+  data); image media-ref `u32` hits 59/59; painting/drawing media-ref `u32`
+  hits 1/1; voice clips link to `.m4a` mediaInfo records 2/2, with 0 page
+  object type-10 audio objects. The note-level `text_core::Common` lead has
+  been fully promoted (see above); the **page text-box** Common-like frame
+  still hits only 2/8 at the blob level and stays a lead.
 
 - Absolute-f64 stroke investigation has started in
   `spec/tools/analyze_absolute_f64_strokes.py`. Default corpus scan:
@@ -59,10 +106,10 @@ structure is now backed by an executable spec:
   a targeted sample or a stronger signature.
 
 - `pageIdInfo.dat` is a *manifest of copied hashes* —
-  `head_hash = note.note[-32:]`, `page_hash = the .page footer hash` (the 32
-  bytes just before the ASCII `Page for SAMSUNG S-Pen SDK` footer signature).
-  Both linkages are decoded and gate-checked; only the *construction* of the
-  underlying 32-byte hash is still open (see Negative results).
+  `head_hash = note.note[-32:] = sha256(note.note[:-32])`, and `page_hash = the
+  .page footer hash` (the 32 bytes just before the ASCII
+  `Page for SAMSUNG S-Pen SDK` footer signature). The note hash construction is
+  decoded; only the page footer hash construction remains open.
 
 ## Toolchain for spec work (needed for tasks below)
 
@@ -89,18 +136,32 @@ and checks layer/object boundaries (`off`, `blob_off`, `end`), counts, raw types
 blob sizes, recursive child order, and layer hashes against `parse_page_tree` /
 `_parse_objects` in [`pysdocx/page.py`](./pysdocx/page.py).
 
-## Completed task 2 — model the `note.note` tail (partial, honest scope)
+## Completed task 2 — model `note.note` end-to-end (supersedes the tail-anchor model)
 
-Done in `spec/ksy/sdocx_note.ksy`, `spec/tools/validate_note.py`, and
-`tests/test_kaitai_spec.py::test_note_header`. The `.ksy` models only fixed
-boundaries: `tail_sentinel` at `offset_to_data`, `trailing_hash` at
-`note.note[-32:]`, and the two EOF-relative `tail_hash_block` candidate windows
-observed in the corpus (EOF-aligned, or followed by a 4-byte post-hash u32).
-`pen_preload_path`, `pen_style_tail`, and voice records remain documented
-procedural scans because they are marker-found, not fixed-offset records.
+Done in `spec/ksy/sdocx_note.ksy`, `pysdocx/note_doc.py`,
+`spec/tools/validate_note.py`, `spec/tools/analyze_note_doc.py`, and
+`tests/test_kaitai_spec.py::test_note_doc` +
+`tests/test_pysdocx_regressions.py::NoteDocStructuralTest`. The `.ksy` now
+models the whole member sequentially (flex fields gated by `field_flags`);
+the old tail anchors (`tail_sentinel`, EOF-relative `tail_hash_block`
+windows, `tail_post_hash_u32`) are decoded/superseded — see
+`docs/format/container/note-note/tail-records.md`. Only the Text/Shape
+wrapper around the `text_core::Common` frames and the type-22 table object's
+inner schema remain procedural.
 
 ## Next tasks
 
+- **Page text-box `text_core::Common` variant:** the note-level Common frame
+  is fully decoded; page text-box blobs expose the same frame on only 2/8 at
+  the raw blob level. Find the wrapper offset/variant (likely the same
+  Text/Shape wrapper with extra fields) and reuse `parse_common_frame`.
+- **Type-22 table inline object schema:** cells are nested Common frames; the
+  surrounding block schema (cell records `06 00 <kind>`, f64 anchors, borders,
+  widths, the trailing `(3,2)` pair) is the next bounded target — 2 corpus
+  notes carry it.
+- **Targeted samples for unexercised flex fields:** a note with a template,
+  a shared/authored note, and an attached (non-image) file would exercise
+  `template_uri`, `author_info`/`app_name`, `attached_files`.
 - Keep expanding only zero-counterexample structural fields in Kaitai; marker
   scans stay in `pysdocx` + docs until a fixed boundary is proven.
 - When the user wants a targeted sample campaign, isolate `HDR_EXT.counter` with
@@ -111,12 +172,12 @@ procedural scans because they are marker-found, not fixed-offset records.
 
 ## Negative results (don't redo)
 
-- **The 32-byte content hash construction** (stored at `note.note[-32:]` and each
-  `.page` footer, then copied into `pageIdInfo.dat`): NOT reproduced by any plain
-  `sha256`/`sha3_256`/`blake2b` of the raw member, and a full contiguous-range
-  brute force over the smallest page found nothing. Likely a canonical/serialized
-  input or a keyed HMAC (device/app secret → unrecoverable from files). Low
-  priority.
+- **The `.page` footer 32-byte hash construction** (copied into
+  `pageIdInfo.dat.page_hash`): NOT reproduced by any plain
+  `sha256`/`sha3_256`/`blake2b` of the raw page member, and a full
+  contiguous-range brute force over the smallest page found nothing. Likely a
+  canonical/serialized input or a keyed construction. The `note.note` trailing
+  hash is no longer part of this negative result; it is `sha256(note.note[:-32])`.
 
 ## Lower-priority backlog
 
@@ -129,10 +190,13 @@ procedural scans because they are marker-found, not fixed-offset records.
   This is the main visible handwriting-fidelity gap, but it is render-side and was
   deprioritized by the user.
 - **Audio→media schema**: `voice_clip` links to a `.m4a` media index as a
-  diagnostic; a full schema needs more audio samples.
-- **`mediaInfo.dat` record tail semantics**, remaining **`end_tag.bin` middle fields**,
-  **`ext_block.seq`/`counter`**: bounded but not semantically named; need
-  isolated samples.
+  diagnostic (2/2 current clips); current pages contain 0 raw type-10 audio
+  objects, so a full page-object schema needs more audio samples.
+- **`mediaInfo.dat` reference-count / attached-flag edge semantics**,
+  **`end_tag.bin` variant coverage** (landscape/non-empty SDK strings/custom
+  data/skipped/encryption blocks), **image/painting flex fields**, and
+  **`ext_block.seq`/`counter`**: bounded but still need isolated samples for
+  semantic edge cases.
 
 ## Discipline
 
