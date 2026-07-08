@@ -9,7 +9,7 @@ this is the single, living plan for the app built on top of them.
 > the handoff between sessions for the app work, the way `future_todo.md` is for
 > the format RE.
 >
-> Status legend: ☐ todo · ◐ in progress · ☑ done. Last updated 2026-07-06.
+> Status legend: ☐ todo · ◐ in progress · ☑ done. Last updated 2026-07-08.
 
 ---
 
@@ -231,12 +231,19 @@ Each phase ends with a concrete, checkable deliverable.
   we have a measured 60fps + cross-webview-consistency verdict on the benchmark
   (→ confirm Tauri or trigger the native-GPU fallback).
 
-- **☐ Phase 1 — Fidelity (priority #1).**
+- **◐ Phase 1 — Fidelity (priority #1).**
   Build the pysdocx-vs-app **render-diff harness** first. Then port one content
   type at a time into the Scene builder, each gated by a passing diff:
   shapes → grid/template → typed text + pagination → tables → sticky → absolute-f64
   strokes → audio indicators.
   *Done when:* the whole corpus renders in-app matching pysdocx within threshold.
+  *Progress (2026-07-08):* **grid/template ☑** (SceneTemplate carries grid
+  kind/spacing/origin/color/line-width, worker draws it) and **shapes ☑** (parser
+  ported to `crates/sdocx` — `PageElement::Shape`, gated by a 384/384 field-level
+  parity test vs a pysdocx fixture — plus `SceneShape` with geometry resolved in
+  Rust and the worker drawer). The image render-diff harness was deferred (see
+  Decision log); these two ports are gated by the parser parity test + scene unit
+  tests + visual check vs pysdocx renders instead.
 
 - **☐ Phase 2 — Performance (priority #2).**
   Confirm/optimize lazy per-page rendering; resolve any SVG-vs-canvas or
@@ -275,6 +282,18 @@ Append-only; newest last. Record what changed and why.
   Zoom tiling handled in Phase 2 (risk ⑥). Big-note transport/cache deferred, door
   kept open (risk ⑦). **Principle adopted now: the parser preserves opaque/unknown
   byte spans** so future editing (writer/round-trip) stays feasible (risk ⑧).
+
+- **2026-07-08** — Phase 1 kickoff, harness deferred (user decision): grid/template
+  and shapes were ported **without** the §7 image-diff harness this round; the gate
+  is (a) a field-level parser parity test vs a pysdocx-generated fixture
+  (`crates/sdocx/tests/shapes.rs`, 384/384 shapes on the two shape samples),
+  (b) Scene-builder unit tests in `opensdocx/src-tauri`, and (c) manual visual
+  comparison vs pysdocx renders. The SSIM harness remains the Phase-1 backbone and
+  should come next. Per risk ②, all grid/shape render heuristics (grid pitch/origin/
+  color, the matplotlib-pt→page-unit factor 3.40, arrowhead sizing) live in the
+  Scene builder (`opensdocx/src-tauri/src/lib.rs`), flagged `⚠ Heuristic`; the
+  worker draws only what the Scene says. Dev affordance added: `VITE_OPEN_FILE`
+  (+ optional `VITE_OPEN_PAGE`) auto-opens a file in `tauri dev` for verification.
 
 ## 10b. Rendering architecture (decided 2026-07-07)
 
