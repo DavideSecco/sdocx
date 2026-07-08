@@ -20,6 +20,12 @@ from pysdocx.dump import dump_container
 from pysdocx.ink import color_hex
 from pysdocx.inventory import build_inventory
 from pysdocx.note import annotate_note_tail_with_page_id_info, parse_note_metadata, parse_typed_text
+from pysdocx.note_doc import (
+    SPAN_TYPE_NAMES,
+    NoteDocParseError,
+    note_doc_common_frames,
+    parse_note_doc,
+)
 from pysdocx.page import parse_page
 
 
@@ -598,6 +604,72 @@ def cmd_end_tag(args: argparse.Namespace) -> None:
         print(f"  raw_footer_padding={end_tag['raw_footer_padding_hex']}")
 
 
+def cmd_note_doc(args: argparse.Namespace) -> None:
+    note = load_note(args.file)
+    if note is None:
+        print("note.note: none")
+        return
+    try:
+        doc = parse_note_doc(note)
+    except NoteDocParseError as exc:
+        print(f"note.note: structural parse FAILED: {exc}")
+        return
+    if args.json:
+        doc = dict(doc)
+        doc["common_frames"] = note_doc_common_frames(note, doc)
+        print(json.dumps(doc, indent=2, ensure_ascii=False, default=str))
+        return
+    print(
+        f"note_doc fmt={doc['format_version']} min_fmt={doc['min_format_version']} "
+        f"id={doc['id']} rev={doc['file_revision']} size={doc['width']}x{doc['height']} "
+        f"pad={doc['page_h_padding']}x{doc['page_v_padding']} "
+        f"landed_on_hash={doc['landed_on_hash']}"
+    )
+    print(
+        f"  property_flags=0x{doc['property_flags']:x} field_flags=0x{doc['field_flags']:x} "
+        f"created_us={doc['created_time_us']} modified_us={doc['modified_time_us']} "
+        f"gap={doc['gap_size']} gap_pair={doc['gap_u32_pair']}"
+    )
+    for name, value in sorted(doc["fields"].items()):
+        if name == "voice_data":
+            for rec in value:
+                print(
+                    f"  voice: file_id={rec['file_id']} name={rec['name']!r} "
+                    f"dur={rec['duration_str']!r} precise_ms={rec['precise_duration_ms']} "
+                    f"events={[(e['action'], e['time_us']) for e in rec['events']]}"
+                )
+        elif name in ("compatible_last_pen_info", "last_pen_info"):
+            print(
+                f"  {name}: name={value['name']!r} size={value['size']:.2f} "
+                f"color={value['color']} adv={value['advanced_settings']!r} "
+                f"size_level={value['size_level']}"
+            )
+        elif name == "string_registry":
+            print(f"  string_registry: {value['strings'] or '{}'}")
+        else:
+            print(f"  {name}: {value!r}")
+    frames = note_doc_common_frames(note, doc)
+    for label in ("title", "body"):
+        frame = frames[label]
+        if frame is None:
+            print(f"  {label} common frame: none")
+            continue
+        print(
+            f"  {label} frame: chars={frame['char_count']} spans={len(frame['spans'])} "
+            f"paragraphs={len(frame['paragraphs'])} margins={frame['margins']} "
+            f"gravity={frame['gravity']} sections={len(frame['sections'])} "
+            f"inline={'-' if frame['inline'] is None else frame['inline']['present']}"
+        )
+        for span in frame["spans"] if args.spans else ():
+            name = SPAN_TYPE_NAMES.get(span["span_type"], f"?{span['span_type']}")
+            print(
+                f"    span {name} [{span['start']},{span['end']}) "
+                f"interval={span['interval_type']} extra={span['extra'] or '-'}"
+            )
+    for cell in frames["cells"]:
+        print(f"  cell frame: text={cell['text']!r} spans={len(cell['spans'])}")
+
+
 def cmd_inventory(args: argparse.Namespace) -> None:
     targets = args.paths or [Path("samples")]
     report = build_inventory(targets)
@@ -837,6 +909,12 @@ def main() -> None:
     p_end.add_argument("file", type=Path)
     p_end.add_argument("--raw", action="store_true", help="print raw undecoded byte ranges")
     p_end.set_defaults(func=cmd_end_tag)
+
+    p_note_doc = sub.add_parser("note-doc", help="print the structural (sequential) note.note parse")
+    p_note_doc.add_argument("file", type=Path)
+    p_note_doc.add_argument("--json", action="store_true", help="dump the full structure as JSON")
+    p_note_doc.add_argument("--spans", action="store_true", help="also print every span record")
+    p_note_doc.set_defaults(func=cmd_note_doc)
 
     p_inventory = sub.add_parser("inventory", help="summarize corpus-level format coverage/profiles")
     p_inventory.add_argument("paths", type=Path, nargs="*", help="files or directories to scan (default: samples/)")
