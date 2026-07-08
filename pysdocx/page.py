@@ -1830,12 +1830,21 @@ def _parse_shape_marker(data: bytes, marker: int, width: int, height: int) -> di
     color = _shape_color_before_marker(data, marker)
     pen_width = _shape_width(data, marker)
 
+    # `outline_ops` keeps the raw (tag, points) segments alongside the flattened
+    # `points` polyline — the renderer can then draw a true Bezier for shapes whose
+    # path has a real CubicBezierTo segment (heart, freeform_smooth) instead of a
+    # fixed-resolution sampled approximation, while every existing `points` consumer
+    # (closed-test, bbox, the shapes.rs Rust parity fixture) is untouched.
+    outline_ops = None
     if type_code in DEGENERATE_OUTLINE_TYPES:
         points = _read_vertex_list(data, marker, width, height)
     else:
-        points = flatten_outline(decode_outline(data, marker + SHAPE_OUTLINE_OFFSET, width, height))
+        segments = decode_outline(data, marker + SHAPE_OUTLINE_OFFSET, width, height)
+        points = flatten_outline(segments)
         if len(points) < 3:  # not a usable outline — try the vertex list
             points = _read_vertex_list(data, marker, width, height)
+        else:
+            outline_ops = segments
     if not points:
         return None
 
@@ -1851,6 +1860,7 @@ def _parse_shape_marker(data: bytes, marker: int, width: int, height: int) -> di
     return {
         "off": marker,
         "points": points,
+        "outline_ops": outline_ops,
         "color": color or (37, 37, 37),
         "type_code": type_code,
         "type": shape_type,

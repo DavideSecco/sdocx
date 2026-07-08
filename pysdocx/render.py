@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 import numpy as np
 from matplotlib.collections import LineCollection
-from matplotlib.patches import Ellipse, FancyBboxPatch
+from matplotlib.patches import Ellipse, FancyBboxPatch, PathPatch
+from matplotlib.path import Path as MplPath
 from PIL import Image
 
 from pysdocx.container import (
@@ -118,6 +119,29 @@ def ellipse_from_points(points):
     return center, float(np.hypot(*axis_a)), float(np.hypot(*axis_b)), angle
 
 
+def _path_from_outline_ops(outline_ops, closed):
+    """Build a matplotlib Path straight from the shape's raw (tag, points) segments
+    (pysdocx.page.decode_outline), so a CubicBezierTo segment (tag 4) draws as a
+    true parametric curve (Path.CURVE4) instead of the fixed-16-point-per-segment
+    sampled approximation `points`/flatten_outline uses. Only called when the
+    outline actually contains a curve — see the caller."""
+    verts, codes = [], []
+    for tag, seg in outline_ops:
+        if tag == 1:  # MoveTo
+            verts.append(seg[0])
+            codes.append(MplPath.MOVETO)
+        elif tag == 2:  # LineTo
+            verts.append(seg[0])
+            codes.append(MplPath.LINETO)
+        elif tag == 4:  # CubicBezierTo: 2 control points + end point
+            verts.extend(seg)
+            codes.extend([MplPath.CURVE4] * 3)
+    if closed and verts:
+        verts.append(verts[0])
+        codes.append(MplPath.CLOSEPOLY)
+    return MplPath(verts, codes)
+
+
 def render_shape(ax, shape, bg_color, default_ink=DEFAULT_INK):
     """Draw one inserted shape from its decoded true outline (pysdocx.parse_shapes).
 
@@ -162,9 +186,20 @@ def render_shape(ax, shape, bg_color, default_ink=DEFAULT_INK):
         )
         ax.annotate("", xy=(x1, y1), xytext=(x0, y0), zorder=2,
                     arrowprops=dict(arrowstyle=style, color=color, lw=lw, mutation_scale=8 + lw * 3))
-    else:  # polygons + heart + cross + freeform (smooth already flattened): draw the real outline
-        poly = list(pts) + ([pts[0]] if closed else [])
-        ax.plot([q[0] for q in poly], [q[1] for q in poly], "-", color=color, linewidth=lw, zorder=2)
+    else:  # polygons + heart + cross + freeform: draw the real outline
+        outline_ops = shape.get("outline_ops")
+        # Only heart/freeform_smooth actually carry a CubicBezierTo segment — draw
+        # those as a true Bezier (matches the OpenSdocx Rust/canvas renderer, which
+        # does the same, so the two stay comparable at any zoom). Every other shape
+        # here is an all-LineTo path; keep the plain polyline, unchanged, so the
+        # well-established majority of shapes gets zero visual footprint from this.
+        has_curve = outline_ops and any(tag == 4 for tag, _ in outline_ops)
+        if has_curve:
+            path = _path_from_outline_ops(outline_ops, closed)
+            ax.add_patch(PathPatch(path, fill=False, edgecolor=color, lw=lw, zorder=2))
+        else:
+            poly = list(pts) + ([pts[0]] if closed else [])
+            ax.plot([q[0] for q in poly], [q[1] for q in poly], "-", color=color, linewidth=lw, zorder=2)
 
 
 def _text_box_layout(box):
