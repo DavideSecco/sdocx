@@ -1,5 +1,5 @@
 {
-  "sample_count": 13,
+  "sample_count": 14,
   "samples": [
     {
       "file": "Allsamsungnotes_260630_113259.sdocx",
@@ -108,6 +108,40 @@
         "voice_clip",
         "voice_clip_header",
         "voice_clip_post"
+      ]
+    },
+    {
+      "file": "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
+      "pages": 66,
+      "objects": 84797,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
       ]
     },
     {
@@ -467,12 +501,13 @@
         "title",
         "voice_clip_labels_durations",
         "tail_record_boundaries",
+        "trailing_sha256_hash",
         "pen_preload_paths",
         "tail_hash_page_id_info_relation"
       ],
       "unknown": [
         "full_note_note_schema",
-        "raw_tail_record_field_semantics",
+        "tail_record_prefix_u32_semantics",
         "remaining_metadata_flags"
       ]
     },
@@ -484,13 +519,18 @@
       ],
       "decoded": [
         "manifest_records",
+        "format_version",
         "media_index",
         "filename",
         "sha256",
+        "ref_count",
+        "modified_time",
+        "is_attached",
         "eof_marker"
       ],
       "unknown": [
-        "manifest_tail_field_semantics"
+        "ref_count_semantic_edge_cases",
+        "is_attached_false_semantics"
       ]
     },
     {
@@ -502,13 +542,24 @@
       "decoded": [
         "payload_size",
         "format_version",
+        "note_uuid",
         "modified_time",
-        "created_time_candidates",
+        "page_size",
+        "app_version",
+        "created_time",
+        "page_model",
+        "document_type",
+        "display_timestamps",
+        "fixed_text_direction",
+        "fixed_background_theme",
+        "server_checkpoint",
+        "orientation",
+        "app_custom_data",
         "sdk_signature"
       ],
       "unknown": [
-        "middle_raw_fields",
-        "older_timestamp_unit_semantics"
+        "older_display_timestamp_unit_semantics",
+        "nonzero_property_flag_semantics"
       ]
     },
     {
@@ -697,13 +748,13 @@
       "object_type": "image",
       "family": "extended",
       "signature": "122/0xe000",
-      "count": 7,
+      "count": 50,
       "example_files": [
         "Allsamsungnotes_260630_113259.sdocx",
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
-        "OnlyImages_260702_190147.sdocx"
+        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx"
       ]
     },
     {
@@ -723,7 +774,7 @@
       "object_type": "shape",
       "family": "extended",
       "signature": "122/0xe000",
-      "count": 139,
+      "count": 173,
       "example_files": [
         "Allsamsungnotes_260630_113259.sdocx",
         "Allsamsungnotes_260630_113259.sdocx",
@@ -749,7 +800,7 @@
       "object_type": "stroke",
       "family": "base",
       "signature": "121/0x6000",
-      "count": 9921,
+      "count": 93873,
       "example_files": [
         "Allsamsungnotes_260630_113259.sdocx",
         "Allsamsungnotes_260630_113259.sdocx",
@@ -775,7 +826,7 @@
       "object_type": "stroke",
       "family": "extended",
       "signature": "153/0x6020",
-      "count": 8,
+      "count": 364,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
@@ -801,7 +852,7 @@
       "object_type": "stroke",
       "family": "extended_rotated",
       "signature": "157/0x6021",
-      "count": 19,
+      "count": 430,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
@@ -827,9 +878,10 @@
       "object_type": "text_box",
       "family": "base",
       "signature": "121/0x6000",
-      "count": 3,
+      "count": 4,
       "example_files": [
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
+        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
         "OnlyTextTypeWritten_260701_180427.sdocx",
         "OnlyTextTypeWritten_squared_260703_013624.sdocx"
       ]
@@ -859,7 +911,7 @@
       {
         "family": "extended",
         "signature": "122/0xe000",
-        "count": 7
+        "count": 50
       },
       {
         "family": "extended_rotated",
@@ -871,7 +923,7 @@
       {
         "family": "extended",
         "signature": "122/0xe000",
-        "count": 139
+        "count": 173
       },
       {
         "family": "extended",
@@ -883,7 +935,7 @@
       {
         "family": "base",
         "signature": "121/0x6000",
-        "count": 9921
+        "count": 93873
       },
       {
         "family": "extended",
@@ -893,7 +945,7 @@
       {
         "family": "extended",
         "signature": "153/0x6020",
-        "count": 8
+        "count": 364
       },
       {
         "family": "extended",
@@ -903,7 +955,7 @@
       {
         "family": "extended_rotated",
         "signature": "157/0x6021",
-        "count": 19
+        "count": 430
       },
       {
         "family": "extended_rotated",
@@ -915,7 +967,7 @@
       {
         "family": "base",
         "signature": "121/0x6000",
-        "count": 3
+        "count": 4
       },
       {
         "family": "extended_rotated",
@@ -938,13 +990,13 @@
     {
       "family": "v4000_preload_hash",
       "signature": "fmt4000/flags0x8/meta0xc8e80",
-      "count": 6,
+      "count": 7,
       "example_files": [
+        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
         "OnlyHighlighterBlack_260630_131753.sdocx",
         "OnlyImages_260702_190147.sdocx",
         "OnlyPensBlacksize10_260630_120309.sdocx",
-        "OnlyShapesblack_260701_173146.sdocx",
-        "OnlyShapesblack_new_260701_185935.sdocx"
+        "OnlyShapesblack_260701_173146.sdocx"
       ]
     },
     {
@@ -975,13 +1027,13 @@
   ],
   "note_tail_profiles": {
     "kinds": {
-      "pen_preload_path": 38,
-      "pen_preload_prelude": 24,
-      "pen_preload_prelude_raw": 13,
-      "pen_style_tail": 10,
-      "tail_hash_block": 13,
+      "pen_preload_path": 44,
+      "pen_preload_prelude": 27,
+      "pen_preload_prelude_raw": 16,
+      "pen_style_tail": 11,
+      "tail_hash_block": 14,
       "tail_post_hash_u32": 3,
-      "tail_sentinel": 13,
+      "tail_sentinel": 14,
       "voice_clip": 2,
       "voice_clip_header": 2,
       "voice_clip_post": 2
@@ -1006,21 +1058,21 @@
         "Allsamsungnotes_260630_113259.sdocx",
         "Allsamsungnotes_260630_113259.sdocx",
         "Appunti vari_260629_230848.sdocx",
-        "OnlyHighlighterBlack_260630_131753.sdocx"
+        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx"
       ],
       "pen_style_tail": [
         "Allsamsungnotes_260630_113259.sdocx",
         "Appunti vari_260629_230848.sdocx",
+        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
         "OnlyHighlighterBlack_260630_131753.sdocx",
-        "OnlyImages_260702_190147.sdocx",
-        "OnlyPensBlacksize10_260630_120309.sdocx"
+        "OnlyImages_260702_190147.sdocx"
       ],
       "tail_hash_block": [
         "Allsamsungnotes_260630_113259.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
-        "OnlyHighlighterBlack_260630_131753.sdocx",
-        "OnlyImages_260702_190147.sdocx"
+        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
+        "OnlyHighlighterBlack_260630_131753.sdocx"
       ],
       "tail_post_hash_u32": [
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
@@ -1031,8 +1083,8 @@
         "Allsamsungnotes_260630_113259.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
-        "OnlyHighlighterBlack_260630_131753.sdocx",
-        "OnlyImages_260702_190147.sdocx"
+        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
+        "OnlyHighlighterBlack_260630_131753.sdocx"
       ],
       "voice_clip": [
         "Allsamsungnotes_260630_113259.sdocx",
@@ -1048,7 +1100,7 @@
       ]
     },
     "page_id_info_relations": {
-      "page_id_head_exact": 10,
+      "page_id_head_exact": 11,
       "page_id_head_shifted_u32_2": 3
     },
     "tail_hash_prefixes": [
@@ -1064,18 +1116,18 @@
           2,
           2
         ],
-        "count": 10
+        "count": 11
       }
     ],
     "preload_paths": {
       "com.samsung.android.sdk.pen.pen.preload.BrushPen": 3,
-      "com.samsung.android.sdk.pen.pen.preload.FountainPen": 9,
-      "com.samsung.android.sdk.pen.pen.preload.InkPen2": 11,
-      "com.samsung.android.sdk.pen.pen.preload.Marker3": 2,
-      "com.samsung.android.sdk.pen.pen.preload.Marker4": 3,
+      "com.samsung.android.sdk.pen.pen.preload.FountainPen": 10,
+      "com.samsung.android.sdk.pen.pen.preload.InkPen2": 13,
+      "com.samsung.android.sdk.pen.pen.preload.Marker3": 3,
+      "com.samsung.android.sdk.pen.pen.preload.Marker4": 4,
       "com.samsung.android.sdk.pen.pen.preload.ObliquePen": 2,
       "com.samsung.android.sdk.pen.pen.preload.Pencil2": 3,
-      "com.samsung.android.sdk.pen.pen.preload.StraightHighlighter": 2,
+      "com.samsung.android.sdk.pen.pen.preload.StraightHighlighter": 3,
       "com.samsung.android.sdk.pen.pen.preload.StraightMarker": 3
     },
     "preload_param_hints": {
@@ -1087,11 +1139,12 @@
       "10;": 2,
       "13;": 3,
       "14;": 3,
+      "15;0;100;": 1,
       "18;0;100;": 4,
       "4;": 2,
-      "5;": 2,
+      "5;": 3,
       "7;": 1,
-      "8;": 7
+      "8;": 8
     },
     "preload_prelude_shapes": [
       {
@@ -1109,6 +1162,15 @@
         ],
         "trailing_u32": [
           2
+        ],
+        "count": 1
+      },
+      {
+        "prefix_u32": [
+          1
+        ],
+        "trailing_u32": [
+          12
         ],
         "count": 1
       },
@@ -1189,10 +1251,34 @@
       },
       {
         "prefix_u32": [
+          7,
+          3211267,
+          3866676,
+          13
+        ],
+        "trailing_u32": [
+          4294967291,
+          150
+        ],
+        "count": 1
+      },
+      {
+        "prefix_u32": [
           9
         ],
         "trailing_u32": [
           8
+        ],
+        "count": 1
+      },
+      {
+        "prefix_u32": [
+          11
+        ],
+        "trailing_u32": [
+          9,
+          3604482,
+          524347
         ],
         "count": 1
       },
@@ -1249,6 +1335,12 @@
     "preload_prelude_raw_shapes": [
       {
         "raw_u32": [
+          0
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
           0,
           162
         ],
@@ -1271,6 +1363,12 @@
       {
         "raw_u32": [
           2
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          6
         ],
         "count": 1
       },
@@ -1304,6 +1402,13 @@
         "raw_u32": [
           460,
           327686
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          600,
+          655370
         ],
         "count": 1
       },
@@ -1344,6 +1449,23 @@
           0,
           0,
           1065353216
+        ],
+        "count": 1
+      },
+      {
+        "width": 2.242,
+        "argb": "0xff252525",
+        "param": null,
+        "raw_u32": [
+          0,
+          327680,
+          65536,
+          0,
+          0,
+          0,
+          0,
+          2492792832,
+          16793108
         ],
         "count": 1
       },
@@ -1556,7 +1678,7 @@
       "voice_media_time_candidate": 2
     },
     "coverage": {
-      "known_bytes": 5938,
+      "known_bytes": 6752,
       "unknown_bytes": 0,
       "gap_prefixes": [],
       "per_file": [
@@ -1587,6 +1709,17 @@
           "tail_start": 8602,
           "tail_len": 154,
           "known_bytes": 154,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
+          "tail_start": 49087,
+          "tail_len": 814,
+          "known_bytes": 814,
           "unknown_bytes": 0,
           "known_ratio": 1.0,
           "gap_count": 0,
@@ -1709,7 +1842,7 @@
   "object_header_ext": {
     "count": 1690,
     "dimension_mismatches": [],
-    "extra_key_blocks": 40,
+    "extra_key_blocks": 807,
     "extra_key_bad": [],
     "per_file": [
       {
@@ -1860,30 +1993,30 @@
     ]
   },
   "payload_geometry_profiles": {
-    "count": 412,
+    "count": 490,
     "by_type": {
-      "image": 15,
-      "shape": 390,
-      "text_box": 7
+      "image": 58,
+      "shape": 424,
+      "text_box": 8
     },
     "point_counts": {
-      "1": 8,
+      "1": 10,
       "10": 1,
       "12": 3,
       "15": 1,
-      "2": 58,
-      "3": 8,
-      "4": 154,
+      "2": 83,
+      "3": 10,
+      "4": 199,
       "5": 28,
-      "6": 75,
+      "6": 79,
       "7": 1,
       "8": 72,
       "9": 3
     },
     "centroid": {
-      "bbox_centroid_match": 301,
-      "bbox_centroid_mismatch": 103,
-      "bbox_centroid_unknown": 8
+      "bbox_centroid_match": 365,
+      "bbox_centroid_mismatch": 115,
+      "bbox_centroid_unknown": 10
     },
     "marker_deltas": [
       {
@@ -1891,21 +2024,21 @@
         "marker": "image",
         "l0_delta": 0,
         "l1_delta": 0,
-        "count": 15
+        "count": 58
       },
       {
         "object_type": "shape",
         "marker": "shape",
         "l0_delta": 0,
         "l1_delta": 0,
-        "count": 337
+        "count": 351
       },
       {
         "object_type": "text_box",
         "marker": "text",
         "l0_delta": 123,
         "l1_delta": 0,
-        "count": 7
+        "count": 8
       }
     ],
     "shape_roles": [
@@ -1913,7 +2046,7 @@
         "shape_type": "arrow",
         "type_code": "None",
         "role": "shaft_endpoints",
-        "count": 53
+        "count": 73
       },
       {
         "shape_type": "cross",
@@ -1931,7 +2064,7 @@
         "shape_type": "freeform",
         "type_code": "88",
         "role": "freeform_vertices",
-        "count": 1
+        "count": 2
       },
       {
         "shape_type": "freeform",
@@ -1943,7 +2076,7 @@
         "shape_type": "freeform_smooth",
         "type_code": "90",
         "role": "bezier_control_points",
-        "count": 32
+        "count": 41
       },
       {
         "shape_type": "heart",
@@ -1997,7 +2130,7 @@
         "shape_type": "triangle",
         "type_code": "2",
         "role": "vertices_with_edge_midpoints",
-        "count": 37
+        "count": 41
       }
     ]
   },
@@ -2028,25 +2161,41 @@
     ]
   },
   "media_info_profiles": {
-    "parsed_files": 13,
-    "records": 60,
+    "parsed_files": 14,
+    "records": 222,
+    "format_versions": {
+      "5202": 1,
+      "5304": 1,
+      "5400": 12
+    },
+    "ref_counts": {
+      "1": 216,
+      "20": 1,
+      "3": 4,
+      "5": 1
+    },
+    "is_attached": {
+      "True": 222
+    },
     "magic": {
       "0x1452": 1,
+      "0x14b8": 1,
       "0x1518": 12
     },
     "tail_tags": {
-      "1": 54,
+      "1": 216,
       "20": 1,
       "3": 4,
       "5": 1
     },
     "name_kinds": {
-      ".jpg": 7,
+      ".": 29,
+      ".jpg": 21,
       ".m4a": 2,
       ".pdf": 2,
       ".png": 1,
       ".sdocx": 3,
-      ".spi": 44,
+      ".spi": 163,
       ".spp": 1
     },
     "bad_eof": 0,
@@ -2058,26 +2207,30 @@
     "unlisted_media_examples": []
   },
   "end_tag_profiles": {
-    "parsed_files": 13,
+    "parsed_files": 14,
     "payload_sizes": {
       "142": 1,
-      "146": 12
+      "146": 13
     },
     "format_versions": {
-      "4000": 9,
+      "4000": 10,
       "5400": 4
     },
     "signature_offsets": {
       "122": 1,
-      "126": 12
+      "126": 13
     },
     "time_relations": {
-      "created_time_a_exact": 10,
+      "created_time_a_exact": 11,
       "created_time_a_millis_close": 3,
-      "created_time_b_exact": 10,
-      "created_time_header_exact": 13,
+      "created_time_b_exact": 11,
+      "created_time_header_exact": 14,
+      "display_created_time_exact": 11,
+      "display_created_time_millis_close": 3,
+      "display_modified_time_exact": 11,
       "extra_time_nonzero": 2,
-      "modified_exact": 13
+      "last_recognised_data_modified_time_nonzero": 2,
+      "modified_exact": 14
     },
     "bad_size": 0,
     "bad_signature": 0,
@@ -2085,11 +2238,11 @@
     "modified_mismatch_examples": []
   },
   "page_id_info_profiles": {
-    "parsed_files": 13,
-    "records": 48,
+    "parsed_files": 14,
+    "records": 114,
     "bad_size": 0,
     "tail_hex": {
-      "": 48
+      "": 114
     },
     "page_hash_sha256_matches": 0
   }

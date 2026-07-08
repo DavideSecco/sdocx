@@ -22,7 +22,7 @@ concrete tasks). It is the handoff between work sessions and agents.
 - `crates/` — the Rust workspace (`sdocx`, `sdocx-cli`, `sdocx-render`,
   `sdocx-wasm`) and `viewer/` — the shipped product. Lags pysdocx by design.
 - `docs/format/` + `spec/` — **the format knowledge base** (see below).
-- `samples/` — the 13-file ground-truth corpus. **Do not invent samples.** New
+- `samples/` — the 14-file ground-truth corpus. **Do not invent samples.** New
   ground-truth `.sdocx` files are made by the user, one variable at a time.
 - `samsung-notes-format/` — the original minimal RE (`RESEARCH.md`); historical
   reference, not maintained.
@@ -49,7 +49,7 @@ Two complementary layers; consult both, don't re-derive from raw bytes:
 1. **pysdocx-first.** Decode and iterate in Python. Port to Rust only at
    checkpoints, not every round.
 2. **Zero-counterexample promotion.** A byte becomes a named field only when it
-   holds across the whole 13-sample corpus with no counterexample. Prefer an
+   holds across the whole 14-sample corpus with no counterexample. Prefer an
    honest **Unknown** over a speculative name.
 3. **Separate decoded facts from heuristics.** Anything calibrated against
    ground-truth images is a render heuristic, lives in `heuristics.md`, and never
@@ -81,7 +81,7 @@ Two complementary layers; consult both, don't re-derive from raw bytes:
 
 ## Notes
 
-- The 13-sample corpus includes the user's personal `samples/Appunti vari_*` —
+- The 14-sample corpus includes the user's personal `samples/Appunti vari_*` —
   keep it uncommitted/private. Same for `Interesting discussion.txt`.
 - `future_todo.md` is a running backlog checkpoint; `unknowns.md` is the
   consolidated open-question list.
