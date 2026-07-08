@@ -2,6 +2,7 @@ mod container;
 mod decode;
 mod error;
 mod page;
+mod shape;
 mod types;
 
 pub use container::{remap_media_indices, Reader};

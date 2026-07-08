@@ -147,6 +147,9 @@ fn render_element(
             .unwrap();
         }
         PageElement::TextBox(text_box) => render_text_box(svg, text_box, page),
+        // Shapes are decoded by the parser but this SVG renderer doesn't draw them
+        // yet — OpenSdocx's Scene renderer does (the SVG path lags by design).
+        PageElement::Shape(_) => {}
     }
 }
 

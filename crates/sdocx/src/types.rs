@@ -77,6 +77,80 @@ pub enum PageElement {
     },
     /// A rich text object.
     TextBox(RichTextBox),
+    /// An inserted shape object (shape tool / line-arrow tool).
+    Shape(Shape),
+}
+
+/// Decoded shape family. Mirrors pysdocx `SHAPE_TYPES` (pysdocx/page.py); codes not
+/// yet mapped fall back to `Polygon` and still render from their decoded outline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum ShapeKind {
+    Ellipse,
+    Triangle,
+    Rectangle,
+    Hexagon,
+    Rhombus,
+    Trapezoid,
+    Pentagon,
+    Star,
+    Cross,
+    Heart,
+    RoundedRect,
+    Freeform,
+    FreeformSmooth,
+    Arrow,
+    Polygon,
+}
+
+/// One segment of a shape's raw outline path, exactly as stored (before
+/// flattening) — 1-byte tag `1=MoveTo, 2=LineTo, 4=CubicBezierTo` in the file.
+/// Lets a renderer draw a true curve instead of `Shape::points`' flattened
+/// polyline approximation (pysdocx always flattens; this is strictly more
+/// fidelity than the reference implementation exposes).
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum OutlineOp {
+    MoveTo(Point),
+    LineTo(Point),
+    /// Cubic Bezier: two control points, then the end point.
+    CurveTo(Point, Point, Point),
+}
+
+/// An inserted shape, decoded from its serialized vector path (ported from pysdocx
+/// `parse_shapes_from_objects`, validated against the shape samples' ground truth).
+///
+/// `points` is the flattened true outline (already rotated / deformed), except for
+/// ellipse (8 boundary points) and rounded-rect (4 edge midpoints), whose stored
+/// outline path is degenerate — they keep the vertex list and are reconstructed at
+/// render time (`ellipse_from_points` / `oriented_corners` in pysdocx render.py).
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Shape {
+    /// Shape family.
+    pub kind: ShapeKind,
+    /// Raw type code from the shape marker; `None` for line/arrow objects,
+    /// which are markerless.
+    pub type_code: Option<u32>,
+    /// Placement box in page coordinates.
+    pub bbox: BoundingBox,
+    /// Outline points in page coordinates (see struct docs).
+    pub points: Vec<Point>,
+    /// The raw (unflattened) outline path, when the shape has a real,
+    /// non-degenerate stored path. `None` for ellipse/rounded-rect (degenerate —
+    /// use `points`/the vertex list) and for arrows (no path at all).
+    pub outline: Option<Vec<OutlineOp>>,
+    /// Stroke color.
+    pub color: Option<Color>,
+    /// Pen line width.
+    pub pen_width: Option<f32>,
+    /// Whether the outline is closed (drawn back to its first point).
+    pub closed: bool,
+    /// Arrow only: arrowhead at the first point.
+    pub head_start: bool,
+    /// Arrow only: arrowhead at the last point.
+    pub head_end: bool,
 }
 
 /// Parsed rich text box data.

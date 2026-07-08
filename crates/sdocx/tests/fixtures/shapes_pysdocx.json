@@ -1,0 +1,11558 @@
+{
+ "OnlyShapesblack_260701_173146.sdocx": {
+  "23922774-755f-11f1-8947-031447c53102.page": [
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     43.976,
+     1221.107,
+     129.293,
+     1294.992
+    ],
+    "n_points": 6,
+    "centroid": [
+     86.634,
+     1258.05
+    ],
+    "points_bbox": [
+     49.692,
+     1215.392,
+     123.577,
+     1300.708
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     54.645,
+     870.145,
+     133.229,
+     938.201
+    ],
+    "n_points": 6,
+    "centroid": [
+     93.937,
+     904.173
+    ],
+    "points_bbox": [
+     54.645,
+     870.145,
+     133.229,
+     938.201
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     57.607,
+     252.415,
+     142.187,
+     325.663
+    ],
+    "n_points": 3,
+    "centroid": [
+     110.876,
+     301.247
+    ],
+    "points_bbox": [
+     57.607,
+     252.415,
+     142.187,
+     325.663
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     62.838,
+     536.538,
+     135.788,
+     608.265
+    ],
+    "n_points": 4,
+    "centroid": [
+     99.313,
+     572.401
+    ],
+    "points_bbox": [
+     62.838,
+     536.538,
+     135.788,
+     608.265
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     66.991,
+     1525.249,
+     231.501,
+     1681.706
+    ],
+    "n_points": 10,
+    "centroid": [
+     149.246,
+     1611.415
+    ],
+    "points_bbox": [
+     66.991,
+     1525.249,
+     231.501,
+     1681.124
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     176.952,
+     1223.364,
+     351.659,
+     1374.663
+    ],
+    "n_points": 6,
+    "centroid": [
+     264.305,
+     1299.014
+    ],
+    "points_bbox": [
+     188.656,
+     1211.66,
+     339.955,
+     1386.367
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     181.513,
+     872.362,
+     335.08,
+     1005.36
+    ],
+    "n_points": 6,
+    "centroid": [
+     258.297,
+     938.861
+    ],
+    "points_bbox": [
+     181.513,
+     872.362,
+     335.08,
+     1005.36
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     208.962,
+     534.314,
+     358.194,
+     676.643
+    ],
+    "n_points": 4,
+    "centroid": [
+     283.578,
+     605.479
+    ],
+    "points_bbox": [
+     208.962,
+     534.314,
+     358.194,
+     676.643
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     209.203,
+     256.9,
+     358.831,
+     386.482
+    ],
+    "n_points": 3,
+    "centroid": [
+     267.95,
+     343.288
+    ],
+    "points_bbox": [
+     209.203,
+     256.9,
+     358.831,
+     386.482
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     281.072,
+     1531.913,
+     507.306,
+     1747.073
+    ],
+    "n_points": 10,
+    "centroid": [
+     394.189,
+     1650.408
+    ],
+    "points_bbox": [
+     281.072,
+     1531.913,
+     507.306,
+     1746.273
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     407.823,
+     1226.485,
+     654.424,
+     1440.044
+    ],
+    "n_points": 6,
+    "centroid": [
+     531.124,
+     1333.265
+    ],
+    "points_bbox": [
+     424.344,
+     1209.964,
+     637.903,
+     1456.565
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     415.97,
+     872.819,
+     645.002,
+     1071.173
+    ],
+    "n_points": 6,
+    "centroid": [
+     530.486,
+     971.996
+    ],
+    "points_bbox": [
+     415.97,
+     872.819,
+     645.002,
+     1071.173
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     425.346,
+     259.521,
+     651.595,
+     455.459
+    ],
+    "n_points": 3,
+    "centroid": [
+     566.768,
+     390.146
+    ],
+    "points_bbox": [
+     425.346,
+     259.521,
+     651.595,
+     455.459
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     426.183,
+     537.024,
+     645.137,
+     749.091
+    ],
+    "n_points": 4,
+    "centroid": [
+     535.66,
+     643.058
+    ],
+    "points_bbox": [
+     426.183,
+     537.024,
+     645.137,
+     749.091
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     546.465,
+     1539.026,
+     822.241,
+     1801.308
+    ],
+    "n_points": 10,
+    "centroid": [
+     684.353,
+     1683.473
+    ],
+    "points_bbox": [
+     546.465,
+     1539.026,
+     822.241,
+     1800.333
+    ]
+   }
+  ],
+  "28663f36-7561-11f1-84e9-c7f019a6b137.page": [],
+  "7deeffea-755e-11f1-86cc-7b6bbdb97c1a.page": [
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     87.422,
+     974.952,
+     336.099,
+     1211.459
+    ],
+    "n_points": 10,
+    "centroid": [
+     211.761,
+     1105.204
+    ],
+    "points_bbox": [
+     87.422,
+     974.952,
+     336.099,
+     1210.58
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     123.498,
+     815.077,
+     278.416,
+     949.241
+    ],
+    "n_points": 6,
+    "centroid": [
+     200.957,
+     882.159
+    ],
+    "points_bbox": [
+     133.875,
+     804.7,
+     268.039,
+     959.618
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     131.39,
+     182.367,
+     271.172,
+     324.789
+    ],
+    "n_points": 3,
+    "centroid": [
+     201.281,
+     277.315
+    ],
+    "points_bbox": [
+     131.39,
+     182.367,
+     271.172,
+     324.789
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     138.397,
+     600.163,
+     293.315,
+     734.327
+    ],
+    "n_points": 6,
+    "centroid": [
+     215.856,
+     667.245
+    ],
+    "points_bbox": [
+     138.397,
+     600.163,
+     293.315,
+     734.327
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     143.154,
+     414.869,
+     285.957,
+     532.312
+    ],
+    "n_points": 4,
+    "centroid": [
+     214.556,
+     473.591
+    ],
+    "points_bbox": [
+     143.154,
+     414.869,
+     285.957,
+     532.312
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     334.56,
+     189.593,
+     474.341,
+     332.015
+    ],
+    "n_points": 3,
+    "centroid": [
+     389.333,
+     284.541
+    ],
+    "points_bbox": [
+     334.56,
+     189.593,
+     474.341,
+     332.015
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     356.893,
+     593.355,
+     511.812,
+     727.52
+    ],
+    "n_points": 6,
+    "centroid": [
+     434.353,
+     660.438
+    ],
+    "points_bbox": [
+     356.893,
+     593.355,
+     511.812,
+     727.52
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     358.251,
+     412.613,
+     501.053,
+     530.059
+    ],
+    "n_points": 4,
+    "centroid": [
+     429.652,
+     471.336
+    ],
+    "points_bbox": [
+     358.251,
+     412.613,
+     501.053,
+     530.059
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     371.044,
+     806.384,
+     525.962,
+     940.548
+    ],
+    "n_points": 6,
+    "centroid": [
+     448.503,
+     873.466
+    ],
+    "points_bbox": [
+     381.421,
+     796.006,
+     515.585,
+     950.925
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     394.335,
+     977.854,
+     643.013,
+     1214.359
+    ],
+    "n_points": 10,
+    "centroid": [
+     518.674,
+     1108.105
+    ],
+    "points_bbox": [
+     394.335,
+     977.854,
+     643.013,
+     1213.48
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     522.636,
+     186.258,
+     662.417,
+     328.68
+    ],
+    "n_points": 3,
+    "centroid": [
+     604.754,
+     281.206
+    ],
+    "points_bbox": [
+     522.636,
+     186.258,
+     662.417,
+     328.68
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     553.909,
+     408.1,
+     696.711,
+     525.541
+    ],
+    "n_points": 4,
+    "centroid": [
+     625.31,
+     466.82
+    ],
+    "points_bbox": [
+     553.909,
+     408.1,
+     696.711,
+     525.541
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     565.636,
+     594.563,
+     720.554,
+     728.728
+    ],
+    "n_points": 6,
+    "centroid": [
+     643.095,
+     661.646
+    ],
+    "points_bbox": [
+     565.636,
+     594.563,
+     720.554,
+     728.728
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     594.436,
+     808.903,
+     749.354,
+     943.067
+    ],
+    "n_points": 6,
+    "centroid": [
+     671.895,
+     875.985
+    ],
+    "points_bbox": [
+     604.813,
+     798.526,
+     738.977,
+     953.444
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     684.636,
+     951.689,
+     933.313,
+     1188.195
+    ],
+    "n_points": 10,
+    "centroid": [
+     808.975,
+     1081.941
+    ],
+    "points_bbox": [
+     684.636,
+     951.689,
+     933.313,
+     1187.316
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     997.979,
+     950.891,
+     1246.657,
+     1187.398
+    ],
+    "n_points": 10,
+    "centroid": [
+     1122.318,
+     1081.143
+    ],
+    "points_bbox": [
+     997.979,
+     950.891,
+     1246.657,
+     1186.519
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1299.226,
+     951.68,
+     1547.904,
+     1188.184
+    ],
+    "n_points": 10,
+    "centroid": [
+     1423.565,
+     1081.93
+    ],
+    "points_bbox": [
+     1299.226,
+     951.68,
+     1547.904,
+     1211.786
+    ]
+   }
+  ],
+  "8dbb2c34-755c-11f1-9535-8397a20bfaf5.page": [
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ],
+    "n_points": 3,
+    "centroid": [
+     103.06,
+     1351.575
+    ],
+    "points_bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ],
+    "n_points": 4,
+    "centroid": [
+     175.504,
+     152.242
+    ],
+    "points_bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ],
+    "n_points": 2,
+    "centroid": [
+     99.659,
+     2088.175
+    ],
+    "points_bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ],
+    "n_points": 4,
+    "centroid": [
+     140.562,
+     1886.053
+    ],
+    "points_bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ],
+    "n_points": 4,
+    "centroid": [
+     102.477,
+     1622.73
+    ],
+    "points_bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ],
+    "n_points": 8,
+    "centroid": [
+     106.928,
+     800.548
+    ],
+    "points_bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ],
+    "n_points": 4,
+    "centroid": [
+     108.427,
+     441.392
+    ],
+    "points_bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ],
+    "n_points": 8,
+    "centroid": [
+     178.572,
+     1124.803
+    ],
+    "points_bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ],
+    "n_points": 2,
+    "centroid": [
+     211.624,
+     2126.023
+    ],
+    "points_bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ],
+    "n_points": 4,
+    "centroid": [
+     286.742,
+     1655.808
+    ],
+    "points_bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ],
+    "n_points": 3,
+    "centroid": [
+     287.181,
+     1393.617
+    ],
+    "points_bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ],
+    "n_points": 4,
+    "centroid": [
+     292.405,
+     475.397
+    ],
+    "points_bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ],
+    "n_points": 8,
+    "centroid": [
+     296.935,
+     844.665
+    ],
+    "points_bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ],
+    "n_points": 4,
+    "centroid": [
+     386.427,
+     1922.277
+    ],
+    "points_bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ],
+    "n_points": 2,
+    "centroid": [
+     398.861,
+     2156.165
+    ],
+    "points_bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ],
+    "n_points": 4,
+    "centroid": [
+     519.076,
+     189.449
+    ],
+    "points_bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ],
+    "n_points": 8,
+    "centroid": [
+     539.189,
+     1167.045
+    ],
+    "points_bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ],
+    "n_points": 3,
+    "centroid": [
+     541.634,
+     1440.475
+    ],
+    "points_bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ],
+    "n_points": 4,
+    "centroid": [
+     538.823,
+     1693.386
+    ],
+    "points_bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ],
+    "n_points": 4,
+    "centroid": [
+     584.998,
+     549.321
+    ],
+    "points_bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ],
+    "n_points": 8,
+    "centroid": [
+     596.242,
+     905.53
+    ],
+    "points_bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ],
+    "n_points": 4,
+    "centroid": [
+     808.758,
+     1913.611
+    ],
+    "points_bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ],
+    "n_points": 4,
+    "centroid": [
+     996.776,
+     229.643
+    ],
+    "points_bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ],
+    "n_points": 8,
+    "centroid": [
+     1015.586,
+     1164.173
+    ],
+    "points_bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1280.209,
+     1883.223,
+     1310.345,
+     1912.745
+    ],
+    "n_points": 52,
+    "centroid": [
+     1297.15,
+     1897.65
+    ],
+    "points_bbox": [
+     1280.209,
+     1883.226,
+     1310.345,
+     1912.745
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ],
+    "n_points": 2,
+    "centroid": [
+     1283.018,
+     1906.32
+    ],
+    "points_bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ],
+    "n_points": 8,
+    "centroid": [
+     1326.21,
+     1902.399
+    ],
+    "points_bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ],
+    "n_points": 2,
+    "centroid": [
+     1352.338,
+     1901.904
+    ],
+    "points_bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1386.914,
+     1882.313,
+     1418.689,
+     1915.253
+    ],
+    "n_points": 69,
+    "centroid": [
+     1402.655,
+     1898.702
+    ],
+    "points_bbox": [
+     1386.914,
+     1882.319,
+     1418.689,
+     1915.231
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ],
+    "n_points": 2,
+    "centroid": [
+     1390.599,
+     1903.581
+    ],
+    "points_bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ],
+    "n_points": 8,
+    "centroid": [
+     1444.578,
+     1901.254
+    ],
+    "points_bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ]
+   }
+  ],
+  "8dbd2d7c-755c-11f1-a119-cb280a09e266.page": [
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     41.849,
+     1705.909,
+     206.36,
+     1862.368
+    ],
+    "n_points": 10,
+    "centroid": [
+     124.104,
+     1792.076
+    ],
+    "points_bbox": [
+     41.849,
+     1705.909,
+     206.36,
+     1861.786
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     61.97,
+     757.928,
+     147.286,
+     831.815
+    ],
+    "n_points": 6,
+    "centroid": [
+     104.628,
+     794.872
+    ],
+    "points_bbox": [
+     67.685,
+     752.213,
+     141.571,
+     837.53
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.618,
+     1124.683,
+     147.841,
+     1200.903
+    ],
+    "n_points": 8,
+    "centroid": [
+     109.73,
+     1162.793
+    ],
+    "points_bbox": [
+     71.618,
+     1124.683,
+     147.841,
+     1200.903
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     72.639,
+     406.965,
+     151.223,
+     475.021
+    ],
+    "n_points": 6,
+    "centroid": [
+     111.931,
+     440.993
+    ],
+    "points_bbox": [
+     72.639,
+     406.965,
+     151.223,
+     475.021
+    ]
+   },
+   {
+    "kind": "pentagon",
+    "type_code": 11,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     74.576,
+     114.502,
+     153.88,
+     189.925
+    ],
+    "n_points": 5,
+    "centroid": [
+     114.228,
+     156.195
+    ],
+    "points_bbox": [
+     74.576,
+     114.502,
+     153.88,
+     189.925
+    ]
+   },
+   {
+    "kind": "rounded_rect",
+    "type_code": 64,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     107.878,
+     1395.5,
+     358.256,
+     1517.662
+    ],
+    "n_points": 4,
+    "centroid": [
+     233.067,
+     1456.581
+    ],
+    "points_bbox": [
+     107.878,
+     1395.5,
+     358.256,
+     1517.662
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     132.744,
+     2073.156,
+     311.315,
+     2187.593
+    ],
+    "n_points": 18,
+    "centroid": [
+     198.216,
+     2150.27
+    ],
+    "points_bbox": [
+     132.792,
+     2073.156,
+     311.315,
+     2187.481
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     194.945,
+     760.186,
+     369.653,
+     911.484
+    ],
+    "n_points": 6,
+    "centroid": [
+     282.299,
+     835.835
+    ],
+    "points_bbox": [
+     206.65,
+     748.481,
+     357.948,
+     923.189
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     197.234,
+     1124.975,
+     354.064,
+     1281.799
+    ],
+    "n_points": 8,
+    "centroid": [
+     275.649,
+     1203.387
+    ],
+    "points_bbox": [
+     197.234,
+     1124.975,
+     354.064,
+     1281.799
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     199.506,
+     409.183,
+     353.074,
+     542.179
+    ],
+    "n_points": 6,
+    "centroid": [
+     276.29,
+     475.681
+    ],
+    "points_bbox": [
+     199.506,
+     409.183,
+     353.074,
+     542.179
+    ]
+   },
+   {
+    "kind": "pentagon",
+    "type_code": 11,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     222.702,
+     136.032,
+     370.774,
+     276.857
+    ],
+    "n_points": 5,
+    "centroid": [
+     296.738,
+     213.878
+    ],
+    "points_bbox": [
+     222.702,
+     136.032,
+     370.774,
+     276.857
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     255.93,
+     1712.575,
+     482.164,
+     1927.734
+    ],
+    "n_points": 10,
+    "centroid": [
+     369.047,
+     1831.07
+    ],
+    "points_bbox": [
+     255.93,
+     1712.575,
+     482.164,
+     1926.934
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     369.67,
+     2100.799,
+     558.376,
+     2175.596
+    ],
+    "n_points": 18,
+    "centroid": [
+     463.563,
+     2123.025
+    ],
+    "points_bbox": [
+     369.67,
+     2100.963,
+     558.376,
+     2175.596
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     396.681,
+     1124.975,
+     613.829,
+     1342.115
+    ],
+    "n_points": 8,
+    "centroid": [
+     505.255,
+     1233.545
+    ],
+    "points_bbox": [
+     396.681,
+     1124.975,
+     613.829,
+     1342.115
+    ]
+   },
+   {
+    "kind": "rounded_rect",
+    "type_code": 64,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     402.956,
+     1397.771,
+     788.225,
+     1585.748
+    ],
+    "n_points": 4,
+    "centroid": [
+     595.59,
+     1491.76
+    ],
+    "points_bbox": [
+     402.956,
+     1397.771,
+     788.226,
+     1585.748
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     425.817,
+     763.307,
+     672.418,
+     976.865
+    ],
+    "n_points": 6,
+    "centroid": [
+     549.117,
+     870.086
+    ],
+    "points_bbox": [
+     442.338,
+     746.786,
+     655.897,
+     993.387
+    ]
+   },
+   {
+    "kind": "pentagon",
+    "type_code": 11,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     431.506,
+     47.167,
+     713.162,
+     315.036
+    ],
+    "n_points": 5,
+    "centroid": [
+     572.334,
+     195.241
+    ],
+    "points_bbox": [
+     431.506,
+     47.167,
+     713.162,
+     315.036
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     433.964,
+     409.64,
+     662.995,
+     607.992
+    ],
+    "n_points": 6,
+    "centroid": [
+     548.479,
+     508.816
+    ],
+    "points_bbox": [
+     433.964,
+     409.64,
+     662.995,
+     607.992
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     521.323,
+     1719.688,
+     797.1,
+     1981.968
+    ],
+    "n_points": 10,
+    "centroid": [
+     659.211,
+     1864.134
+    ],
+    "points_bbox": [
+     521.323,
+     1719.688,
+     797.1,
+     1980.993
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     646.264,
+     2070.476,
+     806.681,
+     2184.999
+    ],
+    "n_points": 18,
+    "centroid": [
+     725.774,
+     2139.673
+    ],
+    "points_bbox": [
+     646.856,
+     2070.476,
+     806.318,
+     2184.999
+    ]
+   },
+   {
+    "kind": "rounded_rect",
+    "type_code": 64,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     838.113,
+     1398.512,
+     1328.776,
+     1637.912
+    ],
+    "n_points": 4,
+    "centroid": [
+     1083.445,
+     1518.212
+    ],
+    "points_bbox": [
+     838.113,
+     1398.512,
+     1328.776,
+     1637.912
+    ]
+   }
+  ],
+  "a8f7d126-755e-11f1-a24c-fbead3d07630.page": [
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ],
+    "n_points": 3,
+    "centroid": [
+     103.06,
+     1351.575
+    ],
+    "points_bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ],
+    "n_points": 4,
+    "centroid": [
+     175.504,
+     152.242
+    ],
+    "points_bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ],
+    "n_points": 2,
+    "centroid": [
+     99.659,
+     2088.175
+    ],
+    "points_bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ],
+    "n_points": 4,
+    "centroid": [
+     140.562,
+     1886.053
+    ],
+    "points_bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ],
+    "n_points": 4,
+    "centroid": [
+     102.477,
+     1622.73
+    ],
+    "points_bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ],
+    "n_points": 8,
+    "centroid": [
+     106.928,
+     800.548
+    ],
+    "points_bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ],
+    "n_points": 4,
+    "centroid": [
+     108.427,
+     441.392
+    ],
+    "points_bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ],
+    "n_points": 8,
+    "centroid": [
+     178.572,
+     1124.803
+    ],
+    "points_bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ],
+    "n_points": 2,
+    "centroid": [
+     211.624,
+     2126.023
+    ],
+    "points_bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ],
+    "n_points": 4,
+    "centroid": [
+     286.742,
+     1655.808
+    ],
+    "points_bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ],
+    "n_points": 3,
+    "centroid": [
+     287.181,
+     1393.617
+    ],
+    "points_bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ],
+    "n_points": 4,
+    "centroid": [
+     292.405,
+     475.397
+    ],
+    "points_bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ],
+    "n_points": 8,
+    "centroid": [
+     296.935,
+     844.665
+    ],
+    "points_bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ],
+    "n_points": 4,
+    "centroid": [
+     386.427,
+     1922.277
+    ],
+    "points_bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ],
+    "n_points": 2,
+    "centroid": [
+     398.861,
+     2156.165
+    ],
+    "points_bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ],
+    "n_points": 4,
+    "centroid": [
+     519.076,
+     189.449
+    ],
+    "points_bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ],
+    "n_points": 8,
+    "centroid": [
+     539.189,
+     1167.045
+    ],
+    "points_bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ],
+    "n_points": 3,
+    "centroid": [
+     541.634,
+     1440.475
+    ],
+    "points_bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ],
+    "n_points": 4,
+    "centroid": [
+     538.823,
+     1693.386
+    ],
+    "points_bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ],
+    "n_points": 4,
+    "centroid": [
+     584.998,
+     549.321
+    ],
+    "points_bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ],
+    "n_points": 8,
+    "centroid": [
+     596.242,
+     905.53
+    ],
+    "points_bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ],
+    "n_points": 4,
+    "centroid": [
+     808.758,
+     1913.611
+    ],
+    "points_bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ],
+    "n_points": 4,
+    "centroid": [
+     996.776,
+     229.643
+    ],
+    "points_bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ],
+    "n_points": 8,
+    "centroid": [
+     1015.586,
+     1164.173
+    ],
+    "points_bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1280.209,
+     1883.223,
+     1310.345,
+     1912.745
+    ],
+    "n_points": 52,
+    "centroid": [
+     1297.15,
+     1897.65
+    ],
+    "points_bbox": [
+     1280.209,
+     1883.226,
+     1310.345,
+     1912.745
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ],
+    "n_points": 2,
+    "centroid": [
+     1283.018,
+     1906.32
+    ],
+    "points_bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ],
+    "n_points": 8,
+    "centroid": [
+     1326.21,
+     1902.399
+    ],
+    "points_bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ],
+    "n_points": 2,
+    "centroid": [
+     1352.338,
+     1901.904
+    ],
+    "points_bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1386.914,
+     1882.313,
+     1418.689,
+     1915.253
+    ],
+    "n_points": 69,
+    "centroid": [
+     1402.655,
+     1898.702
+    ],
+    "points_bbox": [
+     1386.914,
+     1882.319,
+     1418.689,
+     1915.231
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ],
+    "n_points": 2,
+    "centroid": [
+     1390.599,
+     1903.581
+    ],
+    "points_bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ],
+    "n_points": 8,
+    "centroid": [
+     1444.578,
+     1901.254
+    ],
+    "points_bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ]
+   }
+  ],
+  "c1ada90c-755e-11f1-b9c9-572a46918a93.page": [
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ],
+    "n_points": 3,
+    "centroid": [
+     103.06,
+     1351.575
+    ],
+    "points_bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ],
+    "n_points": 4,
+    "centroid": [
+     175.504,
+     152.242
+    ],
+    "points_bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ],
+    "n_points": 2,
+    "centroid": [
+     99.659,
+     2088.175
+    ],
+    "points_bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ],
+    "n_points": 4,
+    "centroid": [
+     140.562,
+     1886.053
+    ],
+    "points_bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ],
+    "n_points": 4,
+    "centroid": [
+     102.477,
+     1622.73
+    ],
+    "points_bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ],
+    "n_points": 8,
+    "centroid": [
+     106.928,
+     800.548
+    ],
+    "points_bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ],
+    "n_points": 4,
+    "centroid": [
+     108.427,
+     441.392
+    ],
+    "points_bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ],
+    "n_points": 8,
+    "centroid": [
+     178.572,
+     1124.803
+    ],
+    "points_bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ],
+    "n_points": 2,
+    "centroid": [
+     211.624,
+     2126.023
+    ],
+    "points_bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ],
+    "n_points": 4,
+    "centroid": [
+     286.742,
+     1655.808
+    ],
+    "points_bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ],
+    "n_points": 3,
+    "centroid": [
+     287.181,
+     1393.617
+    ],
+    "points_bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ],
+    "n_points": 4,
+    "centroid": [
+     292.405,
+     475.397
+    ],
+    "points_bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ],
+    "n_points": 8,
+    "centroid": [
+     296.935,
+     844.665
+    ],
+    "points_bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ],
+    "n_points": 4,
+    "centroid": [
+     386.427,
+     1922.277
+    ],
+    "points_bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ],
+    "n_points": 2,
+    "centroid": [
+     398.861,
+     2156.165
+    ],
+    "points_bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ],
+    "n_points": 4,
+    "centroid": [
+     519.076,
+     189.449
+    ],
+    "points_bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ],
+    "n_points": 8,
+    "centroid": [
+     539.189,
+     1167.045
+    ],
+    "points_bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ],
+    "n_points": 3,
+    "centroid": [
+     541.634,
+     1440.475
+    ],
+    "points_bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ],
+    "n_points": 4,
+    "centroid": [
+     538.823,
+     1693.386
+    ],
+    "points_bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ],
+    "n_points": 4,
+    "centroid": [
+     584.998,
+     549.321
+    ],
+    "points_bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ],
+    "n_points": 8,
+    "centroid": [
+     596.242,
+     905.53
+    ],
+    "points_bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ],
+    "n_points": 4,
+    "centroid": [
+     808.758,
+     1913.611
+    ],
+    "points_bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ],
+    "n_points": 4,
+    "centroid": [
+     996.776,
+     229.643
+    ],
+    "points_bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ],
+    "n_points": 8,
+    "centroid": [
+     1015.586,
+     1164.173
+    ],
+    "points_bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1280.209,
+     1883.223,
+     1310.345,
+     1912.745
+    ],
+    "n_points": 52,
+    "centroid": [
+     1297.15,
+     1897.65
+    ],
+    "points_bbox": [
+     1280.209,
+     1883.226,
+     1310.345,
+     1912.745
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ],
+    "n_points": 2,
+    "centroid": [
+     1283.018,
+     1906.32
+    ],
+    "points_bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ],
+    "n_points": 8,
+    "centroid": [
+     1326.21,
+     1902.399
+    ],
+    "points_bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ],
+    "n_points": 2,
+    "centroid": [
+     1352.338,
+     1901.904
+    ],
+    "points_bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1386.914,
+     1882.313,
+     1418.689,
+     1915.253
+    ],
+    "n_points": 69,
+    "centroid": [
+     1402.655,
+     1898.702
+    ],
+    "points_bbox": [
+     1386.914,
+     1882.319,
+     1418.689,
+     1915.231
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ],
+    "n_points": 2,
+    "centroid": [
+     1390.599,
+     1903.581
+    ],
+    "points_bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ],
+    "n_points": 8,
+    "centroid": [
+     1444.578,
+     1901.254
+    ],
+    "points_bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ]
+   }
+  ],
+  "eb31abd4-755e-11f1-bf67-dbbdebd476a5.page": [
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     57.46,
+     1636.753,
+     130.409,
+     1708.481
+    ],
+    "n_points": 4,
+    "centroid": [
+     93.934,
+     1672.617
+    ],
+    "points_bbox": [
+     64.973,
+     1634.755,
+     136.582,
+     1714.782
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     58.123,
+     175.232,
+     281.759,
+     248.584
+    ],
+    "n_points": 4,
+    "centroid": [
+     169.941,
+     211.908
+    ],
+    "points_bbox": [
+     54.487,
+     161.878,
+     285.395,
+     261.938
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     60.771,
+     1302.742,
+     145.35,
+     1375.991
+    ],
+    "n_points": 3,
+    "centroid": [
+     97.518,
+     1350.244
+    ],
+    "points_bbox": [
+     48.753,
+     1306.734,
+     124.114,
+     1391.199
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ],
+    "n_points": 2,
+    "centroid": [
+     99.659,
+     2088.175
+    ],
+    "points_bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     69.478,
+     1794.435,
+     219.939,
+     1905.853
+    ],
+    "n_points": 4,
+    "centroid": [
+     144.709,
+     1850.144
+    ],
+    "points_bbox": [
+     69.764,
+     1794.647,
+     219.653,
+     1905.641
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ],
+    "n_points": 8,
+    "centroid": [
+     106.928,
+     800.548
+    ],
+    "points_bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.385
+    ],
+    "n_points": 8,
+    "centroid": [
+     178.572,
+     1124.803
+    ],
+    "points_bbox": [
+     103.094,
+     1059.191,
+     254.05,
+     1190.415
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     94.891,
+     355.827,
+     167.93,
+     428.865
+    ],
+    "n_points": 4,
+    "centroid": [
+     131.41,
+     392.346
+    ],
+    "points_bbox": [
+     89.105,
+     350.04,
+     173.716,
+     434.652
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ],
+    "n_points": 2,
+    "centroid": [
+     211.624,
+     2126.023
+    ],
+    "points_bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     206.509,
+     1598.764,
+     355.741,
+     1741.092
+    ],
+    "n_points": 4,
+    "centroid": [
+     281.125,
+     1669.928
+    ],
+    "points_bbox": [
+     221.459,
+     1594.88,
+     367.949,
+     1754.022
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ],
+    "n_points": 3,
+    "centroid": [
+     295.271,
+     1392.044
+    ],
+    "points_bbox": [
+     242.085,
+     1311.946,
+     380.818,
+     1460.119
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ],
+    "n_points": 8,
+    "centroid": [
+     296.935,
+     844.665
+    ],
+    "points_bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     234.876,
+     385.97,
+     378.501,
+     529.594
+    ],
+    "n_points": 4,
+    "centroid": [
+     306.689,
+     457.782
+    ],
+    "points_bbox": [
+     223.497,
+     374.59,
+     389.88,
+     540.973
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     242.818,
+     1827.989,
+     530.144,
+     1987.329
+    ],
+    "n_points": 4,
+    "centroid": [
+     386.481,
+     1907.659
+    ],
+    "points_bbox": [
+     243.365,
+     1828.292,
+     529.597,
+     1987.026
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ],
+    "n_points": 2,
+    "centroid": [
+     398.861,
+     2156.165
+    ],
+    "points_bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     343.818,
+     136.594,
+     687.155,
+     277.34
+    ],
+    "n_points": 4,
+    "centroid": [
+     515.487,
+     206.967
+    ],
+    "points_bbox": [
+     336.521,
+     116.198,
+     694.452,
+     297.737
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     352.108,
+     1099.176,
+     726.27,
+     1234.914
+    ],
+    "n_points": 8,
+    "centroid": [
+     539.189,
+     1167.045
+    ],
+    "points_bbox": [
+     363.39,
+     1085.271,
+     714.988,
+     1248.819
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     426.269,
+     1552.682,
+     645.223,
+     1764.75
+    ],
+    "n_points": 4,
+    "centroid": [
+     535.746,
+     1658.716
+    ],
+    "points_bbox": [
+     448.512,
+     1548.437,
+     663.444,
+     1783.691
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.787
+    ],
+    "n_points": 3,
+    "centroid": [
+     526.303,
+     1436.652
+    ],
+    "points_bbox": [
+     395.757,
+     1321.317,
+     595.524,
+     1547.428
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     438.463,
+     437.854,
+     725.535,
+     724.927
+    ],
+    "n_points": 4,
+    "centroid": [
+     581.999,
+     581.391
+    ],
+    "points_bbox": [
+     415.719,
+     415.11,
+     748.28,
+     747.671
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ],
+    "n_points": 8,
+    "centroid": [
+     596.242,
+     905.53
+    ],
+    "points_bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     578.185,
+     1851.203,
+     1037.737,
+     2020.466
+    ],
+    "n_points": 4,
+    "centroid": [
+     807.961,
+     1935.834
+    ],
+    "points_bbox": [
+     579.059,
+     1851.525,
+     1036.862,
+     2020.144
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     734.01,
+     78.754,
+     1255.039,
+     298.534
+    ],
+    "n_points": 4,
+    "centroid": [
+     994.524,
+     188.644
+    ],
+    "points_bbox": [
+     722.56,
+     47.825,
+     1266.489,
+     329.463
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ],
+    "n_points": 8,
+    "centroid": [
+     1015.586,
+     1164.173
+    ],
+    "points_bbox": [
+     780.3,
+     1059.417,
+     1250.872,
+     1268.929
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1280.209,
+     1883.223,
+     1310.345,
+     1912.745
+    ],
+    "n_points": 52,
+    "centroid": [
+     1297.15,
+     1897.65
+    ],
+    "points_bbox": [
+     1280.209,
+     1883.226,
+     1310.345,
+     1912.745
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ],
+    "n_points": 2,
+    "centroid": [
+     1283.018,
+     1906.32
+    ],
+    "points_bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ],
+    "n_points": 8,
+    "centroid": [
+     1326.21,
+     1902.399
+    ],
+    "points_bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ],
+    "n_points": 2,
+    "centroid": [
+     1352.338,
+     1901.904
+    ],
+    "points_bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1386.914,
+     1882.313,
+     1418.689,
+     1915.253
+    ],
+    "n_points": 69,
+    "centroid": [
+     1402.655,
+     1898.702
+    ],
+    "points_bbox": [
+     1386.914,
+     1882.319,
+     1418.689,
+     1915.231
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ],
+    "n_points": 2,
+    "centroid": [
+     1390.599,
+     1903.581
+    ],
+    "points_bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ],
+    "n_points": 8,
+    "centroid": [
+     1444.578,
+     1901.254
+    ],
+    "points_bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ]
+   }
+  ]
+ },
+ "OnlyShapesblack_new_260701_185935.sdocx": {
+  "23922774-755f-11f1-8947-031447c53102.page": [
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     43.976,
+     1221.107,
+     129.293,
+     1294.992
+    ],
+    "n_points": 6,
+    "centroid": [
+     86.634,
+     1258.05
+    ],
+    "points_bbox": [
+     49.692,
+     1215.392,
+     123.577,
+     1300.708
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     54.645,
+     870.145,
+     133.229,
+     938.201
+    ],
+    "n_points": 6,
+    "centroid": [
+     93.937,
+     904.173
+    ],
+    "points_bbox": [
+     54.645,
+     870.145,
+     133.229,
+     938.201
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     57.607,
+     252.415,
+     142.187,
+     325.663
+    ],
+    "n_points": 3,
+    "centroid": [
+     110.876,
+     301.247
+    ],
+    "points_bbox": [
+     57.607,
+     252.415,
+     142.187,
+     325.663
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     62.838,
+     536.538,
+     135.788,
+     608.265
+    ],
+    "n_points": 4,
+    "centroid": [
+     99.313,
+     572.401
+    ],
+    "points_bbox": [
+     62.838,
+     536.538,
+     135.788,
+     608.265
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     66.991,
+     1525.249,
+     231.501,
+     1681.706
+    ],
+    "n_points": 10,
+    "centroid": [
+     149.246,
+     1611.415
+    ],
+    "points_bbox": [
+     66.991,
+     1525.249,
+     231.501,
+     1681.124
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     176.952,
+     1223.364,
+     351.659,
+     1374.663
+    ],
+    "n_points": 6,
+    "centroid": [
+     264.305,
+     1299.014
+    ],
+    "points_bbox": [
+     188.656,
+     1211.66,
+     339.955,
+     1386.367
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     181.513,
+     872.362,
+     335.08,
+     1005.36
+    ],
+    "n_points": 6,
+    "centroid": [
+     258.297,
+     938.861
+    ],
+    "points_bbox": [
+     181.513,
+     872.362,
+     335.08,
+     1005.36
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     208.962,
+     534.314,
+     358.194,
+     676.643
+    ],
+    "n_points": 4,
+    "centroid": [
+     283.578,
+     605.479
+    ],
+    "points_bbox": [
+     208.962,
+     534.314,
+     358.194,
+     676.643
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     209.203,
+     256.9,
+     358.831,
+     386.482
+    ],
+    "n_points": 3,
+    "centroid": [
+     267.95,
+     343.288
+    ],
+    "points_bbox": [
+     209.203,
+     256.9,
+     358.831,
+     386.482
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     281.072,
+     1531.913,
+     507.306,
+     1747.073
+    ],
+    "n_points": 10,
+    "centroid": [
+     394.189,
+     1650.408
+    ],
+    "points_bbox": [
+     281.072,
+     1531.913,
+     507.306,
+     1746.273
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     407.823,
+     1226.485,
+     654.424,
+     1440.044
+    ],
+    "n_points": 6,
+    "centroid": [
+     531.124,
+     1333.265
+    ],
+    "points_bbox": [
+     424.344,
+     1209.964,
+     637.903,
+     1456.565
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     415.97,
+     872.819,
+     645.002,
+     1071.173
+    ],
+    "n_points": 6,
+    "centroid": [
+     530.486,
+     971.996
+    ],
+    "points_bbox": [
+     415.97,
+     872.819,
+     645.002,
+     1071.173
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     425.346,
+     259.521,
+     651.595,
+     455.459
+    ],
+    "n_points": 3,
+    "centroid": [
+     566.768,
+     390.146
+    ],
+    "points_bbox": [
+     425.346,
+     259.521,
+     651.595,
+     455.459
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     426.183,
+     537.024,
+     645.137,
+     749.091
+    ],
+    "n_points": 4,
+    "centroid": [
+     535.66,
+     643.058
+    ],
+    "points_bbox": [
+     426.183,
+     537.024,
+     645.137,
+     749.091
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     546.465,
+     1539.026,
+     822.241,
+     1801.308
+    ],
+    "n_points": 10,
+    "centroid": [
+     684.353,
+     1683.473
+    ],
+    "points_bbox": [
+     546.465,
+     1539.026,
+     822.241,
+     1800.333
+    ]
+   }
+  ],
+  "28663f36-7561-11f1-84e9-c7f019a6b137.page": [
+   {
+    "kind": "cross",
+    "type_code": 17,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     49.918,
+     1118.836,
+     203.232,
+     1272.148
+    ],
+    "n_points": 12,
+    "centroid": [
+     126.575,
+     1195.492
+    ],
+    "points_bbox": [
+     49.918,
+     1118.836,
+     203.232,
+     1272.148
+    ]
+   },
+   {
+    "kind": "cross",
+    "type_code": 17,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     56.014,
+     779.836,
+     320.095,
+     1043.914
+    ],
+    "n_points": 12,
+    "centroid": [
+     188.055,
+     911.875
+    ],
+    "points_bbox": [
+     56.014,
+     779.836,
+     320.095,
+     1043.914
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     59.428,
+     1401.629,
+     288.889,
+     1596.84
+    ],
+    "n_points": 154,
+    "centroid": [
+     173.875,
+     1500.344
+    ],
+    "points_bbox": [
+     59.472,
+     1401.631,
+     288.889,
+     1596.791
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": true,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     80.166,
+     325.809,
+     229.613,
+     467.488
+    ],
+    "n_points": 2,
+    "centroid": [
+     154.89,
+     396.648
+    ],
+    "points_bbox": [
+     80.166,
+     325.809,
+     229.613,
+     467.488
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     99.129,
+     1889.146,
+     262.93,
+     2062.438
+    ],
+    "n_points": 18,
+    "centroid": [
+     151.098,
+     1995.613
+    ],
+    "points_bbox": [
+     99.335,
+     1889.146,
+     262.93,
+     2062.393
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": true,
+    "head_end": true,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     121.44,
+     613.984,
+     319.058,
+     654.879
+    ],
+    "n_points": 2,
+    "centroid": [
+     220.249,
+     634.432
+    ],
+    "points_bbox": [
+     121.44,
+     613.984,
+     319.058,
+     654.879
+    ]
+   },
+   {
+    "kind": "heart",
+    "type_code": 23,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     140.068,
+     99.384,
+     234.877,
+     207.093
+    ],
+    "n_points": 103,
+    "centroid": [
+     187.473,
+     130.567
+    ],
+    "points_bbox": [
+     140.068,
+     99.384,
+     234.877,
+     207.093
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     152.983,
+     2097.889,
+     301.182,
+     2241.02
+    ],
+    "n_points": 171,
+    "centroid": [
+     244.773,
+     2161.31
+    ],
+    "points_bbox": [
+     152.983,
+     2097.932,
+     301.173,
+     2241.02
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     241.996,
+     1593.414,
+     471.459,
+     1788.625
+    ],
+    "n_points": 154,
+    "centroid": [
+     355.62,
+     1691.309
+    ],
+    "points_bbox": [
+     264.871,
+     1578.64,
+     457.61,
+     1818.584
+    ]
+   },
+   {
+    "kind": "cross",
+    "type_code": 17,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     286.077,
+     1079.195,
+     550.157,
+     1343.281
+    ],
+    "n_points": 12,
+    "centroid": [
+     418.117,
+     1211.238
+    ],
+    "points_bbox": [
+     286.077,
+     1079.195,
+     550.157,
+     1343.281
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     289.019,
+     1929.09,
+     409.25,
+     2129.775
+    ],
+    "n_points": 18,
+    "centroid": [
+     369.183,
+     2007.236
+    ],
+    "points_bbox": [
+     289.019,
+     1929.09,
+     409.101,
+     2129.775
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     326.128,
+     1403.629,
+     480.213,
+     1534.719
+    ],
+    "n_points": 154,
+    "centroid": [
+     402.98,
+     1469.919
+    ],
+    "points_bbox": [
+     326.158,
+     1403.63,
+     480.214,
+     1534.686
+    ]
+   },
+   {
+    "kind": "heart",
+    "type_code": 23,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     357.862,
+     88.315,
+     491.87,
+     234.378
+    ],
+    "n_points": 103,
+    "centroid": [
+     424.866,
+     130.603
+    ],
+    "points_bbox": [
+     357.862,
+     88.315,
+     491.87,
+     234.378
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": true,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     361.528,
+     340.094,
+     446.88,
+     475.094
+    ],
+    "n_points": 2,
+    "centroid": [
+     404.204,
+     407.594
+    ],
+    "points_bbox": [
+     361.528,
+     340.094,
+     446.88,
+     475.094
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": true,
+    "head_end": true,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     387.027,
+     542.734,
+     610.84,
+     695.703
+    ],
+    "n_points": 2,
+    "centroid": [
+     498.934,
+     619.219
+    ],
+    "points_bbox": [
+     387.027,
+     542.734,
+     610.84,
+     695.703
+    ]
+   },
+   {
+    "kind": "cross",
+    "type_code": 17,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     396.788,
+     775.775,
+     565.884,
+     944.873
+    ],
+    "n_points": 12,
+    "centroid": [
+     481.336,
+     860.324
+    ],
+    "points_bbox": [
+     396.788,
+     775.775,
+     565.884,
+     944.873
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     502.859,
+     1950.346,
+     762.9,
+     1999.285
+    ],
+    "n_points": 137,
+    "centroid": [
+     628.619,
+     1973.271
+    ],
+    "points_bbox": [
+     502.859,
+     1950.346,
+     762.9,
+     1999.256
+    ]
+   },
+   {
+    "kind": "freeform",
+    "type_code": 88,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     511.762,
+     2077.078,
+     953.079,
+     2213.596
+    ],
+    "n_points": 8,
+    "centroid": [
+     729.332,
+     2144.845
+    ],
+    "points_bbox": [
+     511.762,
+     2077.078,
+     953.079,
+     2213.596
+    ]
+   },
+   {
+    "kind": "cross",
+    "type_code": 17,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     593.252,
+     797.279,
+     689.04,
+     893.064
+    ],
+    "n_points": 12,
+    "centroid": [
+     641.146,
+     845.172
+    ],
+    "points_bbox": [
+     593.252,
+     797.279,
+     689.04,
+     893.064
+    ]
+   },
+   {
+    "kind": "heart",
+    "type_code": 23,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     593.577,
+     95.041,
+     774.932,
+     299.429
+    ],
+    "n_points": 103,
+    "centroid": [
+     684.254,
+     154.215
+    ],
+    "points_bbox": [
+     593.577,
+     95.041,
+     774.932,
+     299.429
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": true,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     600.534,
+     357.473,
+     675.727,
+     454.316
+    ],
+    "n_points": 2,
+    "centroid": [
+     638.131,
+     405.895
+    ],
+    "points_bbox": [
+     600.534,
+     357.473,
+     675.727,
+     454.316
+    ]
+   },
+   {
+    "kind": "cross",
+    "type_code": 17,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     626.815,
+     1085.82,
+     890.896,
+     1349.902
+    ],
+    "n_points": 12,
+    "centroid": [
+     758.856,
+     1217.861
+    ],
+    "points_bbox": [
+     626.815,
+     1085.82,
+     890.896,
+     1349.902
+    ]
+   },
+   {
+    "kind": "freeform",
+    "type_code": 89,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     646.165,
+     1406.633,
+     981.454,
+     1598.199
+    ],
+    "n_points": 12,
+    "centroid": [
+     791.897,
+     1509.623
+    ],
+    "points_bbox": [
+     646.165,
+     1406.633,
+     981.454,
+     1598.199
+    ]
+   },
+   {
+    "kind": "freeform",
+    "type_code": 89,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     676.008,
+     1634.502,
+     845.738,
+     1731.475
+    ],
+    "n_points": 12,
+    "centroid": [
+     749.781,
+     1686.636
+    ],
+    "points_bbox": [
+     676.008,
+     1634.502,
+     845.738,
+     1731.475
+    ]
+   },
+   {
+    "kind": "cross",
+    "type_code": 17,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     709.567,
+     750.361,
+     973.648,
+     1014.443
+    ],
+    "n_points": 12,
+    "centroid": [
+     841.608,
+     882.402
+    ],
+    "points_bbox": [
+     710.461,
+     751.255,
+     972.755,
+     1013.549
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     835.141,
+     1868.459,
+     1058.875,
+     2039.057
+    ],
+    "n_points": 103,
+    "centroid": [
+     942.417,
+     1949.502
+    ],
+    "points_bbox": [
+     835.201,
+     1868.461,
+     1058.875,
+     2039.053
+    ]
+   },
+   {
+    "kind": "freeform",
+    "type_code": 89,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     890.416,
+     1651.926,
+     1106.52,
+     1775.398
+    ],
+    "n_points": 12,
+    "centroid": [
+     995.176,
+     1728.16
+    ],
+    "points_bbox": [
+     920.125,
+     1626.037,
+     1106.282,
+     1830.464
+    ]
+   },
+   {
+    "kind": "heart",
+    "type_code": 23,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     916.176,
+     82.795,
+     1027.428,
+     236.209
+    ],
+    "n_points": 103,
+    "centroid": [
+     1004.093,
+     159.502
+    ],
+    "points_bbox": [
+     895.095,
+     103.876,
+     1048.509,
+     215.128
+    ]
+   },
+   {
+    "kind": "cross",
+    "type_code": 17,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1027.677,
+     766.555,
+     1221.581,
+     960.453
+    ],
+    "n_points": 12,
+    "centroid": [
+     1124.629,
+     863.504
+    ],
+    "points_bbox": [
+     1025.717,
+     764.593,
+     1223.54,
+     962.414
+    ]
+   },
+   {
+    "kind": "heart",
+    "type_code": 23,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1126.578,
+     93.706,
+     1219.794,
+     211.181
+    ],
+    "n_points": 103,
+    "centroid": [
+     1155.702,
+     134.959
+    ],
+    "points_bbox": [
+     1109.541,
+     88.799,
+     1215.646,
+     194.904
+    ]
+   }
+  ],
+  "7deeffea-755e-11f1-86cc-7b6bbdb97c1a.page": [
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     87.422,
+     974.952,
+     336.099,
+     1211.459
+    ],
+    "n_points": 10,
+    "centroid": [
+     211.761,
+     1105.204
+    ],
+    "points_bbox": [
+     87.422,
+     974.952,
+     336.099,
+     1210.58
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     123.498,
+     815.077,
+     278.416,
+     949.241
+    ],
+    "n_points": 6,
+    "centroid": [
+     200.957,
+     882.159
+    ],
+    "points_bbox": [
+     133.875,
+     804.7,
+     268.039,
+     959.618
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     131.39,
+     182.367,
+     271.172,
+     324.789
+    ],
+    "n_points": 3,
+    "centroid": [
+     201.281,
+     277.315
+    ],
+    "points_bbox": [
+     131.39,
+     182.367,
+     271.172,
+     324.789
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     138.397,
+     600.163,
+     293.315,
+     734.327
+    ],
+    "n_points": 6,
+    "centroid": [
+     215.856,
+     667.245
+    ],
+    "points_bbox": [
+     138.397,
+     600.163,
+     293.315,
+     734.327
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     143.154,
+     414.869,
+     285.957,
+     532.312
+    ],
+    "n_points": 4,
+    "centroid": [
+     214.556,
+     473.591
+    ],
+    "points_bbox": [
+     143.154,
+     414.869,
+     285.957,
+     532.312
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     334.56,
+     189.593,
+     474.341,
+     332.015
+    ],
+    "n_points": 3,
+    "centroid": [
+     389.333,
+     284.541
+    ],
+    "points_bbox": [
+     334.56,
+     189.593,
+     474.341,
+     332.015
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     356.893,
+     593.355,
+     511.812,
+     727.52
+    ],
+    "n_points": 6,
+    "centroid": [
+     434.353,
+     660.438
+    ],
+    "points_bbox": [
+     356.893,
+     593.355,
+     511.812,
+     727.52
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     358.251,
+     412.613,
+     501.053,
+     530.059
+    ],
+    "n_points": 4,
+    "centroid": [
+     429.652,
+     471.336
+    ],
+    "points_bbox": [
+     358.251,
+     412.613,
+     501.053,
+     530.059
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     371.044,
+     806.384,
+     525.962,
+     940.548
+    ],
+    "n_points": 6,
+    "centroid": [
+     448.503,
+     873.466
+    ],
+    "points_bbox": [
+     381.421,
+     796.006,
+     515.585,
+     950.925
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     394.335,
+     977.854,
+     643.013,
+     1214.359
+    ],
+    "n_points": 10,
+    "centroid": [
+     518.674,
+     1108.105
+    ],
+    "points_bbox": [
+     394.335,
+     977.854,
+     643.013,
+     1213.48
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     522.636,
+     186.258,
+     662.417,
+     328.68
+    ],
+    "n_points": 3,
+    "centroid": [
+     604.754,
+     281.206
+    ],
+    "points_bbox": [
+     522.636,
+     186.258,
+     662.417,
+     328.68
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     553.909,
+     408.1,
+     696.711,
+     525.541
+    ],
+    "n_points": 4,
+    "centroid": [
+     625.31,
+     466.82
+    ],
+    "points_bbox": [
+     553.909,
+     408.1,
+     696.711,
+     525.541
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     565.636,
+     594.563,
+     720.554,
+     728.728
+    ],
+    "n_points": 6,
+    "centroid": [
+     643.095,
+     661.646
+    ],
+    "points_bbox": [
+     565.636,
+     594.563,
+     720.554,
+     728.728
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     594.436,
+     808.903,
+     749.354,
+     943.067
+    ],
+    "n_points": 6,
+    "centroid": [
+     671.895,
+     875.985
+    ],
+    "points_bbox": [
+     604.813,
+     798.526,
+     738.977,
+     953.444
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     684.636,
+     951.689,
+     933.313,
+     1188.195
+    ],
+    "n_points": 10,
+    "centroid": [
+     808.975,
+     1081.941
+    ],
+    "points_bbox": [
+     684.636,
+     951.689,
+     933.313,
+     1187.316
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     997.979,
+     950.891,
+     1246.657,
+     1187.398
+    ],
+    "n_points": 10,
+    "centroid": [
+     1122.318,
+     1081.143
+    ],
+    "points_bbox": [
+     997.979,
+     950.891,
+     1246.657,
+     1186.519
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1299.226,
+     951.68,
+     1547.904,
+     1188.184
+    ],
+    "n_points": 10,
+    "centroid": [
+     1423.565,
+     1081.93
+    ],
+    "points_bbox": [
+     1299.226,
+     951.68,
+     1547.904,
+     1211.786
+    ]
+   }
+  ],
+  "8dbb2c34-755c-11f1-9535-8397a20bfaf5.page": [
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ],
+    "n_points": 3,
+    "centroid": [
+     103.06,
+     1351.575
+    ],
+    "points_bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ],
+    "n_points": 4,
+    "centroid": [
+     175.504,
+     152.242
+    ],
+    "points_bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ],
+    "n_points": 2,
+    "centroid": [
+     99.659,
+     2088.175
+    ],
+    "points_bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ],
+    "n_points": 4,
+    "centroid": [
+     140.562,
+     1886.053
+    ],
+    "points_bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ],
+    "n_points": 4,
+    "centroid": [
+     102.477,
+     1622.73
+    ],
+    "points_bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ],
+    "n_points": 8,
+    "centroid": [
+     106.928,
+     800.548
+    ],
+    "points_bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ],
+    "n_points": 4,
+    "centroid": [
+     108.427,
+     441.392
+    ],
+    "points_bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ],
+    "n_points": 8,
+    "centroid": [
+     178.572,
+     1124.803
+    ],
+    "points_bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ],
+    "n_points": 2,
+    "centroid": [
+     211.624,
+     2126.023
+    ],
+    "points_bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ],
+    "n_points": 4,
+    "centroid": [
+     286.742,
+     1655.808
+    ],
+    "points_bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ],
+    "n_points": 3,
+    "centroid": [
+     287.181,
+     1393.617
+    ],
+    "points_bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ],
+    "n_points": 4,
+    "centroid": [
+     292.405,
+     475.397
+    ],
+    "points_bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ],
+    "n_points": 8,
+    "centroid": [
+     296.935,
+     844.665
+    ],
+    "points_bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ],
+    "n_points": 4,
+    "centroid": [
+     386.427,
+     1922.277
+    ],
+    "points_bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ],
+    "n_points": 2,
+    "centroid": [
+     398.861,
+     2156.165
+    ],
+    "points_bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ],
+    "n_points": 4,
+    "centroid": [
+     519.076,
+     189.449
+    ],
+    "points_bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ],
+    "n_points": 8,
+    "centroid": [
+     539.189,
+     1167.045
+    ],
+    "points_bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ],
+    "n_points": 3,
+    "centroid": [
+     541.634,
+     1440.475
+    ],
+    "points_bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ],
+    "n_points": 4,
+    "centroid": [
+     538.823,
+     1693.386
+    ],
+    "points_bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ],
+    "n_points": 4,
+    "centroid": [
+     584.998,
+     549.321
+    ],
+    "points_bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ],
+    "n_points": 8,
+    "centroid": [
+     596.242,
+     905.53
+    ],
+    "points_bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ],
+    "n_points": 4,
+    "centroid": [
+     808.758,
+     1913.611
+    ],
+    "points_bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ],
+    "n_points": 4,
+    "centroid": [
+     996.776,
+     229.643
+    ],
+    "points_bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ],
+    "n_points": 8,
+    "centroid": [
+     1015.586,
+     1164.173
+    ],
+    "points_bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1280.209,
+     1883.223,
+     1310.345,
+     1912.745
+    ],
+    "n_points": 52,
+    "centroid": [
+     1297.15,
+     1897.65
+    ],
+    "points_bbox": [
+     1280.209,
+     1883.226,
+     1310.345,
+     1912.745
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ],
+    "n_points": 2,
+    "centroid": [
+     1283.018,
+     1906.32
+    ],
+    "points_bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ],
+    "n_points": 8,
+    "centroid": [
+     1326.21,
+     1902.399
+    ],
+    "points_bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ],
+    "n_points": 2,
+    "centroid": [
+     1352.338,
+     1901.904
+    ],
+    "points_bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1386.914,
+     1882.313,
+     1418.689,
+     1915.253
+    ],
+    "n_points": 69,
+    "centroid": [
+     1402.655,
+     1898.702
+    ],
+    "points_bbox": [
+     1386.914,
+     1882.319,
+     1418.689,
+     1915.231
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ],
+    "n_points": 2,
+    "centroid": [
+     1390.599,
+     1903.581
+    ],
+    "points_bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ],
+    "n_points": 8,
+    "centroid": [
+     1444.578,
+     1901.254
+    ],
+    "points_bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ]
+   }
+  ],
+  "8dbd2d7c-755c-11f1-a119-cb280a09e266.page": [
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     41.849,
+     1705.909,
+     206.36,
+     1862.368
+    ],
+    "n_points": 10,
+    "centroid": [
+     124.104,
+     1792.076
+    ],
+    "points_bbox": [
+     41.849,
+     1705.909,
+     206.36,
+     1861.786
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     61.97,
+     757.928,
+     147.286,
+     831.815
+    ],
+    "n_points": 6,
+    "centroid": [
+     104.628,
+     794.872
+    ],
+    "points_bbox": [
+     67.685,
+     752.213,
+     141.571,
+     837.53
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.618,
+     1124.683,
+     147.841,
+     1200.903
+    ],
+    "n_points": 8,
+    "centroid": [
+     109.73,
+     1162.793
+    ],
+    "points_bbox": [
+     71.618,
+     1124.683,
+     147.841,
+     1200.903
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     72.639,
+     406.965,
+     151.223,
+     475.021
+    ],
+    "n_points": 6,
+    "centroid": [
+     111.931,
+     440.993
+    ],
+    "points_bbox": [
+     72.639,
+     406.965,
+     151.223,
+     475.021
+    ]
+   },
+   {
+    "kind": "pentagon",
+    "type_code": 11,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     74.576,
+     114.502,
+     153.88,
+     189.925
+    ],
+    "n_points": 5,
+    "centroid": [
+     114.228,
+     156.195
+    ],
+    "points_bbox": [
+     74.576,
+     114.502,
+     153.88,
+     189.925
+    ]
+   },
+   {
+    "kind": "rounded_rect",
+    "type_code": 64,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     107.878,
+     1395.5,
+     358.256,
+     1517.662
+    ],
+    "n_points": 4,
+    "centroid": [
+     233.067,
+     1456.581
+    ],
+    "points_bbox": [
+     107.878,
+     1395.5,
+     358.256,
+     1517.662
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     132.744,
+     2073.156,
+     311.315,
+     2187.593
+    ],
+    "n_points": 18,
+    "centroid": [
+     198.216,
+     2150.27
+    ],
+    "points_bbox": [
+     132.792,
+     2073.156,
+     311.315,
+     2187.481
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     194.945,
+     760.186,
+     369.653,
+     911.484
+    ],
+    "n_points": 6,
+    "centroid": [
+     282.299,
+     835.835
+    ],
+    "points_bbox": [
+     206.65,
+     748.481,
+     357.948,
+     923.189
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     197.234,
+     1124.975,
+     354.064,
+     1281.799
+    ],
+    "n_points": 8,
+    "centroid": [
+     275.649,
+     1203.387
+    ],
+    "points_bbox": [
+     197.234,
+     1124.975,
+     354.064,
+     1281.799
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     199.506,
+     409.183,
+     353.074,
+     542.179
+    ],
+    "n_points": 6,
+    "centroid": [
+     276.29,
+     475.681
+    ],
+    "points_bbox": [
+     199.506,
+     409.183,
+     353.074,
+     542.179
+    ]
+   },
+   {
+    "kind": "pentagon",
+    "type_code": 11,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     222.702,
+     136.032,
+     370.774,
+     276.857
+    ],
+    "n_points": 5,
+    "centroid": [
+     296.738,
+     213.878
+    ],
+    "points_bbox": [
+     222.702,
+     136.032,
+     370.774,
+     276.857
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     255.93,
+     1712.575,
+     482.164,
+     1927.734
+    ],
+    "n_points": 10,
+    "centroid": [
+     369.047,
+     1831.07
+    ],
+    "points_bbox": [
+     255.93,
+     1712.575,
+     482.164,
+     1926.934
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     369.67,
+     2100.799,
+     558.376,
+     2175.596
+    ],
+    "n_points": 18,
+    "centroid": [
+     463.563,
+     2123.025
+    ],
+    "points_bbox": [
+     369.67,
+     2100.963,
+     558.376,
+     2175.596
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     396.681,
+     1124.975,
+     613.829,
+     1342.115
+    ],
+    "n_points": 8,
+    "centroid": [
+     505.255,
+     1233.545
+    ],
+    "points_bbox": [
+     396.681,
+     1124.975,
+     613.829,
+     1342.115
+    ]
+   },
+   {
+    "kind": "rounded_rect",
+    "type_code": 64,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     402.956,
+     1397.771,
+     788.225,
+     1585.748
+    ],
+    "n_points": 4,
+    "centroid": [
+     595.59,
+     1491.76
+    ],
+    "points_bbox": [
+     402.956,
+     1397.771,
+     788.226,
+     1585.748
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     425.817,
+     763.307,
+     672.418,
+     976.865
+    ],
+    "n_points": 6,
+    "centroid": [
+     549.117,
+     870.086
+    ],
+    "points_bbox": [
+     442.338,
+     746.786,
+     655.897,
+     993.387
+    ]
+   },
+   {
+    "kind": "pentagon",
+    "type_code": 11,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     431.506,
+     47.167,
+     713.162,
+     315.036
+    ],
+    "n_points": 5,
+    "centroid": [
+     572.334,
+     195.241
+    ],
+    "points_bbox": [
+     431.506,
+     47.167,
+     713.162,
+     315.036
+    ]
+   },
+   {
+    "kind": "hexagon",
+    "type_code": 6,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     433.964,
+     409.64,
+     662.995,
+     607.992
+    ],
+    "n_points": 6,
+    "centroid": [
+     548.479,
+     508.816
+    ],
+    "points_bbox": [
+     433.964,
+     409.64,
+     662.995,
+     607.992
+    ]
+   },
+   {
+    "kind": "star",
+    "type_code": 13,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     521.323,
+     1719.688,
+     797.1,
+     1981.968
+    ],
+    "n_points": 10,
+    "centroid": [
+     659.211,
+     1864.134
+    ],
+    "points_bbox": [
+     521.323,
+     1719.688,
+     797.1,
+     1980.993
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     646.264,
+     2070.476,
+     806.681,
+     2184.999
+    ],
+    "n_points": 18,
+    "centroid": [
+     725.774,
+     2139.673
+    ],
+    "points_bbox": [
+     646.856,
+     2070.476,
+     806.318,
+     2184.999
+    ]
+   },
+   {
+    "kind": "rounded_rect",
+    "type_code": 64,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     838.113,
+     1398.512,
+     1328.776,
+     1637.912
+    ],
+    "n_points": 4,
+    "centroid": [
+     1083.445,
+     1518.212
+    ],
+    "points_bbox": [
+     838.113,
+     1398.512,
+     1328.776,
+     1637.912
+    ]
+   }
+  ],
+  "a8f7d126-755e-11f1-a24c-fbead3d07630.page": [
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ],
+    "n_points": 3,
+    "centroid": [
+     103.06,
+     1351.575
+    ],
+    "points_bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ],
+    "n_points": 4,
+    "centroid": [
+     175.504,
+     152.242
+    ],
+    "points_bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ],
+    "n_points": 2,
+    "centroid": [
+     99.659,
+     2088.175
+    ],
+    "points_bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ],
+    "n_points": 4,
+    "centroid": [
+     140.562,
+     1886.053
+    ],
+    "points_bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ],
+    "n_points": 4,
+    "centroid": [
+     102.477,
+     1622.73
+    ],
+    "points_bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ],
+    "n_points": 8,
+    "centroid": [
+     106.928,
+     800.548
+    ],
+    "points_bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ],
+    "n_points": 4,
+    "centroid": [
+     108.427,
+     441.392
+    ],
+    "points_bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ],
+    "n_points": 8,
+    "centroid": [
+     178.572,
+     1124.803
+    ],
+    "points_bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ],
+    "n_points": 2,
+    "centroid": [
+     211.624,
+     2126.023
+    ],
+    "points_bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ],
+    "n_points": 4,
+    "centroid": [
+     286.742,
+     1655.808
+    ],
+    "points_bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ],
+    "n_points": 3,
+    "centroid": [
+     287.181,
+     1393.617
+    ],
+    "points_bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ],
+    "n_points": 4,
+    "centroid": [
+     292.405,
+     475.397
+    ],
+    "points_bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ],
+    "n_points": 8,
+    "centroid": [
+     296.935,
+     844.665
+    ],
+    "points_bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ],
+    "n_points": 4,
+    "centroid": [
+     386.427,
+     1922.277
+    ],
+    "points_bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ],
+    "n_points": 2,
+    "centroid": [
+     398.861,
+     2156.165
+    ],
+    "points_bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ],
+    "n_points": 4,
+    "centroid": [
+     519.076,
+     189.449
+    ],
+    "points_bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ],
+    "n_points": 8,
+    "centroid": [
+     539.189,
+     1167.045
+    ],
+    "points_bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ],
+    "n_points": 3,
+    "centroid": [
+     541.634,
+     1440.475
+    ],
+    "points_bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ],
+    "n_points": 4,
+    "centroid": [
+     538.823,
+     1693.386
+    ],
+    "points_bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ],
+    "n_points": 4,
+    "centroid": [
+     584.998,
+     549.321
+    ],
+    "points_bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ],
+    "n_points": 8,
+    "centroid": [
+     596.242,
+     905.53
+    ],
+    "points_bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ],
+    "n_points": 4,
+    "centroid": [
+     808.758,
+     1913.611
+    ],
+    "points_bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ],
+    "n_points": 4,
+    "centroid": [
+     996.776,
+     229.643
+    ],
+    "points_bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ],
+    "n_points": 8,
+    "centroid": [
+     1015.586,
+     1164.173
+    ],
+    "points_bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1280.209,
+     1883.223,
+     1310.345,
+     1912.745
+    ],
+    "n_points": 52,
+    "centroid": [
+     1297.15,
+     1897.65
+    ],
+    "points_bbox": [
+     1280.209,
+     1883.226,
+     1310.345,
+     1912.745
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ],
+    "n_points": 2,
+    "centroid": [
+     1283.018,
+     1906.32
+    ],
+    "points_bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ],
+    "n_points": 8,
+    "centroid": [
+     1326.21,
+     1902.399
+    ],
+    "points_bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ],
+    "n_points": 2,
+    "centroid": [
+     1352.338,
+     1901.904
+    ],
+    "points_bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1386.914,
+     1882.313,
+     1418.689,
+     1915.253
+    ],
+    "n_points": 69,
+    "centroid": [
+     1402.655,
+     1898.702
+    ],
+    "points_bbox": [
+     1386.914,
+     1882.319,
+     1418.689,
+     1915.231
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 2.8678,
+    "bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ],
+    "n_points": 2,
+    "centroid": [
+     1390.599,
+     1903.581
+    ],
+    "points_bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ],
+    "n_points": 8,
+    "centroid": [
+     1444.578,
+     1901.254
+    ],
+    "points_bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ]
+   }
+  ],
+  "c1ada90c-755e-11f1-b9c9-572a46918a93.page": [
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ],
+    "n_points": 3,
+    "centroid": [
+     103.06,
+     1351.575
+    ],
+    "points_bbox": [
+     60.771,
+     1302.743,
+     145.35,
+     1375.991
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ],
+    "n_points": 4,
+    "centroid": [
+     175.504,
+     152.242
+    ],
+    "points_bbox": [
+     63.686,
+     115.566,
+     287.322,
+     188.918
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ],
+    "n_points": 2,
+    "centroid": [
+     99.659,
+     2088.175
+    ],
+    "points_bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ],
+    "n_points": 4,
+    "centroid": [
+     140.562,
+     1886.053
+    ],
+    "points_bbox": [
+     65.331,
+     1830.344,
+     215.792,
+     1941.762
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ],
+    "n_points": 4,
+    "centroid": [
+     102.477,
+     1622.73
+    ],
+    "points_bbox": [
+     66.002,
+     1586.866,
+     138.952,
+     1658.594
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ],
+    "n_points": 8,
+    "centroid": [
+     106.928,
+     800.548
+    ],
+    "points_bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ],
+    "n_points": 4,
+    "centroid": [
+     108.427,
+     441.392
+    ],
+    "points_bbox": [
+     71.908,
+     404.873,
+     144.946,
+     477.912
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ],
+    "n_points": 8,
+    "centroid": [
+     178.572,
+     1124.803
+    ],
+    "points_bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.384
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ],
+    "n_points": 2,
+    "centroid": [
+     211.624,
+     2126.023
+    ],
+    "points_bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ],
+    "n_points": 4,
+    "centroid": [
+     286.742,
+     1655.808
+    ],
+    "points_bbox": [
+     212.125,
+     1584.644,
+     361.358,
+     1726.972
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ],
+    "n_points": 3,
+    "centroid": [
+     287.181,
+     1393.617
+    ],
+    "points_bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ],
+    "n_points": 4,
+    "centroid": [
+     292.405,
+     475.397
+    ],
+    "points_bbox": [
+     220.593,
+     403.585,
+     364.217,
+     547.21
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ],
+    "n_points": 8,
+    "centroid": [
+     296.935,
+     844.665
+    ],
+    "points_bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ],
+    "n_points": 4,
+    "centroid": [
+     386.427,
+     1922.277
+    ],
+    "points_bbox": [
+     242.764,
+     1842.607,
+     530.09,
+     2001.948
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ],
+    "n_points": 2,
+    "centroid": [
+     398.861,
+     2156.165
+    ],
+    "points_bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ],
+    "n_points": 4,
+    "centroid": [
+     519.076,
+     189.449
+    ],
+    "points_bbox": [
+     347.407,
+     119.077,
+     690.744,
+     259.822
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ],
+    "n_points": 8,
+    "centroid": [
+     539.189,
+     1167.045
+    ],
+    "points_bbox": [
+     352.108,
+     1099.175,
+     726.27,
+     1234.914
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ],
+    "n_points": 3,
+    "centroid": [
+     541.634,
+     1440.475
+    ],
+    "points_bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.788
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ],
+    "n_points": 4,
+    "centroid": [
+     538.823,
+     1693.386
+    ],
+    "points_bbox": [
+     429.346,
+     1587.353,
+     648.3,
+     1799.42
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ],
+    "n_points": 4,
+    "centroid": [
+     584.998,
+     549.321
+    ],
+    "points_bbox": [
+     441.462,
+     405.785,
+     728.534,
+     692.857
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ],
+    "n_points": 8,
+    "centroid": [
+     596.242,
+     905.53
+    ],
+    "points_bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ],
+    "n_points": 4,
+    "centroid": [
+     808.758,
+     1913.611
+    ],
+    "points_bbox": [
+     578.983,
+     1828.979,
+     1038.534,
+     1998.242
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ],
+    "n_points": 4,
+    "centroid": [
+     996.776,
+     229.643
+    ],
+    "points_bbox": [
+     736.262,
+     119.753,
+     1257.29,
+     339.532
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ],
+    "n_points": 8,
+    "centroid": [
+     1015.586,
+     1164.173
+    ],
+    "points_bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1280.209,
+     1883.223,
+     1310.345,
+     1912.745
+    ],
+    "n_points": 52,
+    "centroid": [
+     1297.15,
+     1897.65
+    ],
+    "points_bbox": [
+     1280.209,
+     1883.226,
+     1310.345,
+     1912.745
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ],
+    "n_points": 2,
+    "centroid": [
+     1283.018,
+     1906.32
+    ],
+    "points_bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ],
+    "n_points": 8,
+    "centroid": [
+     1326.21,
+     1902.399
+    ],
+    "points_bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ],
+    "n_points": 2,
+    "centroid": [
+     1352.338,
+     1901.904
+    ],
+    "points_bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1386.914,
+     1882.313,
+     1418.689,
+     1915.253
+    ],
+    "n_points": 69,
+    "centroid": [
+     1402.655,
+     1898.702
+    ],
+    "points_bbox": [
+     1386.914,
+     1882.319,
+     1418.689,
+     1915.231
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": 5.5567,
+    "bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ],
+    "n_points": 2,
+    "centroid": [
+     1390.599,
+     1903.581
+    ],
+    "points_bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     255,
+     54,
+     54
+    ],
+    "pen_width": null,
+    "bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ],
+    "n_points": 8,
+    "centroid": [
+     1444.578,
+     1901.254
+    ],
+    "points_bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ]
+   }
+  ],
+  "c8a48dd4-756d-11f1-847a-9faa985b65ec.page": [],
+  "eb31abd4-755e-11f1-bf67-dbbdebd476a5.page": [
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     57.46,
+     1636.753,
+     130.409,
+     1708.481
+    ],
+    "n_points": 4,
+    "centroid": [
+     93.934,
+     1672.617
+    ],
+    "points_bbox": [
+     64.973,
+     1634.755,
+     136.582,
+     1714.782
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     58.123,
+     175.232,
+     281.759,
+     248.584
+    ],
+    "n_points": 4,
+    "centroid": [
+     169.941,
+     211.908
+    ],
+    "points_bbox": [
+     54.487,
+     161.878,
+     285.395,
+     261.938
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     60.771,
+     1302.742,
+     145.35,
+     1375.991
+    ],
+    "n_points": 3,
+    "centroid": [
+     97.518,
+     1350.244
+    ],
+    "points_bbox": [
+     48.753,
+     1306.734,
+     124.114,
+     1391.199
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ],
+    "n_points": 2,
+    "centroid": [
+     99.659,
+     2088.175
+    ],
+    "points_bbox": [
+     65.112,
+     2057.2,
+     134.206,
+     2119.15
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     69.478,
+     1794.435,
+     219.939,
+     1905.853
+    ],
+    "n_points": 4,
+    "centroid": [
+     144.709,
+     1850.144
+    ],
+    "points_bbox": [
+     69.764,
+     1794.647,
+     219.653,
+     1905.641
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ],
+    "n_points": 8,
+    "centroid": [
+     106.928,
+     800.548
+    ],
+    "points_bbox": [
+     71.376,
+     764.996,
+     142.481,
+     836.1
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     78.563,
+     1089.221,
+     278.581,
+     1160.385
+    ],
+    "n_points": 8,
+    "centroid": [
+     178.572,
+     1124.803
+    ],
+    "points_bbox": [
+     103.094,
+     1059.191,
+     254.05,
+     1190.415
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     94.891,
+     355.827,
+     167.93,
+     428.865
+    ],
+    "n_points": 4,
+    "centroid": [
+     131.41,
+     392.346
+    ],
+    "points_bbox": [
+     89.105,
+     350.04,
+     173.716,
+     434.652
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ],
+    "n_points": 2,
+    "centroid": [
+     211.624,
+     2126.023
+    ],
+    "points_bbox": [
+     149.65,
+     2063.086,
+     273.599,
+     2188.959
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     206.509,
+     1598.764,
+     355.741,
+     1741.092
+    ],
+    "n_points": 4,
+    "centroid": [
+     281.125,
+     1669.928
+    ],
+    "points_bbox": [
+     221.459,
+     1594.88,
+     367.949,
+     1754.022
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     212.367,
+     1307.229,
+     361.995,
+     1436.811
+    ],
+    "n_points": 3,
+    "centroid": [
+     295.271,
+     1392.044
+    ],
+    "points_bbox": [
+     242.085,
+     1311.946,
+     380.818,
+     1460.119
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ],
+    "n_points": 8,
+    "centroid": [
+     296.935,
+     844.665
+    ],
+    "points_bbox": [
+     222.441,
+     770.171,
+     371.429,
+     919.159
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     234.876,
+     385.97,
+     378.501,
+     529.594
+    ],
+    "n_points": 4,
+    "centroid": [
+     306.689,
+     457.782
+    ],
+    "points_bbox": [
+     223.497,
+     374.59,
+     389.88,
+     540.973
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     242.818,
+     1827.989,
+     530.144,
+     1987.329
+    ],
+    "n_points": 4,
+    "centroid": [
+     386.481,
+     1907.659
+    ],
+    "points_bbox": [
+     243.365,
+     1828.292,
+     529.597,
+     1987.026
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ],
+    "n_points": 2,
+    "centroid": [
+     398.861,
+     2156.165
+    ],
+    "points_bbox": [
+     295.27,
+     2053.292,
+     502.453,
+     2259.038
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     343.818,
+     136.594,
+     687.155,
+     277.34
+    ],
+    "n_points": 4,
+    "centroid": [
+     515.487,
+     206.967
+    ],
+    "points_bbox": [
+     336.521,
+     116.198,
+     694.452,
+     297.737
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     352.108,
+     1099.176,
+     726.27,
+     1234.914
+    ],
+    "n_points": 8,
+    "centroid": [
+     539.189,
+     1167.045
+    ],
+    "points_bbox": [
+     363.39,
+     1085.271,
+     714.988,
+     1248.819
+    ]
+   },
+   {
+    "kind": "trapezoid",
+    "type_code": 9,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     426.269,
+     1552.682,
+     645.223,
+     1764.75
+    ],
+    "n_points": 4,
+    "centroid": [
+     535.746,
+     1658.716
+    ],
+    "points_bbox": [
+     448.512,
+     1548.437,
+     663.444,
+     1783.691
+    ]
+   },
+   {
+    "kind": "triangle",
+    "type_code": 2,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     428.509,
+     1309.85,
+     654.759,
+     1505.787
+    ],
+    "n_points": 3,
+    "centroid": [
+     526.303,
+     1436.652
+    ],
+    "points_bbox": [
+     395.757,
+     1321.317,
+     595.524,
+     1547.428
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     438.463,
+     437.854,
+     725.535,
+     724.927
+    ],
+    "n_points": 4,
+    "centroid": [
+     581.999,
+     581.391
+    ],
+    "points_bbox": [
+     415.719,
+     415.11,
+     748.28,
+     747.671
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ],
+    "n_points": 8,
+    "centroid": [
+     596.242,
+     905.53
+    ],
+    "points_bbox": [
+     459.462,
+     768.75,
+     733.023,
+     1042.311
+    ]
+   },
+   {
+    "kind": "rhombus",
+    "type_code": 8,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     578.185,
+     1851.203,
+     1037.737,
+     2020.466
+    ],
+    "n_points": 4,
+    "centroid": [
+     807.961,
+     1935.834
+    ],
+    "points_bbox": [
+     579.059,
+     1851.525,
+     1036.862,
+     2020.144
+    ]
+   },
+   {
+    "kind": "rectangle",
+    "type_code": 4,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     734.01,
+     78.754,
+     1255.039,
+     298.534
+    ],
+    "n_points": 4,
+    "centroid": [
+     994.524,
+     188.644
+    ],
+    "points_bbox": [
+     722.56,
+     47.825,
+     1266.489,
+     329.463
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     758.033,
+     1086.744,
+     1273.139,
+     1241.602
+    ],
+    "n_points": 8,
+    "centroid": [
+     1015.586,
+     1164.173
+    ],
+    "points_bbox": [
+     780.3,
+     1059.417,
+     1250.872,
+     1268.929
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1280.209,
+     1883.223,
+     1310.345,
+     1912.745
+    ],
+    "n_points": 52,
+    "centroid": [
+     1297.15,
+     1897.65
+    ],
+    "points_bbox": [
+     1280.209,
+     1883.226,
+     1310.345,
+     1912.745
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ],
+    "n_points": 2,
+    "centroid": [
+     1283.018,
+     1906.32
+    ],
+    "points_bbox": [
+     1283.018,
+     1894.087,
+     1283.018,
+     1918.552
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ],
+    "n_points": 8,
+    "centroid": [
+     1326.21,
+     1902.399
+    ],
+    "points_bbox": [
+     1311.632,
+     1894.095,
+     1340.788,
+     1910.704
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ],
+    "n_points": 2,
+    "centroid": [
+     1352.338,
+     1901.904
+    ],
+    "points_bbox": [
+     1352.338,
+     1890.355,
+     1352.338,
+     1913.454
+    ]
+   },
+   {
+    "kind": "freeform_smooth",
+    "type_code": 90,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1386.914,
+     1882.313,
+     1418.689,
+     1915.253
+    ],
+    "n_points": 69,
+    "centroid": [
+     1402.655,
+     1898.702
+    ],
+    "points_bbox": [
+     1386.914,
+     1882.319,
+     1418.689,
+     1915.231
+    ]
+   },
+   {
+    "kind": "arrow",
+    "type_code": null,
+    "closed": false,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": 6.3547,
+    "bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ],
+    "n_points": 2,
+    "centroid": [
+     1390.599,
+     1903.581
+    ],
+    "points_bbox": [
+     1390.599,
+     1894.276,
+     1390.599,
+     1912.887
+    ]
+   },
+   {
+    "kind": "ellipse",
+    "type_code": 1,
+    "closed": true,
+    "head_start": false,
+    "head_end": false,
+    "color": [
+     37,
+     37,
+     37
+    ],
+    "pen_width": null,
+    "bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ],
+    "n_points": 8,
+    "centroid": [
+     1444.578,
+     1901.254
+    ],
+    "points_bbox": [
+     1430.525,
+     1887.201,
+     1458.632,
+     1915.308
+    ]
+   }
+  ]
+ }
+}

@@ -551,21 +551,43 @@ fn parse_page_elements(
         }
         // Anchor on the object's ascii UUID (inside the common header), keeping
         // the uuid-relative record logic identical to the old whole-buffer scan
-        // — just scoped to this object's blob.
-        let Some(uuid_off) = find_uuid_in(data, obj.blob_off, obj.blob_off + 96) else {
-            continue;
-        };
-        let Some(bbox) = find_object_bbox(data, uuid_off, width, height) else {
-            continue;
-        };
-        let record_end = obj.blob_end.min(uuid_off + MAX_OBJECT_RECORD_LEN);
-        let record = &data[uuid_off..record_end];
+        // — just scoped to this object's blob. Shape objects don't need this
+        // anchor (their bbox comes from the shape marker itself), so a missing
+        // uuid/bbox only skips the text/image path, not the whole object.
+        if let Some(uuid_off) = find_uuid_in(data, obj.blob_off, obj.blob_off + 96) {
+            if let Some(bbox) = find_object_bbox(data, uuid_off, width, height) {
+                let record_end = obj.blob_end.min(uuid_off + MAX_OBJECT_RECORD_LEN);
+                let record = &data[uuid_off..record_end];
 
-        if let Some(text_box) = parse_text_box_record(record, bbox) {
-            elements.push(PageElement::TextBox(text_box));
-        } else if let Some(media_index) = image_media_index(record) {
-            elements.push(PageElement::Image { bbox, media_index });
+                if let Some(text_box) = parse_text_box_record(record, bbox) {
+                    elements.push(PageElement::TextBox(text_box));
+                    continue;
+                }
+                if let Some(media_index) = image_media_index(record) {
+                    elements.push(PageElement::Image { bbox, media_index });
+                    continue;
+                }
+            }
         }
+
+        // pysdocx `_classify_page_object` precedence: an image placement marker
+        // claims the object even when its media index fails to decode — never
+        // shape-scan those blobs.
+        let blob = &data[obj.blob_off..obj.blob_end];
+        if find_sub(blob, IMAGE_MARKER).is_some() {
+            continue;
+        }
+
+        let mut shapes = Vec::new();
+        crate::shape::parse_shapes_in_object(
+            data,
+            obj.blob_off,
+            obj.blob_end,
+            width,
+            height,
+            &mut shapes,
+        );
+        elements.extend(shapes.into_iter().map(PageElement::Shape));
     }
 
     elements
