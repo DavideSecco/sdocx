@@ -106,11 +106,22 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
             if data is None:
                 continue
             ref, k = parse_end_tag(data), SdocxEndTag.from_bytes(data)
-            for f in ("payload_size", "format_version", "format_version_dup",
-                      "modified_time", "page_width", "created_time_header",
-                      "document_height", "created_time_a", "created_time_b",
-                      "extra_time_candidate"):
+            for f in (
+                "payload_size", "format_version", "format_version_dup",
+                "modified_time", "note_uuid", "property_flags", "cover_image",
+                "note_width", "page_width", "created_time_header",
+                "document_height", "app_name", "app_version_major",
+                "app_version_minor", "app_version_patch_name",
+                "min_format_version", "last_viewed_page_index", "page_model",
+                "document_type", "owner_id", "skipped_size",
+                "encryption_data_size", "display_created_time",
+                "display_modified_time", "last_recognised_data_modified_time",
+                "created_time_a", "created_time_b", "extra_time_candidate",
+                "fixed_font", "fixed_text_direction", "fixed_background_theme",
+                "server_checkpoint", "new_orientation", "min_unknown_version",
+            ):
                 self.assertEqual(ref[f], getattr(k, f), f"{sample.name}: {f}")
+            self.assertEqual(ref["app_custom_data"], getattr(k, "app_custom_data", ""), f"{sample.name}: app_custom_data")
             self.assertEqual(k.signature, "Document for S-Pen SDK", sample.name)
             note = _member(sample, "note.note")
             if note is not None:
@@ -145,56 +156,44 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
             if data is None:
                 continue
             ref, k = parse_media_info(data), SdocxMediaInfo.from_bytes(data)
-            self.assertEqual(k.magic, ref["magic"], sample.name)
+            self.assertEqual(k.format_version, ref["format_version"], sample.name)
             self.assertEqual(k.record_count, ref["count"], sample.name)
             self.assertEqual(k.eof, "EOFX", sample.name)
             for i, (kr, rr) in enumerate(zip(k.records, ref["records"])):
                 self.assertEqual(kr.body.media_index, rr["media_index"], f"{sample.name}: rec[{i}].media_index")
                 self.assertEqual(kr.body.name, rr["name"], f"{sample.name}: rec[{i}].name")
                 self.assertEqual(kr.body.sha256, rr["sha256"], f"{sample.name}: rec[{i}].sha256")
-                self.assertEqual(kr.body.tail.tag, rr["tail_tag"], f"{sample.name}: rec[{i}].tail.tag")
+                self.assertEqual(kr.body.tail.ref_count, rr["ref_count"], f"{sample.name}: rec[{i}].tail.ref_count")
                 self.assertEqual(
-                    kr.body.tail.time_candidate,
-                    rr["time_candidate"],
-                    f"{sample.name}: rec[{i}].tail.time_candidate",
+                    kr.body.tail.modified_time,
+                    rr["modified_time"],
+                    f"{sample.name}: rec[{i}].tail.modified_time",
                 )
-                self.assertEqual(kr.body.tail.marker, rr["tail_marker"], f"{sample.name}: rec[{i}].tail.marker")
+                self.assertEqual(
+                    kr.body.tail.is_attached,
+                    int(rr["is_attached"]),
+                    f"{sample.name}: rec[{i}].tail.is_attached",
+                )
             checked += 1
         self.assertGreater(checked, 0)
 
-    def test_note_header(self) -> None:
+    def test_note_doc(self) -> None:
+        """The full sequential note.note spec must agree with pysdocx.
+
+        `spec.tools.validate_note.diffs_for` compares every modeled field —
+        header, bitfields, blob boundaries, pre-flex gap, all flex fields
+        (string registry, pen info, voice recordings, attached files, ...) and
+        the trailing hash gate — between the Kaitai parse and
+        `pysdocx.note_doc.parse_note_doc` / `parse_note_metadata`.
+        """
+        from spec.tools.validate_note import diffs_for
+
         checked = 0
         for sample in _samples():
             data = _member(sample, "note.note")
             if data is None:
                 continue
-            ref, k = parse_note_metadata(data), SdocxNote.from_bytes(data)
-            for f in ("offset_to_data", "flags", "meta_flags", "format_version",
-                      "file_revision", "created_time", "modified_time", "width",
-                      "height", "page_h_padding", "page_v_padding",
-                      "min_format_version", "title_size"):
-                self.assertEqual(ref[f], getattr(k, f), f"{sample.name}: {f}")
-            self.assertEqual(ref["note_id"], k.note_id.value, f"{sample.name}: note_id")
-            tail_sentinel = next(r for r in ref["tail_records"] if r["kind"] == "tail_sentinel")
-            self.assertEqual(k.tail_sentinel.hex(), tail_sentinel["signature"], f"{sample.name}: tail_sentinel")
-            self.assertEqual(k.trailing_hash.hex(), data[-32:].hex(), f"{sample.name}: trailing_hash")
-            tail_hash = next(r for r in ref["tail_records"] if r["kind"] == "tail_hash_block")
-            candidates = []
-            if tail_hash["off"] == len(data) - 40:
-                candidates.append(k.tail_hash_block_eof)
-            if tail_hash["off"] == len(data) - 44:
-                candidates.append(k.tail_hash_block_before_post_u32)
-            self.assertEqual(len(candidates), 1, f"{sample.name}: modeled tail_hash_block boundary")
-            block = candidates[0]
-            self.assertEqual(block.prefix_u32, tail_hash["prefix_u32"], f"{sample.name}: tail_hash.prefix")
-            self.assertEqual(block.hash32.hex(), tail_hash["hash32"], f"{sample.name}: tail_hash.hash32")
-            for record in ref["tail_records"]:
-                if record["kind"] == "tail_post_hash_u32":
-                    self.assertEqual(
-                        record["value"],
-                        struct.unpack_from("<I", data, len(data) - 4)[0],
-                        f"{sample.name}: tail_post_hash_u32",
-                    )
+            self.assertEqual(diffs_for(data), [], sample.name)
             checked += 1
         self.assertGreater(checked, 0)
 

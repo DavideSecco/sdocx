@@ -58,10 +58,10 @@ Expected validator output:
 
 | Member | `.ksy` | Validator | Corpus |
 |---|---|---|---|
-| `end_tag.bin` | `ksy/sdocx_end_tag.ksy` | `tools/validate_end_tag.py` | 13/13 ✅ |
-| `pageIdInfo.dat` | `ksy/sdocx_page_id_info.ksy` | `tools/validate_page_id_info.py` | 13/13 ✅ |
-| `media/mediaInfo.dat` | `ksy/sdocx_media_info.ksy` | `tools/validate_media_info.py` | 13/13, 60/60 record tails ✅ |
-| `note.note` (header + fixed tail anchors) | `ksy/sdocx_note.ksy` | `tools/validate_note.py` | 13/13 ✅ |
-| `<uuid>.page` (header + tree) | `ksy/sdocx_page.ksy` | `tools/validate_page.py`, `tools/validate_page_tree.py` | 48/48 pages ✅ |
-| `.page` object header | `ksy/sdocx_object_header.ksy` | `tools/validate_object_header.py` | 11788/11788 objects ✅ |
-| `.page` payload geometry | `ksy/sdocx_payload_geometry.ksy` | `tools/validate_payload_geometry.py` | 412/412 wrappers ✅ |
+| `end_tag.bin` | `ksy/sdocx_end_tag.ksy` | `tools/validate_end_tag.py` | 14/14 ✅ |
+| `pageIdInfo.dat` | `ksy/sdocx_page_id_info.ksy` | `tools/validate_page_id_info.py` | 14/14 ✅ |
+| `media/mediaInfo.dat` | `ksy/sdocx_media_info.ksy` | `tools/validate_media_info.py` | 14/14, 222/222 record tails ✅ |
+| `note.note` (whole member, sequential) | `ksy/sdocx_note.ksy` | `tools/validate_note.py` | 14/14 ✅ |
+| `<uuid>.page` (header + tree) | `ksy/sdocx_page.ksy` | `tools/validate_page.py`, `tools/validate_page_tree.py` | 114/114 pages ✅ |
+| `.page` object header | `ksy/sdocx_object_header.ksy` | `tools/validate_object_header.py` | all corpus objects ✅ |
+| `.page` payload geometry | `ksy/sdocx_payload_geometry.ksy` | `tools/validate_payload_geometry.py` | 490/490 wrappers ✅ |
