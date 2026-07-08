@@ -28,6 +28,11 @@ type-specific.
 - The media index maps to a `media/<index>@…` archive member (and a
   [`mediaInfo.dat`](../mediaInfo.md) record). Placement markers: `01 00 04 20`
   with a `u16` media index just before and a 4×`f64` on-page bbox just after.
+- `sdocx2pdf` exposes a broader Image flex schema (crop/original/border fields).
+  Our current diagnostic confirms that the already-decoded media reference is
+  present as a `u32` in every image object blob (15/15), but does **not** yet
+  isolate which flex field corresponds to `original_image_bind_id` or the crop
+  fields. See `spec/tools/analyze_sdocx2pdf_leads.py`.
 
 ## Drawings — `raw_type` 14
 
@@ -35,7 +40,11 @@ type-specific.
 - Decoded: drawing media placement from object/blob markers; raster drawing
   rendering when the media is a raster. Drawings do **not** share the
   payload-geometry wrapper in the current corpus.
-- Unknown: fuller object-level semantics for the drawing payload.
+- `sdocx2pdf` calls raw type 14 `Painting`. Our current diagnostic confirms the
+  drawing media reference as a `u32` in the one corpus painting/drawing object
+  (1/1), but the attached thumbnail, ratio, crop rect, and original rect remain
+  hypotheses until a larger corpus validates them.
+- Unknown: fuller object-level semantics for the drawing/painting payload.
 
 ## Text boxes — `raw_type` 2
 
@@ -49,6 +58,10 @@ type-specific.
 - **Heuristic (not format):** how a rotated box wraps its text — the 90° and 16°
   boxes are laid out with a calibrated inner-wrap inset, not a decoded padding
   field. See [`../../heuristics.md`](../../heuristics.md) and `future_todo.md`.
+- `sdocx2pdf`'s `text_core::Common` frame is visible in 1/7 current text-box
+  blobs (`[u32 frame_size][u32 char_count][UTF-16 text]` matching our text
+  extraction). The other 6/7 text boxes do not expose that simple frame at the
+  same level, so `Common` is a useful lead but not yet promoted here.
 
 ## Attachments on a page — Marker / Inferred
 

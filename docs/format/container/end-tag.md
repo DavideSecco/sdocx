@@ -1,7 +1,7 @@
 # `end_tag.bin`
 
-A fixed-shape footer record that closes a Samsung Notes `.sdocx` archive. One
-per document.
+A sequential S Pen SDK footer record that closes a Samsung Notes `.sdocx`
+archive. One per document.
 
 - **Formal spec:** [`spec/ksy/sdocx_end_tag.ksy`](../../../spec/ksy/sdocx_end_tag.ksy)
   (Kaitai Struct; validated against the whole corpus — see [validation](#validation)).
@@ -20,25 +20,39 @@ Little-endian throughout. Two size families occur in the corpus:
 | Standard | `146` | 148 bytes | `126` | 12 / 13 |
 | Legacy import (`handwritten.sdocx`) | `142` | 144 bytes | `122` | 1 / 13 |
 
-The leading fields are contiguous and fully decoded. The bytes between the decoded islands are structurally bounded but not yet named (see [Unknown regions](#unknown-regions)); the footer constants and the ASCII signature are anchored from the **end** of the stream so both families parse with a single definition.
+The field names below are cross-checked against the independent `sdocx2pdf`
+parser and validated against the current corpus. The ASCII signature is anchored
+from the **end** of the stream so both size families parse with a single
+definition; the legacy `handwritten.sdocx` footer omits the final zero-length
+`app_custom_data` field before the signature.
 
 ```
 offset  size  field                    status
 0       2     payload_size             Decoded   = file_size - 2
-2       2     format_version           Decoded   = note.note format_version
-4       4     reserved_at_4            Decoded   always 0
+2       4     format_version           Decoded   = note.note format_version
+6       var   note_uuid                Decoded   short UTF-16 string; empty corpus-wide
 8       8     modified_time (s64)      Decoded   = note.note modified_time
-16     ...    (raw island)             Unknown
-22      2     page_width               Decoded   = page header width
+16      4     property_flags           Decoded   bit 1 = is_landscape; zero corpus-wide
+20      var   cover_image              Decoded   short UTF-16 string; empty corpus-wide
+22      4     note_width               Decoded   = page header width
 26      4     document_height          Decoded   f32 = note.note height
-...    ...    (raw island)             Unknown
-42      2     format_version_dup       Decoded   = format_version
+30      var   app_name/version         Decoded   empty app name, version fields
+42      4     min_format_version       Decoded   = format_version
 46      8     created_time_header      Decoded   = note.note created_time
-...    ...    (raw island)             Unknown
-72      8     created_time_a           Decoded   created-time candidate
-80      8     created_time_b           Decoded   created-time candidate
-88      8     extra_time_candidate     Decoded   timestamp-like, rarely set
-...    ...    (raw island + footer)    Partial   see below
+54      4     last_viewed_page_index   Decoded   zero corpus-wide
+58      2     page_model               Decoded   0 paged/list, 1 pageless/single
+60      2     document_type            Decoded   0 unlocked document corpus-wide
+62      var   owner/skip/encryption    Decoded   empty/zero corpus-wide
+72      8     display_created_time     Decoded   SDK display created time
+80      8     display_modified_time    Decoded   SDK display modified time
+88      8     last_recognised...       Decoded   non-zero on 2 samples
+96      var   fixed_font               Decoded   empty corpus-wide
+98      4     fixed_text_direction     Decoded   2 = default corpus-wide
+102     4     fixed_background_theme   Decoded   2 = default corpus-wide
+106     8     server_checkpoint        Decoded   -1 corpus-wide
+114     4     new_orientation          Decoded   0 = portrait corpus-wide
+118     4     min_unknown_version      Decoded   zero corpus-wide
+122     var   app_custom_data          Decoded   optional long UTF-16 string; empty/omitted
 end-22  22    signature (ASCII)        Decoded   "Document for S-Pen SDK"
 ```
 
@@ -51,65 +65,74 @@ counterexamples**.
 Byte count of everything after this field: `payload_size == file_size - 2` on
 13/13 files (`bad_size = 0`).
 
-### `format_version` — `u16` @ 2
+### `format_version` — `u32` @ 2
 Matches `note.note`'s `format_version` on 13/13. Corpus values: `4000` (×9),
-`5400` (×4). Repeated verbatim at offset 42 (`format_version_dup`).
+`5400` (×4). The older parser exposed the low `u16`; the high half is zero on
+the corpus.
 
 ### `modified_time` — `s64` @ 8
-Epoch-milliseconds document modified time. Matches `note.note`'s
-`modified_time` exactly on 13/13 (`modified_mismatches = 0`).
+Samsung document modified timestamp. Matches `note.note`'s `modified_time`
+exactly on 13/13 (`modified_mismatches = 0`).
 
-### `page_width` — `u16` @ 22
-Equals the page-header page width on the current corpus. Lives inside an
-otherwise-unnamed region, so it is decoded as an isolated island rather than as
-part of a fully-mapped struct.
+### `note_width` / `document_height` — `u32` @ 22 / `f32` @ 26
+`note_width` equals the page-header width on the current corpus; `page_width`
+remains as a back-compat low-`u16` alias. `document_height` equals `note.note`'s
+height on 13/13 samples. This is the document/note height (for multi-page notes,
+the stacked note height), not the per-page `.page` height.
 
-### `document_height` — `f32` @ 26
-Equals `note.note`'s `height` on 13/13 samples. This is the document/note height
-(for multi-page notes, the stacked note height), not the per-page `.page`
-height.
+### SDK string / option fields
+`note_uuid`, `cover_image`, `app_name`, `app_version_patch_name`, `owner_id`,
+`fixed_font`, and `app_custom_data` are decoded as SDK length-prefixed UTF-16
+strings. They are empty on the current corpus; the legacy footer reaches the
+signature immediately after `min_unknown_version`, so `app_custom_data` is
+omitted rather than encoded as a zero-length long string.
+
+`app_version_major` and `app_version_minor` are both `0xffffffff` on the current
+corpus. `skipped_size` and `encryption_data_size` are zero on 13/13.
 
 ### `created_time_header` — `s64` @ 46
-Creation-time candidate carried in the header region; matches `note.note`
+Creation time carried in the SDK footer; matches `note.note`
 `created_time` exactly on 13/13 (`created_time_header_exact = 13`).
 
-### `created_time_a` / `created_time_b` — `s64` @ 72 / @ 80
-Two further creation-time candidates. Both match the note creation time exactly
-on the 10 newer samples; on the 3 older imports they read as millisecond-close
-but not identical values. `created_time_a` and `created_time_b` are identical to
-each other on the 10 newer samples.
+### `page_model` / `document_type`
+`page_model` is `0` for paged/list notes and `1` for pageless/single notes,
+matching the enum names in `sdocx2pdf`. `document_type` is `0` on the current
+corpus (`UnlockedDoc` in `sdocx2pdf`).
+
+### `display_created_time` / `display_modified_time` — `s64` @ 72 / @ 80
+SDK display timestamps. Both match the note creation time exactly on the 10
+newer samples; on the 3 older imports they read as millisecond-close but not
+identical values. These retain back-compat aliases `created_time_a` and
+`created_time_b`.
 
 `analyze_time_fields.py` confirms the split: `created_time_header` matches
-`note.note.created_time` on 13/13, while `created_time_a` and `created_time_b`
-match exactly on 10/13 and diverge on the three older/imported samples.
+`note.note.created_time` on 13/13, while `display_created_time` and
+`display_modified_time` match exactly on 10/13 and diverge on the three
+older/imported samples.
 
-### `extra_time_candidate` — `s64` @ 88
-An additional timestamp-like value; non-zero on only 2 samples. Named
-conservatively because two positives are not enough to fix its meaning.
-The two non-zero values do not equal `note.note.modified_time`; they precede it
-by about 13.18s and 0.99s respectively in the current corpus.
+### `last_recognised_data_modified_time` — `s64` @ 88
+Non-zero on only 2 samples. The two non-zero values do not equal
+`note.note.modified_time`; they precede it by about 13.18s and 0.99s
+respectively in the current corpus. Retains the back-compat alias
+`extra_time_candidate`.
+
+### Fixed settings and orientation
+`fixed_text_direction` and `fixed_background_theme` are both `2` (`Default` in
+`sdocx2pdf`) on 13/13. `server_checkpoint` is `-1`, `new_orientation` is `0`
+(`Portrait`), and `min_unknown_version` is `0`.
 
 ### `signature` — 22-byte ASCII @ `end - 22`
 Always the literal `Document for S-Pen SDK` (`bad_signature = 0`). Located from
 the end of the stream, which is why a single spec parses both size families.
 
-## Unknown regions
+## Remaining caveats
 
-Structurally present, not yet semantically named. They are deliberately left
-unmodeled in the `.ksy` rather than given speculative names:
-
-- **`[16, 72)` minus the decoded islands** — `page_width` @22,
-  `document_height` @26, `format_version_dup` @42 and
-  `created_time_header` @46 sit inside this range; the surrounding bytes are
-  exposed only as `raw_mid_hex` diagnostics by the reference parser.
-- **`[96, footer)`** — bytes between the last decoded timestamp and the footer
-  constants (`raw_between_times_and_footer_hex`).
-- **Footer constants** — the reference parser locates a 16-byte pattern
-  `02 00 00 00  02 00 00 00  ff ff ff ff ff ff ff ff` (two `u32(2)` then
-  `s64(-1)`) before the signature, followed by zero padding
-  (`raw_footer_padding_hex`). These are consistent but pattern-anchored rather
-  than offset-anchored, so they are documented here but not yet promoted into
-  the formal spec.
+- Property flag semantics are only cross-checked for the current zero value; a
+  landscape sample is needed to validate bit 1 in practice.
+- `display_created_time` / `display_modified_time` use a different apparent unit
+  or conversion on the three older/imported samples.
+- Non-empty SDK strings, skipped blocks, encryption data, and custom data are
+  structurally modeled but not represented in the current corpus.
 
 ## Validation
 

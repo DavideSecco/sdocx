@@ -99,8 +99,17 @@ Current heuristic hotspots:
 
 ```bash
 .venv/bin/python -m py_compile pysdocx/__main__.py pysdocx/render.py pysdocx/page.py pysdocx/note.py
+.venv/bin/python spec/tools/analyze_sdocx2pdf_leads.py samples
 git diff -- pysdocx/__main__.py pysdocx/render.py pysdocx/page.py pysdocx/note.py
 ```
 
 If a change is meant to be diagnostic-only, verify that the rendered PNGs for the squared sample
 do not unexpectedly move unrelated content.
+
+Expected current `analyze_sdocx2pdf_leads.py` headline:
+
+- `end_tag` variant gaps are all zero-hit on the current corpus.
+- note title/body Common-like frame hits: 19/21 diagnostic surfaces.
+- page text-box Common-like frame hits: 1/7.
+- image/painting media-ref `u32` hits: 16/16.
+- voice clips linked to `.m4a`: 2/2; page audio type-10 objects: 0.

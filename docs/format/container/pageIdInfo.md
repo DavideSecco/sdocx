@@ -17,7 +17,7 @@ decoded, zero counterexamples across the corpus (48 records over 13 files).
 
 ```
 offset  size  field           status
-0       32    head_hash       Decoded (bytes) / Unknown (meaning)
+0       32    head_hash       Decoded   copy of sha256(note.note[:-32])
 32      2     page_count      Decoded
 34      ...   page_record[]   Decoded   page_count x 106 bytes
 ```
@@ -33,13 +33,12 @@ offset  size  field        status
 
 ## Decoded fields
 
-### `head_hash` — 32 bytes @ 0 — Decoded (source found)
-A document-level hash, and — like `page_hash` — a **copy**, not a digest computed
-here: it equals **`note.note`'s trailing 32 bytes** (`head_hash == note.note[-32:]`)
-on **13/13** samples (the test gate cross-checks this). So `pageIdInfo.dat` is a
-manifest that mirrors hashes stored at the tail of `note.note` (`head_hash`) and
-in each page footer (`page_hash`). What `note.note` computes that 32-byte hash
-over is still Unknown; the linkage is decoded.
+### `head_hash` — 32 bytes @ 0 — Decoded
+A document-level hash copied from `note.note`: it equals **`note.note`'s trailing
+32 bytes** (`head_hash == note.note[-32:]`) on **13/13** samples, and that
+trailing value is **`sha256(note.note[:-32])`** on **13/13**. So
+`pageIdInfo.dat` is a manifest mirror, not the place where the digest is
+computed.
 
 ### `page_count` — `u16` @ 32
 Number of `page_record`s that follow. The list order **is** the document's page
@@ -67,16 +66,14 @@ decoded.
 
 ## Unknown regions
 
-Both hashes are now decoded as **copies** (`head_hash = note.note[-32:]`,
-`page_hash = the .page footer hash`); what remains open is how those source
-hashes are computed:
+`head_hash` is fully explained: `head_hash = note.note[-32:] =
+sha256(note.note[:-32])` on 13/13.
 
-- **The hash construction** (shared question for both) — the 32-byte digest that
-  `note.note` and each `.page` store. Negative results on the corpus: no plain
-  `sha256`/`sha3_256`/`blake2b` of the raw member reproduces it, and a full
-  brute-force over every contiguous byte range of the smallest page finds no
-  match either. So it is over a canonical/serialized form or is keyed (HMAC with
-  a device/app secret) — the latter would be unrecoverable from files alone.
+What remains open is the **page** hash construction. `page_hash` is decoded as a
+copy of each `.page` footer hash, but the footer hash itself is not reproduced by
+plain `sha256`/`sha3_256`/`blake2b` of the raw page member, and a full
+contiguous-range brute force over the smallest page found no match. It likely
+uses a canonical/serialized input or a keyed construction.
 - There is **no trailing data**: records tile the file exactly
   (`valid_size` true on 13/13), so there is no unexplained tail here.
 

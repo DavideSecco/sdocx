@@ -10,7 +10,7 @@ index, archive filename, and a SHA-256 digest. Closed by the ASCII trailer
 - **Reference parser:** `parse_media_info` / `list_media_info` in
   [`pysdocx/container.py`](../../../pysdocx/container.py).
 - **Tail diagnostic:** [`spec/tools/analyze_media_tail.py`](../../../spec/tools/analyze_media_tail.py)
-  explores remaining `tag` / `time_candidate` semantics.
+  explores timestamp relations for `modified_time`.
 - **Conventions:** [`../00-conventions.md`](../00-conventions.md).
 
 ## At a glance
@@ -21,7 +21,7 @@ existing members and every SHA-256 verifies).
 
 ```
 offset  size  field           status
-0       4     magic           Decoded   0x1518 (x12) / 0x1452 (x1)
+0       4     format_version  Decoded   5400 (x12) / 5202 (x1)
 4       2     record_count    Decoded
 6       ...   media_record[]  Decoded   record_count records
 ...     4     "EOFX"          Decoded   ASCII trailer
@@ -43,15 +43,16 @@ offset  size       field         status
 4       2          name_len      Decoded   UTF-16 char count
 6       name_len*2 name          Decoded   UTF-16LE archive filename
 6+n*2   64         sha256        Decoded   ASCII hex; verifies vs media/<name>
-...     11         tail          Structural [u16 tag][u64 time][u8 marker]
+...     11         tail          Decoded   [u16 ref_count][u64 modified_time][u8 is_attached]
 ```
 
 ## Decoded fields
 
-### `magic` — `u32` @ 0
-Manifest magic. Corpus values `0x1518` (×12) and `0x1452` (×1, on
-`handwritten.sdocx`). Both parse identically; the difference tracks the same
-old-import family seen in `end_tag.bin`.
+### `format_version` — `u32` @ 0
+Manifest format version. Corpus values `5400` (`0x1518`, ×12) and `5202`
+(`0x1452`, ×1, on `handwritten.sdocx`). This was previously named `magic`; the
+independent `sdocx2pdf` parser reads the same field as the newer-format
+`mediaInfo.dat` format version.
 
 ### `record_count` — `u16` @ 4
 Number of `media_record`s before the `EOFX` trailer.
@@ -85,17 +86,17 @@ ends there.
 The tail is structurally fixed on 60/60 corpus records:
 
 ```
-u16 tag
-u64 time_candidate
-u8  marker
+u16 ref_count
+u64 modified_time
+u8  is_attached
 ```
 
-`marker` is constant `1` on 60/60. `tag` values are `1` ×54, `3` ×4, `5` ×1,
-`20` ×1. The tag correlates partly with media kind (`3` appears on four `.jpg`
-records, `5` on one `.jpg`, `20` on one `.pdf`), but not cleanly enough to name.
-`time_candidate` is timestamp-like and near note/media edit times, but it is not
-identical to the note created/modified times. The structure is Decoded; the
-semantics of `tag` and `time_candidate` remain Unknown.
+`sdocx2pdf` independently names these fields `_ref_count`, `_modified_time`, and
+`is_attached`. The byte boundaries are decoded with zero counterexamples here.
+`is_attached` is constant `1`/`True` on 60/60 corpus records. `ref_count` values
+are `1` ×54, `3` ×4, `5` ×1, `20` ×1. `modified_time` is timestamp-like and near
+note/media edit times, but it is not identical to the note created/modified
+times or ZIP entry time on the current corpus.
 
 Corpus diagnostics:
 
@@ -105,20 +106,22 @@ Corpus diagnostics:
 
 Current negative/partial results:
 
-- `time_candidate` exactly matches neither `note.note.created_time`, nor
+- `modified_time` exactly matches neither `note.note.created_time`, nor
   `note.note.modified_time`, nor ZIP entry time on any of the 60 records.
-- Per file, the latest `time_candidate` is often close to the note modified time
+- Per file, the latest `modified_time` is often close to the note modified time
   (from -176 µs to about -2.1e9 µs in the current corpus), so it plausibly tracks
   media import/edit time, but not tightly enough to promote a semantic name.
-- `tag` is not simply file extension: `tag=1` covers `.spi`, `.spp`, `.jpg`,
+- `ref_count` is not simply file extension: `ref_count=1` covers `.spi`, `.spp`, `.jpg`,
   `.png`, `.pdf`, `.m4a`, and nested `.sdocx`; non-1 tags appear only on a small
   set of `.jpg` / `.pdf` records.
 
 ## Unknown regions
 
 There is no unbounded raw region left in `mediaInfo.dat` on the current corpus:
-the former `raw_tail` is now structurally decoded. The remaining Unknowns are
-semantic, not boundary-related: `tail.tag` and `tail.time_candidate`.
+the former `raw_tail` is now decoded. The remaining caveat is semantic variety:
+`ref_count` and `is_attached` are named from the independent implementation, but
+the current corpus does not vary attachment deletion/reference states enough to
+stress those meanings.
 
 ## Validation
 
@@ -127,7 +130,8 @@ KSC_GEN=<scratch>/gen .venv/bin/python spec/tools/validate_media_info.py
 # -> 13 matched, 0 mismatched, out of 13 parsed
 ```
 
-The check compares `magic`, `record_count`, the `EOFX` trailer, and every
-record's `media_index`, `name`, `sha256`, `tail.tag`, `tail.time_candidate`, and
-`tail.marker` against the reference `pysdocx` parser. See
+The check compares `format_version`, `record_count`, the `EOFX` trailer, and
+every record's `media_index`, `name`, `sha256`, `tail.ref_count`,
+`tail.modified_time`, and `tail.is_attached` against the reference `pysdocx`
+parser. See
 [`../../../spec/README.md`](../../../spec/README.md) for the toolchain.
