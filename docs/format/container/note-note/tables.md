@@ -20,22 +20,30 @@ anchors at a U+FFFC char in the body text.
 - **Status:** cell text + grid + basic rich text **Decoded**; the table
   object's own block schema (borders, merges, column widths) is **Unknown**.
 
-## Cell marker — Decoded (scan view)
+## Cell record — Decoded
 
-Each cell is preceded by a 10-byte marker, immediately followed by the cell's
-UTF-16LE text:
+Each cell inside the type-22 table object is:
 
 ```
-06 00 <u16 kind> 00 00 <u32 char_count>   marker (10 bytes)
-<char_count * 2 bytes UTF-16LE>           cell text
+f64 anchor_x, f64 anchor_y     cell bottom-left corner (page coords)
+u16 6                          cell tag
+<text_core::Common frame>      the cell's own rich-text frame
+<fixed structured tail + 32-byte hash-like value, then per-cell fields>
 ```
 
-Structurally, `<u32 char_count><text>` is the head of the cell's own Common
-frame; the `06 00 <kind>` bytes belong to the surrounding (not yet modeled)
-cell record of the table object. Observed `kind` values: `0x8d`, `0x95`,
-`0xcd`. The cell's bottom-left corner in page coordinates is the `f64` pair
-located **before** the marker: x at `marker - 16`, y at `marker - 8`.
-Clustering these anchors reconstructs the row and column grid.
+The scan's 10-byte "cell marker" `06 00 <u16 kind> 00 00 <u32 char_count>` is
+this record seen mid-stream: the `06 00` is the u16 tag, and **`kind` is the
+Common frame's `frame_size`** (observed `0x8d`/`0x95`/`0xcd` = 141/149/205 —
+the former "does kind encode a style?" unknown is resolved: it doesn't). The
+`u16 tag == 6` + plausible-anchor checks hold on 2/2 table notes, 18/18 cells
+(`spec/tools/analyze_note_doc.py`).
+
+Cell records are evenly spaced: after each frame comes the same structured
+tail family as after a text-box frame (`.. 0f 00 00 00 02 ..` + a 32-byte
+hash-like value), a u32 that equals the distance to the next cell record, and
+per-cell fields ending in `(f64,f64)` point pairs. The inter-record overhead
+is a constant 461 bytes, growing to 486 at each row start (a 25-byte per-row
+record). Clustering the anchors reconstructs the row and column grid.
 
 ## Cell rich text — Decoded
 
@@ -48,9 +56,10 @@ a plain cell simply carries only the default color+font spans.
 
 ## What is Unknown
 
-- The table object's block-level schema inside the inline object (borders,
-  merged cells, per-column widths as stored fields rather than reconstructed
-  from anchors; where exactly the per-cell `06 00 <kind>` record and the f64
-  anchor pair sit in that schema).
-- Whether `kind` encodes a table style/type beyond distinguishing cell records.
+- The table object's header (before the first cell record) and the semantics
+  of the ~461-byte per-cell field block (borders, merges, per-column widths
+  as stored fields) and the 25-byte row record.
 - The trailing `(3, 2)` u32 pair of the table inline object.
+
+Needs a table-only sample family (plain grid / merged cells / custom borders
++ widths) to vary these one at a time.

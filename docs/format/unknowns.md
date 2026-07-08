@@ -41,9 +41,11 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   u32 pair of inline objects; `interval_type` values beyond their enum names.
 - **Title/body Text wrapper**: the Shape/Text object bytes around the Common
   frame (the frame is found by scan, not fixed offset).
-- **Tables:** the type-22 inline object's block-level schema (borders, merges,
-  column widths; where the per-cell `06 00 <kind>` record and f64 anchors sit);
-  whether cell `kind` encodes a table style.
+- **Tables:** the type-22 inline object's header, the ~461-byte per-cell field
+  block (borders, merges, column widths), and the 25-byte row record. The cell
+  record framing itself is decoded (`f64×2 anchor + u16 6 + Common frame`; the
+  scan's `kind` byte is the frame size) — see
+  `container/note-note/tables.md`.
 - **Rotated text-box** inner text padding / logical frame (currently
   [heuristic](./heuristics.md#rotated-text-box-wrapping)).
 

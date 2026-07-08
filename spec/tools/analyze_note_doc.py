@@ -157,6 +157,31 @@ def cross_check(path: Path, doc: dict, note: bytes) -> dict:
             else None
         )
 
+    # Cell record structure inside the type-22 table inline object: each cell
+    # Common frame is directly preceded by a u16 tag == 6 (the scan's "kind"
+    # byte is really the frame_size low byte) and, 16 bytes earlier, the f64
+    # anchor pair the table scan clusters into the grid.
+    if body_frame is not None and frames["cells"]:
+        import struct as _struct
+        body_blob = note[doc["body_off"] : doc["body_off"] + doc["body_size"]]
+        tag_ok = all(
+            c["off"] >= 18
+            and _struct.unpack_from("<H", body_blob, c["off"] - 2)[0] == 6
+            for c in frames["cells"]
+        )
+        anchors_ok = all(
+            0 <= _struct.unpack_from("<d", body_blob, c["off"] - 18)[0] <= 3000
+            and 0 <= _struct.unpack_from("<d", body_blob, c["off"] - 10)[0] <= 400000
+            for c in frames["cells"]
+        )
+        gaps = [
+            b["off"] - (a["off"] + 4 + a["frame_size"])
+            for a, b in zip(frames["cells"], frames["cells"][1:])
+        ]
+        checks["cell_tag_is_6"] = tag_ok
+        checks["cell_anchors_plausible"] = anchors_ok
+        checks["cell_gap_hist"] = dict(Counter(gaps))
+
     # Voice recordings vs the tail-record scans.
     voice_checks = []
     scan_clips = [r for r in (meta or {}).get("tail_records", ())
@@ -273,6 +298,10 @@ def collect(paths: list[Path]) -> dict:
         "cell_texts_match_table_scan": sum(
             1 for r in rows
             if r.get("checks", {}).get("cell_texts_match_table_scan")),
+        "cell_tag_is_6": sum(
+            1 for r in rows if r.get("checks", {}).get("cell_tag_is_6")),
+        "cell_anchors_plausible": sum(
+            1 for r in rows if r.get("checks", {}).get("cell_anchors_plausible")),
         "cell_text_surfaces": sum(
             1 for r in rows
             if r.get("checks", {}).get("cell_texts_match_table_scan") is not None),
@@ -314,7 +343,8 @@ def main() -> int:
     print(f"body common-frame text match:  {s['body_text_matches']}/{s['body_text_surfaces']}")
     print(f"span families equal-to-scan: {s['span_families_equal']} of {s['span_families_total']}")
     print(f"inline objects anchor-match: {s['inline_objects_with_anchor_match']}/{s['inline_object_surfaces']} "
-          f"cell texts match table scan: {s['cell_texts_match_table_scan']}/{s['cell_text_surfaces']}")
+          f"cell texts match table scan: {s['cell_texts_match_table_scan']}/{s['cell_text_surfaces']} "
+          f"cell tag6/anchors: {s['cell_tag_is_6']}/{s['cell_anchors_plausible']}")
     print(f"voice records: {s['voice_records']} all-fields-match={s['voice_all_fields_match']}")
     for row in report["rows"]:
         if not row.get("parse_ok"):
