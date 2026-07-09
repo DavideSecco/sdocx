@@ -3,7 +3,7 @@ from pathlib import Path
 
 from pysdocx.container import list_pages, load_page
 from pysdocx.inventory import build_inventory
-from pysdocx.page import parse_page
+from pysdocx.page import page_background_color, parse_page
 from pysdocx.render import debug_text_box_layout
 from spec.tools.analyze_note_doc import collect as collect_note_doc
 from spec.tools.analyze_sdocx2pdf_leads import collect as collect_sdocx2pdf_leads
@@ -246,6 +246,52 @@ class TextBoxLayoutRegressionTest(unittest.TestCase):
                 "corsivo ruotato di 90 gradi",
             ],
         )
+
+
+class PageBackgroundColorTest(unittest.TestCase):
+    """The paper color is a per-.page field (RE 2026-07-09), located by signature.
+
+    Every page of a note carries the same single light paper; the pink `Rosina`
+    one-variable sample pins the field. Also asserts the whole corpus resolves a
+    color on every page (no None) — the old fixed-offset heuristic missed some.
+    """
+
+    TEST_BG = SAMPLES / "test-background"
+
+    def test_paper_color_from_one_variable_samples(self) -> None:
+        cases = {
+            "Default-Liscio_260709_125314.sdocx": (252, 252, 252),
+            "Bianca-Liscio_260709_125449.sdocx": (230, 230, 230),
+            "Rosina-Liscio_260709_125531.sdocx": (245, 221, 221),
+            "Bianca-quadretti_260709_125637.sdocx": (230, 230, 230),
+            # Explicit DARK paper is the same field, a dark RGB — the note's paper,
+            # not a theme flag (fixed_background_theme stays 2 here).
+            "Nera-Liscio_260709_140421.sdocx": (1, 1, 1),
+        }
+        checked = 0
+        for name, expected in cases.items():
+            path = self.TEST_BG / name
+            if not path.exists():
+                continue
+            import zipfile
+
+            with zipfile.ZipFile(path) as z:
+                for pn in list_pages(path):
+                    self.assertEqual(page_background_color(z.read(pn)), expected, f"{name} {pn}")
+                    checked += 1
+        if checked == 0:
+            self.skipTest("test-background samples not available")
+
+    def test_every_corpus_page_resolves_a_paper_color(self) -> None:
+        require_sample(SAMPLES)
+        import zipfile
+
+        for sdocx in sorted(SAMPLES.glob("*.sdocx")):
+            with zipfile.ZipFile(sdocx) as z:
+                for pn in list_pages(sdocx):
+                    self.assertIsNotNone(
+                        page_background_color(z.read(pn)), f"{sdocx.name} {pn}"
+                    )
 
 
 if __name__ == "__main__":

@@ -1152,6 +1152,31 @@ def page_template(data: bytes) -> dict | None:
 PAGE_FOOTER_SIGNATURE = b"Page for SAMSUNG S-Pen SDK"
 
 
+def page_background_color(data: bytes) -> tuple[int, int, int] | None:
+    """Decode the page's stored paper (background) color from the `.page` header.
+
+    RE-validated (2026-07-09, `samples/test-background/` one-variable samples): the paper color is
+    a `BGRA` quad (alpha == 0xFF) inside the record `[u32 kind][BGRA][u32 display_width]` — `kind`
+    is 2 (3 on some devices), `display_width` is the device paper width. Its absolute offset varies
+    with a variable-length header preamble (0x84 / 0xa4 / 0x13e / 0x15e seen), so it is located by
+    that signature within `[0x7c, base)`, not a fixed offset. Exactly one match on all 122 pages of
+    the corpus + the 4 background samples (the `Rosina` pink `(245,221,221)` pins the field). Unlike
+    `bg_color_from_note` (which is empty on the corpus), this is the authoritative paper source.
+    """
+    if len(data) < 4:
+        return None
+    base = struct.unpack_from("<I", data, 0)[0]
+    hi = min(base, len(data) - 8)
+    for off in range(0x7C, hi):
+        if data[off + 3] != 0xFF:
+            continue
+        kind = struct.unpack_from("<I", data, off - 4)[0]
+        width = struct.unpack_from("<I", data, off + 4)[0]
+        if 1 <= kind <= 8 and 256 <= width <= 40000:
+            return (data[off + 2], data[off + 1], data[off])
+    return None
+
+
 def parse_page_footer(data: bytes) -> dict | None:
     """Decode the .page footer: the 32-byte content hash + trailing SDK signature.
 

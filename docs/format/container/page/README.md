@@ -51,6 +51,34 @@ cross-checks the two per page (48/48). Reference: `parse_page_footer` in
 [`pysdocx/page.py`](../../../../pysdocx/page.py). How the page computes the hash
 is still Unknown; the manifest↔page linkage is decoded.
 
+### Paper (background) color — Decoded
+
+Each page stores its **paper color** in the header preamble as a small record:
+
+```
+[u32 kind] [B G R 0xFF] [u32 display_width]
+   kind ∈ {2, 3}         BGRA, alpha == 0xFF   device paper width (px)
+```
+
+The record's *absolute* offset varies with a variable-length header preamble
+(seen at `0x84` / `0xa4` / `0x13e` / `0x15e`), so it is **located by that
+signature** within `[0x7c, base)` rather than a fixed offset — the earlier
+fixed-offset guess (`0x84`/`0x80`/`0xa4` keyed on `base`) misread `base==0x8c`
+pages as having *no* paper. The signature yields exactly one match on all
+**122 pages** of the 14-sample corpus **+** the 4 one-variable background samples
+in [`samples/test-background/`](../../../../samples/test-background/) (zero
+counterexamples). Reference: `page_background_color` in
+[`crates/sdocx/src/page.rs`](../../../../crates/sdocx/src/page.rs).
+
+The `test-background` samples pin the field: `Default` `(252,252,252)`, `Bianca`
+`(230,230,230)`, and — decisively — **`Rosina` `(245,221,221)`** (a pink paper,
+the only sample whose value is unmistakably a tint), all differing *only* in the
+paper. Every corpus note carries a **single light paper across all its pages**
+(mostly `(252,252,252)`), so `note.note` does **not** store this — the paper is a
+per-`.page` field. What sets `kind` to 2 vs 3, and the full structure of the
+variable preamble before the record, are **Unknown** (not needed to read the
+color); a full header-preamble model in the `.ksy` is future work.
+
 The **template** (grid vs plain, grid pitch) is *not* a single fixed field: its
 offset depends on `base` and whether the note is built-in or an imported PDF, so
 it is decoded procedurally (`page_template`) and documented with the object

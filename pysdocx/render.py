@@ -31,7 +31,7 @@ from pysdocx.container import (
 )
 from pysdocx.ink import color_hex
 from pysdocx.note import parse_tables, parse_typed_text
-from pysdocx.page import GRID_ORIGIN, GRID_SPACING, parse_page
+from pysdocx.page import GRID_ORIGIN, GRID_SPACING, page_background_color, parse_page
 
 MAX_PRESSURE = 1400.0
 DEFAULT_INK = "#ffffff"
@@ -1073,7 +1073,11 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
         if page is not None and idx != page:
             continue
 
-        _, page_bytes, stored_bg = load_page_with_bg(path, page_name)
+        _, page_bytes, note_bg = load_page_with_bg(path, page_name)
+        # The authoritative paper color is a per-.page field (RE 2026-07-09), not note.note —
+        # note_bg is empty on the whole corpus. Fall back to the note-level bg, then white.
+        page_paper = page_background_color(page_bytes)
+        stored_bg = ("#%02x%02x%02x" % page_paper) if page_paper else note_bg
         page_bg = _resolve_bg(bg, stored_bg)
         default_ink = _contrast_ink(page_bg)
         page_result = parse_page(page_bytes)
