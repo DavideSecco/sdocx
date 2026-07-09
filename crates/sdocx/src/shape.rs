@@ -426,9 +426,8 @@ pub(crate) fn parse_shapes_in_object(
             found_marker_shape = true;
         }
     }
-    if !found_marker_shape {
-        if let Some(arrow) = parse_arrow_object(data, blob_off, blob_end, width, height) {
+    if !found_marker_shape
+        && let Some(arrow) = parse_arrow_object(data, blob_off, blob_end, width, height) {
             out.push(arrow);
         }
-    }
 }

@@ -1,8 +1,8 @@
 use crate::decode::{decode_coordinates, decode_trailing};
 use crate::error::{Error, Result};
 use crate::types::{
-    BoundingBox, Color, Page, PageElement, PageTemplate, PageTemplateSource, Point, RichTextBox,
-    RichTextRun, Stroke,
+    BoundingBox, Color, ColorRun, FontSizeRun, Page, PageElement, PageTemplate,
+    PageTemplateSource, Point, RichTextBox, RichTextRun, Stroke,
 };
 
 // Layer/object tree constants (mirror pysdocx page.py):
@@ -157,10 +157,19 @@ fn skip_utf16_string(data: &[u8], offset: usize) -> Option<usize> {
     (end <= data.len()).then_some(end)
 }
 
-/// Validate the common object header at the start of a blob and return its
-/// `total_size` field (mirrors pysdocx `_parse_object_header`; only total_size
-/// is needed for stroke decoding — it yields `extra_len`).
-fn object_header_total_size(blob: &[u8]) -> Option<u32> {
+/// The decoded common object header at the start of an object blob
+/// (mirrors pysdocx `_parse_object_header`; only the fields consumers need).
+struct ObjectHeader {
+    total_size: u32,
+    field_flags: u64,
+    bbox: BoundingBox,
+}
+
+/// Parse the common object header at the start of a blob (mirrors pysdocx
+/// `_parse_object_header`). Strokes only need `total_size` (it yields
+/// `extra_len`); text boxes also use `field_flags` (rotation gate) and the
+/// header `bbox`.
+fn parse_object_header(blob: &[u8]) -> Option<ObjectHeader> {
     if blob.len() < OBJECT_BASE_HEADER_LEN {
         return None;
     }
@@ -169,6 +178,10 @@ fn object_header_total_size(blob: &[u8]) -> Option<u32> {
     let flag_len = *blob.get(pos)? as usize;
     pos += 1 + flag_len;
     let field_len = *blob.get(pos)? as usize;
+    let mut field_flags: u64 = 0;
+    for (i, &b) in blob.get(pos + 1..pos + 1 + field_len.min(8))?.iter().enumerate() {
+        field_flags |= (b as u64) << (8 * i);
+    }
     pos += 1 + field_len;
     pos += 4; // format_version
     let uuid_byte_len = read_i16(blob, pos)?;
@@ -176,8 +189,20 @@ fn object_header_total_size(blob: &[u8]) -> Option<u32> {
         return None;
     }
     pos += 2 + uuid_byte_len as usize;
-    pos += 8 + 32 + 4 + 1; // modified_time + bbox + timestamp + resizable
-    (pos <= blob.len()).then_some(total_size)
+    pos += 8; // modified_time
+    let bbox = BoundingBox {
+        x_min: read_f64(blob, pos)?,
+        y_min: read_f64(blob, pos + 8)?,
+        x_max: read_f64(blob, pos + 16)?,
+        y_max: read_f64(blob, pos + 24)?,
+    };
+    pos += 32;
+    pos += 4 + 1; // timestamp + resizable
+    (pos <= blob.len()).then_some(ObjectHeader {
+        total_size,
+        field_flags,
+        bbox,
+    })
 }
 
 /// The stroke-header bbox itself is a plausible page-sized rectangle (generous
@@ -313,7 +338,7 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
             continue;
         }
         let blob = &data[obj.blob_off..obj.blob_end];
-        let Some(total_size) = object_header_total_size(blob) else {
+        let Some(total_size) = parse_object_header(blob).map(|h| h.total_size) else {
             continue;
         };
         let extra_len = total_size.saturating_sub(STROKE_OBJECT_BASE_TOTAL_SIZE) as usize;
@@ -369,7 +394,8 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
         // else: genuinely off-page/garbage → drop
     }
 
-    let elements = parse_page_elements(data, &objects, width, height);
+    let mut elements = parse_page_elements(data, &objects, width, height);
+    scan_sticky_notes(data, width, height, &mut elements);
 
     Ok(Page {
         uuid,
@@ -477,21 +503,41 @@ fn read_f64(data: &[u8], offset: usize) -> Option<f64> {
     ))
 }
 
+/// Decode the page's stored **paper (background) color** from the `.page` header.
+///
+/// RE-validated (2026-07-09, `samples/test-background/` one-variable samples): the
+/// paper color is a real header field — a `BGRA` quad with `alpha == 0xFF` — sitting
+/// in the record `[u32 kind][BGRA paper_color][u32 display_width]`. The `kind` u32 is
+/// 2 (or 3 on some devices); `display_width` is the device paper width. The record's
+/// absolute offset varies with a variable-length header preamble (seen at 0x84 / 0xA4
+/// / 0x13e / 0x15e), so it is located by that signature rather than a fixed offset —
+/// the old fixed-offset heuristic (0x84/0x80/0xA4 by `base`) misread base-0x8c pages
+/// as having no paper. The signature yields exactly one match on all 122 pages of the
+/// 14-sample corpus + the 4 background test samples (the `Rosina` pink sample —
+/// `(245,221,221)` — pins the field; every corpus note is a single light paper across
+/// all its pages, e.g. `(252,252,252)` / `(230,230,230)`).
+///
+/// `base` (= start of the layer/object tree) upper-bounds the header search.
 fn page_background_color(data: &[u8], base: usize) -> Option<crate::types::Color> {
-    let offset = match base {
-        0x90 => 0x84,
-        0xA6 => 0x80,
-        _ => 0xA4,
-    };
-    if data.len() >= offset + 4 && data[offset + 3] == 0xFF {
-        Some(crate::types::Color {
-            r: data[offset + 2],
-            g: data[offset + 1],
-            b: data[offset],
-        })
-    } else {
-        None
+    // Search the header preamble [0x7c, base) for the signature. 0x7c skips the
+    // fixed leading fields (uuid + the two u32 canvas dims at 0x78/0x7c) so a
+    // spurious `..FF` inside them can't match.
+    let hi = base.min(data.len().saturating_sub(8));
+    for off in 0x7c..hi {
+        if data[off + 3] != 0xFF {
+            continue;
+        }
+        let kind = read_u32(data, off - 4)?;
+        let display_width = read_u32(data, off + 4)?;
+        if (1..=8).contains(&kind) && (256..=40_000).contains(&display_width) {
+            return Some(crate::types::Color {
+                r: data[off + 2],
+                g: data[off + 1],
+                b: data[off],
+            });
+        }
     }
+    None
 }
 
 fn page_template(data: &[u8], base: usize) -> Option<PageTemplate> {
@@ -549,34 +595,29 @@ fn parse_page_elements(
         if obj.raw_type == 1 {
             continue;
         }
-        // Anchor on the object's ascii UUID (inside the common header), keeping
-        // the uuid-relative record logic identical to the old whole-buffer scan
-        // — just scoped to this object's blob. Shape objects don't need this
-        // anchor (their bbox comes from the shape marker itself), so a missing
-        // uuid/bbox only skips the text/image path, not the whole object.
-        if let Some(uuid_off) = find_uuid_in(data, obj.blob_off, obj.blob_off + 96) {
-            if let Some(bbox) = find_object_bbox(data, uuid_off, width, height) {
-                let record_end = obj.blob_end.min(uuid_off + MAX_OBJECT_RECORD_LEN);
-                let record = &data[uuid_off..record_end];
-
-                if let Some(text_box) = parse_text_box_record(record, bbox) {
-                    elements.push(PageElement::TextBox(text_box));
-                    continue;
-                }
-                if let Some(media_index) = image_media_index(record) {
-                    elements.push(PageElement::Image { bbox, media_index });
-                    continue;
-                }
-            }
-        }
+        let blob = &data[obj.blob_off..obj.blob_end];
 
         // pysdocx `_classify_page_object` precedence: an image placement marker
         // claims the object even when its media index fails to decode — never
-        // shape-scan those blobs.
-        let blob = &data[obj.blob_off..obj.blob_end];
+        // text- or shape-scan those blobs.
         if find_sub(blob, IMAGE_MARKER).is_some() {
+            if let Some(uuid_off) = find_uuid_in(data, obj.blob_off, obj.blob_off + 96)
+                && let Some(bbox) = find_object_bbox(data, uuid_off, width, height) {
+                    let record_end = obj.blob_end.min(uuid_off + MAX_OBJECT_RECORD_LEN);
+                    if let Some(media_index) = image_media_index(&data[uuid_off..record_end]) {
+                        elements.push(PageElement::Image { bbox, media_index });
+                    }
+                }
             continue;
         }
+
+        // Text boxes are raw type-2 objects whose blob decodes as text
+        // (pysdocx `_classify_page_object`).
+        if obj.raw_type == 2
+            && let Some(text_box) = parse_text_box_object(blob) {
+                elements.push(PageElement::TextBox(text_box));
+                continue;
+            }
 
         let mut shapes = Vec::new();
         crate::shape::parse_shapes_in_object(
@@ -669,185 +710,554 @@ fn image_media_index(record: &[u8]) -> Option<usize> {
     Some(u16::from_le_bytes(record[off..off + 2].try_into().unwrap()) as usize)
 }
 
-fn parse_text_box_record(record: &[u8], bbox: BoundingBox) -> Option<RichTextBox> {
-    let (text, text_end) = first_utf16_text(record)?;
-    let styles = &record[text_end..];
-    let color = tlv_color(styles, 0x01);
-    let highlight_color = tlv_color(styles, 0x11);
-    let underline = tlv_u32(styles, 0x07).is_some_and(|value| value != 0)
-        || tlv_u32(styles, 0x06).is_some_and(|value| value != 0);
-    let font_size = tlv_f32(styles, 0x03);
-    let rotation_degrees = infer_rotation_degrees(record, bbox);
-    let runs = parse_rich_text_runs(styles, text.chars().count());
+// ---------------------------------------------------------------------------
+// Text-box objects (pysdocx `parse_text_boxes_from_objects` and helpers).
+//
+// The box text uses the `06 00 <u16 kind> 00 00 <u32 char_count>` marker; the
+// style runs right after it reuse note.note's local TLV families
+// (`18 00 <tag> 00 | pad | u32 start | u32 end | u32 value | u32 enabled`,
+// plus `14 00 14 00` for strikethrough), with offsets local to the box text.
+// ---------------------------------------------------------------------------
+
+/// `06 00 <u16 kind> 00 00 <u32 char_count>` then UTF-16LE text.
+const TEXT_BOX_TEXT_PREFIX: [u8; 2] = [0x06, 0x00];
+const TEXT_BOX_TEXT_MARKER_LEN: usize = 10;
+
+// TLV style-run layout (pysdocx note.py RUN_*): 4-byte marker, 2 pad bytes,
+// then u32 start / end / value / enabled.
+const RUN_START_OFF: usize = 6;
+const RUN_END_OFF: usize = 10;
+const RUN_ENABLED_OFF: usize = 18;
+const RUN_MARKER_LEN: usize = 22;
+
+const BOLD_TAG: u16 = 0x05;
+const ITALIC_TAG: u16 = 0x06;
+const UNDERLINE_TAG: u16 = 0x07;
+const COLOR_TAG: u16 = 0x01;
+const FONT_TAG: u16 = 0x03;
+const HIGHLIGHT_TAG: u16 = 0x11;
+const STRIKETHROUGH_MARKER: [u8; 4] = [0x14, 0x00, 0x14, 0x00];
+
+/// Rotation angle: gated by `field_flags & 0x1`, a plain f32 in degrees
+/// (clockwise-positive on screen) at the common header's attributes offset
+/// (pysdocx IMAGE_ANGLE_OFFSET/IMAGE_ANGLE_FIELD_FLAG — shared with images).
+const ANGLE_FIELD_FLAG: u64 = 0x1;
+const ANGLE_OFFSET: usize = OBJECT_BASE_HEADER_LEN;
+
+/// Parse one raw type-2 object blob as a rich text box (pysdocx
+/// `_text_box_rich_text` + object-level bbox/angle/frame-midpoints).
+fn parse_text_box_object(blob: &[u8]) -> Option<RichTextBox> {
+    let header = parse_object_header(blob)?;
+    let (text_off, text, raw_char_len) = text_box_text(blob)?;
+    let scan_start = text_off + raw_char_len * 2;
+    let styles = scan_rich_text_styles(blob, scan_start, raw_char_len, text.chars().count());
+
+    let rotation_degrees = object_rotation_degrees(blob, header.field_flags);
+    let frame_midpoints = text_box_frame_midpoints(blob, &header);
 
     Some(RichTextBox {
-        bbox,
+        bbox: header.bbox,
         rotation_degrees,
         text,
-        color,
-        highlight_color,
-        underline,
-        font_size,
-        runs,
+        color: styles.colors.first().map(|c| c.color),
+        highlight_color: styles.highlights.first().map(|c| c.color),
+        underline: styles.runs.iter().any(|r| r.underline),
+        font_size: styles.font_sizes.first().map(|f| f.size),
+        runs: styles.runs,
+        colors: styles.colors,
+        highlights: styles.highlights,
+        font_sizes: styles.font_sizes,
+        frame_midpoints,
     })
 }
 
-fn first_utf16_text(data: &[u8]) -> Option<(String, usize)> {
-    let mut offset = 0;
-    while offset + 6 <= data.len() {
-        // Decode the maximal printable run [offset, end) once. The printable set
-        // is BMP-only (0x0A + 0x20..=0xD7FF, no surrogates), so one u16 == one
-        // char and code-unit indexes are char indexes.
+/// Rotation angle in degrees for any object with a common header
+/// (pysdocx `_image_rotation_deg`); `None` when unset or zero.
+fn object_rotation_degrees(blob: &[u8], field_flags: u64) -> Option<f64> {
+    if field_flags & ANGLE_FIELD_FLAG == 0 || ANGLE_OFFSET + 4 > blob.len() {
+        return None;
+    }
+    let angle = f32::from_le_bytes(blob[ANGLE_OFFSET..ANGLE_OFFSET + 4].try_into().unwrap());
+    if !angle.is_finite() {
+        return None;
+    }
+    let deg = (angle as f64).rem_euclid(360.0);
+    (deg != 0.0).then_some(deg)
+}
+
+// Inserted-object geometry wrapper right after the common header
+// (pysdocx `_decode_payload_geometry`): u32 l0, u16 tag=6, u32 l1,
+// 4-byte opcode, u32 point_count, then (f64 x, f64 y) points.
+const PAYLOAD_GEOMETRY_TAG: u16 = 6;
+const PAYLOAD_GEOMETRY_OPCODE: [u8; 4] = [0x01, 0x00, 0x01, 0x0C];
+const PAYLOAD_GEOMETRY_HEADER_LEN: usize = 18;
+
+/// The 4 stored edge-midpoints of a text-box frame, accepted only when their
+/// centroid matches the header bbox center (pysdocx `_text_box_frame_midpoints`):
+/// preferred source is the payload-geometry wrapper (4 points); the raw scan at
+/// `total_size + 0x12` is the fallback for rotated boxes without one.
+fn text_box_frame_midpoints(blob: &[u8], header: &ObjectHeader) -> Option<[Point; 4]> {
+    let read4 = |start: usize| -> Option<[Point; 4]> {
+        let mut pts = [Point { x: 0.0, y: 0.0 }; 4];
+        for (i, pt) in pts.iter_mut().enumerate() {
+            pt.x = read_f64(blob, start + i * 16)?;
+            pt.y = read_f64(blob, start + i * 16 + 8)?;
+            if !pt.x.is_finite() || !pt.y.is_finite() {
+                return None;
+            }
+        }
+        let cx = pts.iter().map(|p| p.x).sum::<f64>() / 4.0;
+        let cy = pts.iter().map(|p| p.y).sum::<f64>() / 4.0;
+        let bbox_cx = (header.bbox.x_min + header.bbox.x_max) / 2.0;
+        let bbox_cy = (header.bbox.y_min + header.bbox.y_max) / 2.0;
+        ((cx - bbox_cx).abs() <= 1.0 && (cy - bbox_cy).abs() <= 1.0).then_some(pts)
+    };
+
+    if let Some(points_off) = payload_geometry_4_points(blob, header)
+        && let Some(pts) = read4(points_off) {
+            return Some(pts);
+        }
+    if header.field_flags & ANGLE_FIELD_FLAG != 0 {
+        return read4(header.total_size as usize + 0x12);
+    }
+    None
+}
+
+/// Offset of the payload-geometry wrapper's point array when it holds exactly
+/// 4 points (the text-box frame case).
+fn payload_geometry_4_points(blob: &[u8], header: &ObjectHeader) -> Option<usize> {
+    let start = header.total_size as usize;
+    if start + PAYLOAD_GEOMETRY_HEADER_LEN > blob.len() {
+        return None;
+    }
+    if read_u16(blob, start + 4)? != PAYLOAD_GEOMETRY_TAG
+        || blob[start + 10..start + 14] != PAYLOAD_GEOMETRY_OPCODE
+    {
+        return None;
+    }
+    let point_count = read_u32(blob, start + 14)? as usize;
+    let points_start = start + PAYLOAD_GEOMETRY_HEADER_LEN;
+    (point_count == 4 && points_start + 4 * 16 <= blob.len()).then_some(points_start)
+}
+
+/// Lexicographic "note-likeness" score for candidate decoded strings
+/// (pysdocx `_text_score`).
+fn text_score(text: &str) -> (usize, usize, usize) {
+    let stripped = text.trim();
+    if stripped.is_empty() {
+        return (0, 0, 0);
+    }
+    let mut ascii_printable = 0;
+    let mut letters = 0;
+    let mut separators = 0;
+    for ch in stripped.chars() {
+        if ch == '\n' || (' '..='~').contains(&ch) {
+            ascii_printable += 1;
+        }
+        if ch.is_alphabetic() {
+            letters += 1;
+        }
+        if ch.is_whitespace() || ".,;:!?'-_/()".contains(ch) {
+            separators += 1;
+        }
+    }
+    (
+        ascii_printable + letters + separators,
+        ascii_printable,
+        stripped.chars().count(),
+    )
+}
+
+/// The box text: marker-based first (`_text_from_marker`), best-scored
+/// printable UTF-16 run as fallback (`_text_box_text`). Returns
+/// `(text_offset, text, raw_char_len)` — `raw_char_len` in u16 code units.
+fn text_box_text(blob: &[u8]) -> Option<(usize, String, usize)> {
+    if let Some(parsed) = text_from_marker(blob) {
+        return Some(parsed);
+    }
+    // Fallback: best-scored printable UTF-16 run after the common header.
+    let mut best: Option<(usize, String)> = None;
+    let mut best_score = (0, 0, 0);
+    let mut offset = OBJECT_BASE_HEADER_LEN;
+    while offset + 6 <= blob.len() {
         let mut units: Vec<u16> = Vec::new();
         let mut end = offset;
-        while end + 2 <= data.len() {
-            let unit = u16::from_le_bytes([data[end], data[end + 1]]);
+        while end + 2 <= blob.len() {
+            let unit = u16::from_le_bytes([blob[end], blob[end + 1]]);
             if unit != 0x0A && !(0x20..=0xD7FF).contains(&unit) {
                 break;
             }
             units.push(unit);
             end += 2;
         }
-        // Find the earliest start within the run whose text is note-like (>=3
-        // non-whitespace chars, >=75% ASCII alnum/punct). Suffix counts make this
-        // O(run) — the old code re-decoded + re-allocated a String for every start,
-        // which is O(run^2) and cost seconds on text-heavy pages.
-        let m = units.len();
-        if m >= 3 {
-            let mut nonws = 0i64;
-            let mut common = 0i64;
-            let mut first_ok: Option<usize> = None;
-            for k in (0..m).rev() {
-                if let Some(c) = char::from_u32(units[k] as u32) {
-                    if !c.is_whitespace() {
-                        nonws += 1;
-                        if c.is_ascii_alphanumeric() || c.is_ascii_punctuation() {
-                            common += 1;
-                        }
+        if units.len() >= 3
+            && let Ok(text) = String::from_utf16(&units) {
+                let text = text.trim_matches('\0').to_string();
+                if !text.trim().is_empty() {
+                    let score = text_score(&text);
+                    if score > best_score {
+                        best_score = score;
+                        best = Some((offset, text));
                     }
                 }
-                if nonws >= 3 && common * 4 >= nonws * 3 {
-                    first_ok = Some(k);
-                }
             }
-            if let Some(k) = first_ok {
-                let text = String::from_utf16(&units[k..]).ok()?;
-                return Some((text, end));
-            }
-        }
         offset = if end > offset { end } else { offset + 2 };
     }
-    None
+    let (off, text) = best?;
+    let text = text.trim_end_matches('\n').to_string();
+    let len = text.chars().count();
+    Some((off, text, len))
 }
 
-fn tlv_color(data: &[u8], tag: u16) -> Option<Color> {
-    let marker = [0x18, 0x00, tag as u8, (tag >> 8) as u8];
-    for offset in 0..data.len().saturating_sub(22) {
-        if data[offset..offset + 4] == marker && data[offset + 21] == 0xFF {
-            return Some(Color {
-                r: data[offset + 20],
-                g: data[offset + 19],
-                b: data[offset + 18],
-            });
+/// All `06 00` text markers in the blob, best-scored decode wins
+/// (pysdocx `_text_from_marker` + `_decode_text_box_marker`).
+fn text_from_marker(blob: &[u8]) -> Option<(usize, String, usize)> {
+    let mut best: Option<(usize, String, usize)> = None;
+    let mut best_score = (0, 0, 0);
+    let mut off = OBJECT_BASE_HEADER_LEN;
+    while off + TEXT_BOX_TEXT_MARKER_LEN <= blob.len() {
+        let Some(marker) = find_sub(&blob[off..], &TEXT_BOX_TEXT_PREFIX).map(|i| off + i) else {
+            break;
+        };
+        if marker + TEXT_BOX_TEXT_MARKER_LEN > blob.len() {
+            break;
         }
-    }
-    None
-}
-
-fn tlv_u32(data: &[u8], tag: u16) -> Option<u32> {
-    let marker = [0x18, 0x00, tag as u8, (tag >> 8) as u8];
-    for offset in 0..data.len().saturating_sub(22) {
-        if data[offset..offset + 4] == marker {
-            return read_u32(data, offset + 18);
-        }
-    }
-    None
-}
-
-fn tlv_f32(data: &[u8], tag: u16) -> Option<f32> {
-    let marker = [0x18, 0x00, tag as u8, (tag >> 8) as u8];
-    for offset in 0..data.len().saturating_sub(24) {
-        if data[offset..offset + 4] == marker {
-            for value_offset in [18, 20, 24] {
-                let value = f32::from_le_bytes(
-                    data[offset + value_offset..offset + value_offset + 4]
-                        .try_into()
-                        .ok()?,
-                );
-                if value.is_finite() && (4.0..=96.0).contains(&value) {
-                    return Some(value);
+        if blob[marker + 4..marker + 6] == [0, 0] {
+            let char_len = read_u32(blob, marker + 6)? as usize;
+            if let Some(parsed) = decode_text_box_marker(blob, marker, char_len) {
+                let score = text_score(&parsed.1);
+                if score > best_score {
+                    best_score = score;
+                    best = Some(parsed);
                 }
             }
         }
+        off = marker + 1;
     }
-    None
+    best
 }
 
-fn parse_rich_text_runs(data: &[u8], text_len: usize) -> Vec<RichTextRun> {
+fn decode_text_box_marker(
+    blob: &[u8],
+    marker: usize,
+    char_len: usize,
+) -> Option<(usize, String, usize)> {
+    let text_off = marker + TEXT_BOX_TEXT_MARKER_LEN;
+    let end = text_off + char_len * 2;
+    if char_len == 0 || char_len >= 10000 || end > blob.len() {
+        return None;
+    }
+    let units: Vec<u16> = blob[text_off..end]
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
+    let raw_text = String::from_utf16(&units).ok()?;
+    let text = raw_text.trim_end_matches(['\0', '\n']).to_string();
+    if text.trim().is_empty() || text_score(&text).0 == 0 {
+        return None;
+    }
+    Some((text_off, text, char_len))
+}
+
+/// All rich-text style families decoded from one TLV region.
+pub(crate) struct RichTextStyles {
+    pub(crate) runs: Vec<RichTextRun>,
+    pub(crate) colors: Vec<ColorRun>,
+    pub(crate) highlights: Vec<ColorRun>,
+    pub(crate) font_sizes: Vec<FontSizeRun>,
+}
+
+/// Decode every style-run family from `data[scan_start..]`. Run indexes are
+/// validated against `raw_len` (the stored character count, which may include
+/// a stripped trailing newline) and then clamped to `text_len` — mirroring
+/// pysdocx `_text_box_rich_text`'s scan + `rebase`. note.note's typed text
+/// uses the same TLV families, so this is shared.
+pub(crate) fn scan_rich_text_styles(
+    data: &[u8],
+    scan_start: usize,
+    raw_len: usize,
+    text_len: usize,
+) -> RichTextStyles {
+    // pysdocx `rebase`: clamp a raw run to the stripped text, dropping it when
+    // nothing remains.
+    let rebase = move |start: usize, end: usize| -> Option<(usize, usize)> {
+        let end = end.min(text_len);
+        (start < end).then_some((start, end))
+    };
+    let style_flag = |bold, italic, underline| RichTextRun {
+        start: 0,
+        end: 0,
+        bold,
+        italic,
+        underline,
+        strikethrough: false,
+    };
     let mut runs = Vec::new();
-    collect_style_runs(data, text_len, 0x05, true, false, &mut runs);
-    collect_style_runs(data, text_len, 0x06, false, true, &mut runs);
+    for (tag, proto) in [
+        (BOLD_TAG, style_flag(true, false, false)),
+        (ITALIC_TAG, style_flag(false, true, false)),
+        (UNDERLINE_TAG, style_flag(false, false, true)),
+    ] {
+        for (start, end, _value, enabled) in style_runs(data, tag, raw_len, scan_start) {
+            if enabled != 0
+                && let Some((start, end)) = rebase(start, end) {
+                    runs.push(RichTextRun {
+                        start,
+                        end,
+                        ..proto.clone()
+                    });
+                }
+        }
+    }
+
+    // Strikethrough runs chain: an enabled run counts only when its `end` is
+    // the `start` of another record (pysdocx `_text_box_rich_text`).
+    let strike_runs = marker_runs(data, &STRIKETHROUGH_MARKER, raw_len, scan_start);
+    let strike_starts: std::collections::HashSet<usize> = strike_runs
+        .iter()
+        .filter(|&&(_s, _e, _v, en)| en <= 1)
+        .map(|&(s, _e, _v, _en)| s)
+        .collect();
+    for (start, end, _value, enabled) in strike_runs {
+        if enabled == 1 && strike_starts.contains(&end)
+            && let Some((start, end)) = rebase(start, end) {
+                runs.push(RichTextRun {
+                    start,
+                    end,
+                    bold: false,
+                    italic: false,
+                    underline: false,
+                    strikethrough: true,
+                });
+            }
+    }
+
+    let argb_runs = |tag: u16| -> Vec<ColorRun> {
+        style_runs(data, tag, raw_len, scan_start)
+            .into_iter()
+            .filter(|&(_s, _e, _v, argb)| argb >> 24 == 0xFF)
+            .filter_map(|(start, end, _value, argb)| {
+                let (start, end) = rebase(start, end)?;
+                Some(ColorRun {
+                    start,
+                    end,
+                    color: Color {
+                        r: (argb >> 16) as u8,
+                        g: (argb >> 8) as u8,
+                        b: argb as u8,
+                    },
+                })
+            })
+            .collect()
+    };
+    let colors = argb_runs(COLOR_TAG);
+    let highlights = argb_runs(HIGHLIGHT_TAG);
+
+    let font_sizes = style_runs(data, FONT_TAG, raw_len, scan_start)
+        .into_iter()
+        .filter_map(|(start, end, _value, enabled)| {
+            let size = f32::from_le_bytes(enabled.to_le_bytes());
+            if !size.is_finite() || !(4.0..=200.0).contains(&size) {
+                return None;
+            }
+            let (start, end) = rebase(start, end)?;
+            Some(FontSizeRun { start, end, size })
+        })
+        .collect();
+
+    RichTextStyles {
+        runs,
+        colors,
+        highlights,
+        font_sizes,
+    }
+}
+
+fn style_runs(
+    data: &[u8],
+    tag: u16,
+    text_len: usize,
+    scan_start: usize,
+) -> Vec<(usize, usize, u32, u32)> {
+    let marker = [0x18, 0x00, tag as u8, (tag >> 8) as u8];
+    marker_runs(data, &marker, text_len, scan_start)
+}
+
+/// All local `(start, end, value, enabled)` TLV runs for one marker
+/// (pysdocx `_text_box_marker_runs`).
+fn marker_runs(
+    data: &[u8],
+    marker: &[u8; 4],
+    text_len: usize,
+    scan_start: usize,
+) -> Vec<(usize, usize, u32, u32)> {
+    let mut runs = Vec::new();
+    let mut off = scan_start;
+    while off + RUN_MARKER_LEN <= data.len() {
+        let Some(hit) = find_sub(&data[off..], marker).map(|i| off + i) else {
+            break;
+        };
+        if hit + RUN_MARKER_LEN <= data.len() && data[hit + 4..hit + 6] == [0, 0] {
+            let start = read_u32(data, hit + RUN_START_OFF).unwrap() as usize;
+            let end = read_u32(data, hit + RUN_END_OFF).unwrap() as usize;
+            let value = read_u32(data, hit + RUN_START_OFF + 8).unwrap();
+            let enabled = read_u32(data, hit + RUN_ENABLED_OFF).unwrap();
+            if start < end && end <= text_len {
+                runs.push((start, end, value, enabled));
+            }
+        }
+        off = hit + 1;
+    }
     runs
 }
 
-fn collect_style_runs(
-    data: &[u8],
-    text_len: usize,
-    tag: u16,
-    bold: bool,
-    italic: bool,
-    runs: &mut Vec<RichTextRun>,
-) {
-    let marker = [0x18, 0x00, tag as u8, (tag >> 8) as u8];
-    for offset in 0..data.len().saturating_sub(18) {
-        if data[offset..offset + 4] != marker {
-            continue;
-        }
-        let Some(start) = read_u32(data, offset + 6).map(|value| value as usize) else {
-            continue;
-        };
-        let Some(end) = read_u32(data, offset + 10).map(|value| value as usize) else {
-            continue;
-        };
-        let enabled = read_u32(data, offset + 18).is_some_and(|value| value != 0);
-        if enabled && start < end && end <= text_len {
-            runs.push(RichTextRun {
-                start,
-                end,
-                bold,
-                italic,
-            });
+// ---------------------------------------------------------------------------
+// Sticky-note (file-attachment) placements — pysdocx `scan_sticky_notes`.
+//
+// These live in whole-page attachment property bags anchored by the ascii
+// marker `co_attach_file`, OUTSIDE the declared layer/object tree (the layer's
+// object_count excludes them), so they are found by marker scan, not tree walk.
+// Bag layout: a sequence of `<u32 len><ascii>` keys; the `co_attach_file` key
+// is followed by `u32 media_index + u32 type_tag` instead of a string value,
+// every other key by a `<u32 len><ascii>` value. A bag with any `skn_*` key is
+// a sticky note; `skn_collapse_rect` holds its "x0,y0,x1,y1" placement.
+// ---------------------------------------------------------------------------
+
+const STICKY_NOTE_MARKER: &[u8] = b"co_attach_file";
+const STICKY_NOTE_RECT_KEY: &str = "skn_collapse_rect";
+const STICKY_NOTE_BG_KEY: &str = "skn_bg_color";
+const ATTACHMENT_PROPERTY_BAG_MAX_SCAN: usize = 512;
+const ATTACHMENT_PROPERTY_BAG_MAX_KEYS: usize = 16;
+
+fn scan_sticky_notes(data: &[u8], width: u32, height: u32, elements: &mut Vec<PageElement>) {
+    let mut off = 0usize;
+    while let Some(rel) = find_sub(&data[off..], STICKY_NOTE_MARKER) {
+        let marker_off = off + rel;
+        off = marker_off + 1;
+        if let Some(el) = parse_attachment_property_bag(data, marker_off, width, height) {
+            elements.push(el);
         }
     }
 }
 
-fn infer_rotation_degrees(record: &[u8], bbox: BoundingBox) -> Option<f64> {
-    let mut points = Vec::new();
-    for offset in 0..record.len().saturating_sub(16) {
-        let x = read_f64(record, offset)?;
-        let y = read_f64(record, offset + 8)?;
-        if x.is_finite()
-            && y.is_finite()
-            && x >= bbox.x_min - bbox.x_max
-            && x <= bbox.x_max + bbox.x_max
-            && y >= bbox.y_min - bbox.y_max
-            && y <= bbox.y_max + bbox.y_max
-        {
-            points.push((x, y));
-        }
+/// `<u32 length><ascii bytes>` at `offset` (pysdocx `_read_len_prefixed_ascii`).
+fn read_len_prefixed_ascii(data: &[u8], offset: usize) -> Option<(&str, usize)> {
+    let length = read_u32(data, offset)? as usize;
+    if length == 0 || length >= 1000 {
+        return None;
     }
-    for pair in points.windows(2) {
-        let dx = pair[1].0 - pair[0].0;
-        let dy = pair[1].1 - pair[0].1;
-        let distance = dx.hypot(dy);
-        if distance > 40.0 {
-            let degrees = dy.atan2(dx).to_degrees();
-            if degrees.abs() > 5.0 && degrees.abs() < 85.0 {
-                return Some(degrees);
+    let start = offset + 4;
+    let end = start + length;
+    let bytes = data.get(start..end)?;
+    if !bytes.is_ascii() {
+        return None;
+    }
+    Some((std::str::from_utf8(bytes).ok()?, end))
+}
+
+fn is_bag_key(key: &str) -> bool {
+    (2..=64).contains(&key.len())
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
+
+/// "x0,y0,x1,y1" → a page-plausible bbox (pysdocx `_parse_attachment_bbox`).
+fn parse_attachment_bbox(text: &str, width: u32, height: u32) -> Option<BoundingBox> {
+    let mut vals = [0f64; 4];
+    let mut parts = text.split(',');
+    for v in &mut vals {
+        *v = parts.next()?.parse().ok()?;
+    }
+    if parts.next().is_some() || vals.iter().any(|v| !v.is_finite()) {
+        return None;
+    }
+    let bbox = BoundingBox {
+        x_min: vals[0].min(vals[2]),
+        y_min: vals[1].min(vals[3]),
+        x_max: vals[0].max(vals[2]),
+        y_max: vals[1].max(vals[3]),
+    };
+    let (w, h) = (width as f64, height as f64);
+    (-5.0 <= bbox.x_min
+        && bbox.x_min < bbox.x_max
+        && bbox.x_max <= w + 5.0
+        && -5.0 <= bbox.y_min
+        && bbox.y_min < bbox.y_max
+        && bbox.y_max <= h + 5.0)
+        .then_some(bbox)
+}
+
+/// Decode one attachment property bag anchored at a `co_attach_file` marker
+/// (pysdocx `_scan_attachment_property_bag` + the sticky filter of
+/// `scan_sticky_notes`). Returns a StickyNote element or None.
+fn parse_attachment_property_bag(
+    data: &[u8],
+    marker_off: usize,
+    width: u32,
+    height: u32,
+) -> Option<PageElement> {
+    let bag_off = marker_off.checked_sub(4)?;
+    if read_u32(data, bag_off)? as usize != STICKY_NOTE_MARKER.len() {
+        return None;
+    }
+
+    let end_limit = data.len().min(bag_off + ATTACHMENT_PROPERTY_BAG_MAX_SCAN);
+    let mut pos = bag_off;
+    let mut media_index = None;
+    let mut bbox = None;
+    let mut bg_color = None;
+    let mut is_sticky = false;
+
+    for _ in 0..ATTACHMENT_PROPERTY_BAG_MAX_KEYS {
+        let Some((key, next)) = read_len_prefixed_ascii(data, pos) else {
+            break;
+        };
+        if !is_bag_key(key) {
+            break;
+        }
+        is_sticky |= key.starts_with("skn_");
+        pos = next;
+
+        if key == "co_attach_file" {
+            if pos + 8 > end_limit {
+                return None;
+            }
+            media_index = Some(read_u32(data, pos)? as usize);
+            pos += 8; // media_index + type_tag
+        } else {
+            let Some((value, next)) = read_len_prefixed_ascii(data, pos) else {
+                break;
+            };
+            pos = next;
+            if key == STICKY_NOTE_RECT_KEY {
+                bbox = parse_attachment_bbox(value, width, height);
+            } else if key == STICKY_NOTE_BG_KEY {
+                // Android ARGB color int as decimal string (e.g. "-6482" =
+                // 0xFFFFE6AE, the default sticky yellow).
+                if let Ok(argb) = value.parse::<i64>() {
+                    let argb = argb as u32;
+                    if argb >> 24 == 0xFF {
+                        bg_color = Some(Color {
+                            r: (argb >> 16) as u8,
+                            g: (argb >> 8) as u8,
+                            b: argb as u8,
+                        });
+                    }
+                }
             }
         }
+
+        if pos + 4 > end_limit {
+            break;
+        }
     }
-    None
+
+    Some(PageElement::StickyNote {
+        bbox: bbox.filter(|_| is_sticky)?,
+        media_index: media_index?,
+        bg_color,
+    })
 }
 
 #[cfg(test)]
@@ -986,10 +1396,16 @@ mod tests {
 
     #[test]
     fn parses_page_header_background_color() {
-        let mut data = vec![0; 0xA8];
+        // Paper color record signature (RE 2026-07-09): [u32 kind][BGRA alpha=FF]
+        // [u32 display_width], located within [0x7c, base). `base` must reach past
+        // the record.
+        let mut data = vec![0; 0xB0];
+        data[0x00..0x04].copy_from_slice(&0xB0_u32.to_le_bytes()); // base
         data[0x16..0x1A].copy_from_slice(&1080_u32.to_le_bytes());
         data[0x1A..0x1E].copy_from_slice(&1527_u32.to_le_bytes());
-        data[0xA4..0xA8].copy_from_slice(&[0xDD, 0xDD, 0xF5, 0xFF]);
+        data[0xA0..0xA4].copy_from_slice(&2_u32.to_le_bytes()); // kind
+        data[0xA4..0xA8].copy_from_slice(&[0xDD, 0xDD, 0xF5, 0xFF]); // BGRA
+        data[0xA8..0xAC].copy_from_slice(&1080_u32.to_le_bytes()); // display_width
 
         let page = parse_page(&data).unwrap();
 
@@ -1003,13 +1419,55 @@ mod tests {
         );
     }
 
+    /// RE parity on real one-variable samples: the paper color is decoded from the
+    /// `.page` header and equals the paper the note was created with (proven by the
+    /// pink `Rosina` sample). Skips cleanly when the samples are absent.
+    #[test]
+    fn decodes_paper_color_from_test_background_samples() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../samples/test-background");
+        let cases = [
+            ("Default-Liscio_260709_125314.sdocx", (252, 252, 252)),
+            ("Bianca-Liscio_260709_125449.sdocx", (230, 230, 230)),
+            ("Rosina-Liscio_260709_125531.sdocx", (245, 221, 221)),
+            ("Bianca-quadretti_260709_125637.sdocx", (230, 230, 230)),
+            // Explicit DARK paper is stored the same way, as a dark RGB.
+            ("Nera-Liscio_260709_140421.sdocx", (1, 1, 1)),
+        ];
+        let mut checked = 0;
+        for (name, (r, g, b)) in cases {
+            let path = dir.join(name);
+            if !path.exists() {
+                eprintln!("skipping: {name} not present");
+                continue;
+            }
+            let mut reader = crate::open(&path).expect("open sample");
+            // Every page of a note carries the same single paper color.
+            for i in 0..reader.page_count() {
+                let bytes = reader.page_bytes(i).expect("page bytes");
+                let page = parse_page(&bytes).expect("parse page");
+                assert_eq!(
+                    page.background_color,
+                    Some(Color { r, g, b }),
+                    "{name} page {i}"
+                );
+                checked += 1;
+            }
+        }
+        if checked == 0 {
+            eprintln!("no test-background samples present");
+        }
+    }
+
     #[test]
     fn parses_page_template_id() {
         let mut data = vec![0; 0x200];
         data[0x00..0x04].copy_from_slice(&0xE7_u32.to_le_bytes());
         data[0x16..0x1A].copy_from_slice(&1080_u32.to_le_bytes());
         data[0x1A..0x1E].copy_from_slice(&1527_u32.to_le_bytes());
+        data[0xA0..0xA4].copy_from_slice(&2_u32.to_le_bytes()); // paper-color kind
         data[0xA4..0xA8].copy_from_slice(&[0xDD, 0xDA, 0xCB, 0xFF]);
+        data[0xA8..0xAC].copy_from_slice(&1080_u32.to_le_bytes()); // display_width
         data[0xAC..0xB0].copy_from_slice(&1_u32.to_le_bytes());
 
         let page = parse_page(&data).unwrap();
@@ -1029,7 +1487,9 @@ mod tests {
         data[0x00..0x04].copy_from_slice(&0x90_u32.to_le_bytes());
         data[0x16..0x1A].copy_from_slice(&1080_u32.to_le_bytes());
         data[0x1A..0x1E].copy_from_slice(&1527_u32.to_le_bytes());
+        data[0x80..0x84].copy_from_slice(&2_u32.to_le_bytes()); // paper-color kind
         data[0x84..0x88].copy_from_slice(&[0xDD, 0xDA, 0xCB, 0xFF]);
+        data[0x88..0x8C].copy_from_slice(&1080_u32.to_le_bytes()); // display_width
         data[0x8C..0x90].copy_from_slice(&10_u32.to_le_bytes());
 
         let page = parse_page(&data).unwrap();
@@ -1049,7 +1509,9 @@ mod tests {
         data[0x00..0x04].copy_from_slice(&0xA6_u32.to_le_bytes());
         data[0x16..0x1A].copy_from_slice(&1080_u32.to_le_bytes());
         data[0x1A..0x1E].copy_from_slice(&1528_u32.to_le_bytes());
+        data[0x7C..0x80].copy_from_slice(&2_u32.to_le_bytes()); // paper-color kind
         data[0x80..0x84].copy_from_slice(&[0xDD, 0xDA, 0xCB, 0xFF]);
+        data[0x84..0x88].copy_from_slice(&1080_u32.to_le_bytes()); // display_width
         data[0x8C..0x90].copy_from_slice(&(3_u32 << 16).to_le_bytes());
 
         let page = parse_page(&data).unwrap();
@@ -1069,7 +1531,9 @@ mod tests {
         data[0x00..0x04].copy_from_slice(&0xE3_u32.to_le_bytes());
         data[0x16..0x1A].copy_from_slice(&1080_u32.to_le_bytes());
         data[0x1A..0x1E].copy_from_slice(&1527_u32.to_le_bytes());
+        data[0xA0..0xA4].copy_from_slice(&2_u32.to_le_bytes()); // paper-color kind
         data[0xA4..0xA8].copy_from_slice(&[0xFC, 0xFC, 0xFC, 0xFF]);
+        data[0xA8..0xAC].copy_from_slice(&1080_u32.to_le_bytes()); // display_width
         data[0xAC..0xB0].copy_from_slice(&1_u32.to_le_bytes());
         data[0xB4..0xB8].copy_from_slice(&0_u32.to_le_bytes());
 

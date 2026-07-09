@@ -1,0 +1,378 @@
+{
+ "Allsamsungnotes_260630_113259.sdocx": [
+  {
+   "rows": 4,
+   "cols": 3,
+   "bbox": [
+    72.11111450195312,
+    1322.3344319661458,
+    1528.1111907958984,
+    1824.5567626953125
+   ],
+   "x_edges": [
+    72.11111450195312,
+    557.4444732666016,
+    1042.77783203125,
+    1528.1111907958984
+   ],
+   "y_edges": [
+    1322.3344319661458,
+    1447.8900146484375,
+    1573.445597330729,
+    1699.0011800130208,
+    1824.5567626953125
+   ],
+   "cells": [
+    {
+     "text": "Cell1,1",
+     "anchor": [
+      72.11111450195312,
+      1447.8900146484375
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 0,
+     "row": 0
+    },
+    {
+     "text": "Cell1,2",
+     "anchor": [
+      557.4444580078125,
+      1447.8900146484375
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 1,
+     "row": 0
+    },
+    {
+     "text": "Cell1,3",
+     "anchor": [
+      1042.77783203125,
+      1447.8900146484375
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 2,
+     "row": 0
+    },
+    {
+     "text": "Cell2,1",
+     "anchor": [
+      72.11111450195312,
+      1573.445556640625
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 0,
+     "row": 1
+    },
+    {
+     "text": "Cell2,2",
+     "anchor": [
+      557.4444580078125,
+      1573.445556640625
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 1,
+     "row": 1
+    },
+    {
+     "text": "Cell2,3",
+     "anchor": [
+      1042.77783203125,
+      1573.445556640625
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 2,
+     "row": 1
+    },
+    {
+     "text": "Cell3,1",
+     "anchor": [
+      72.11111450195312,
+      1699.001220703125
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 0,
+     "row": 2
+    },
+    {
+     "text": "Cell3,2",
+     "anchor": [
+      557.4444580078125,
+      1699.001220703125
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 1,
+     "row": 2
+    },
+    {
+     "text": "Cell3,3",
+     "anchor": [
+      1042.77783203125,
+      1699.001220703125
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 2,
+     "row": 2
+    },
+    {
+     "text": "Cell4,1",
+     "anchor": [
+      72.11111450195312,
+      1824.5567626953125
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 0,
+     "row": 3
+    },
+    {
+     "text": "Cell4,2",
+     "anchor": [
+      557.4444580078125,
+      1824.5567626953125
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 1,
+     "row": 3
+    },
+    {
+     "text": "Cell4,3",
+     "anchor": [
+      1042.77783203125,
+      1824.5567626953125
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 2,
+     "row": 3
+    }
+   ]
+  }
+ ],
+ "Associationpages&stickynote&images&audio_260701_183225.sdocx": [
+  {
+   "rows": 2,
+   "cols": 3,
+   "bbox": [
+    72.11111450195312,
+    464.33416748046875,
+    1528.1111907958984,
+    715.4453735351562
+   ],
+   "x_edges": [
+    72.11111450195312,
+    557.4444732666016,
+    1042.77783203125,
+    1528.1111907958984
+   ],
+   "y_edges": [
+    464.33416748046875,
+    589.8897705078125,
+    715.4453735351562
+   ],
+   "cells": [
+    {
+     "text": "c11",
+     "anchor": [
+      72.11111450195312,
+      589.8897705078125
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 0,
+     "row": 0
+    },
+    {
+     "text": "c12ingrassettoepiccolo",
+     "anchor": [
+      557.4444580078125,
+      589.8897705078125
+     ],
+     "bold": true,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 4.0,
+     "col": 1,
+     "row": 0
+    },
+    {
+     "text": "c13",
+     "anchor": [
+      1042.77783203125,
+      589.8897705078125
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 2,
+     "row": 0
+    },
+    {
+     "text": "c21",
+     "anchor": [
+      72.11111450195312,
+      715.4453735351562
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 0,
+     "row": 1
+    },
+    {
+     "text": "c22",
+     "anchor": [
+      557.4444580078125,
+      715.4453735351562
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 1,
+     "row": 1
+    },
+    {
+     "text": "c23",
+     "anchor": [
+      1042.77783203125,
+      715.4453735351562
+     ],
+     "bold": false,
+     "italic": false,
+     "underline": false,
+     "color": [
+      37,
+      37,
+      37
+     ],
+     "font_size": 15.0,
+     "col": 2,
+     "row": 1
+    }
+   ]
+  }
+ ]
+}

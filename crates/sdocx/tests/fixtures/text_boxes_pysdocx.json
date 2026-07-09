@@ -1,0 +1,474 @@
+{
+ "Associationpages&stickynote&images&audio_260701_183225.sdocx": {
+  "499afd8a-7567-11f1-bfe0-6b1182489037.page": [
+   {
+    "text": "casella di testo di pagina 1",
+    "bbox": [
+     71.0,
+     45.4444465637207,
+     556.3333740234375,
+     213.44444274902344
+    ],
+    "angle_deg": 0.0,
+    "frame_midpoints": [
+     [
+      313.66668701171875,
+      45.4444465637207
+     ],
+     [
+      556.3333740234375,
+      129.44444274902344
+     ],
+     [
+      313.66668701171875,
+      213.44444274902344
+     ],
+     [
+      71.0,
+      129.44444274902344
+     ]
+    ],
+    "runs": [],
+    "colors": [
+     {
+      "start": 0,
+      "end": 28,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     }
+    ],
+    "highlights": [],
+    "font_sizes": [
+     {
+      "start": 0,
+      "end": 28,
+      "size": 11.0
+     }
+    ],
+    "font_size": 11.0
+   }
+  ]
+ },
+ "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx": {
+  "016a88d8-27ca-11ef-96d4-4b79df809eac.page": [
+   {
+    "text": "- THE PREDICTION is a LINEAR COMBINATION of the TARGET values from the TRAINING SET\n- is like taking a weighted average over the target samples, based on the similarity between the new samples and the target samples in the training data\n- completely eliminated the parameters, so we have found a dual representation of the parametric model eliminating the need of parameters and features \n- the ”model” is now implicit in the data",
+    "bbox": [
+     -7.63555908203125,
+     1458.3828125,
+     1592.363525390625,
+     1782.3359375
+    ],
+    "angle_deg": 0.0,
+    "frame_midpoints": [
+     [
+      792.36376953125,
+      1458.3828125
+     ],
+     [
+      1592.363037109375,
+      1620.359375
+     ],
+     [
+      792.36376953125,
+      1782.3359375
+     ],
+     [
+      -7.63555908203125,
+      1620.359375
+     ]
+    ],
+    "runs": [],
+    "colors": [
+     {
+      "start": 0,
+      "end": 86,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     },
+     {
+      "start": 86,
+      "end": 239,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     },
+     {
+      "start": 239,
+      "end": 391,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     },
+     {
+      "start": 391,
+      "end": 430,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     }
+    ],
+    "highlights": [],
+    "font_sizes": [
+     {
+      "start": 0,
+      "end": 86,
+      "size": 13.0
+     },
+     {
+      "start": 86,
+      "end": 239,
+      "size": 13.0
+     },
+     {
+      "start": 239,
+      "end": 391,
+      "size": 13.0
+     },
+     {
+      "start": 391,
+      "end": 430,
+      "size": 13.0
+     }
+    ],
+    "font_size": 13.0
+   }
+  ]
+ },
+ "OnlyTextTypeWritten_260701_180427.sdocx": {
+  "a48f4f92-7563-11f1-b813-6b2530ed042f.page": [
+   {
+    "text": "testo dentro una casella di testo orizzonale",
+    "bbox": [
+     71.00000762939453,
+     1503.222900390625,
+     1133.75,
+     1737.22265625
+    ],
+    "angle_deg": 0.0,
+    "frame_midpoints": [
+     [
+      602.3748779296875,
+      1503.222900390625
+     ],
+     [
+      1133.749755859375,
+      1620.2227783203125
+     ],
+     [
+      602.3748779296875,
+      1737.22265625
+     ],
+     [
+      71.00000762939453,
+      1620.2227783203125
+     ]
+    ],
+    "runs": [],
+    "colors": [
+     {
+      "start": 0,
+      "end": 44,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     }
+    ],
+    "highlights": [],
+    "font_sizes": [
+     {
+      "start": 0,
+      "end": 44,
+      "size": 11.0
+     }
+    ],
+    "font_size": 11.0
+   },
+   {
+    "text": "testo dentro una casella di testo su 2 righe inclinata",
+    "bbox": [
+     71.00000762939453,
+     1635.22265625,
+     556.3333740234375,
+     1869.22265625
+    ],
+    "angle_deg": 16.0,
+    "frame_midpoints": [
+     [
+      345.916259765625,
+      1639.7550048828125
+     ],
+     [
+      546.932861328125,
+      1819.110595703125
+     ],
+     [
+      281.4171142578125,
+      1864.6903076171875
+     ],
+     [
+      80.40049743652344,
+      1685.334716796875
+     ]
+    ],
+    "runs": [],
+    "colors": [
+     {
+      "start": 0,
+      "end": 54,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     }
+    ],
+    "highlights": [],
+    "font_sizes": [
+     {
+      "start": 0,
+      "end": 54,
+      "size": 11.0
+     }
+    ],
+    "font_size": 11.0
+   },
+   {
+    "text": "testo dentro una casella di testo in grassetto e in corsivo ruotato di 90 gradi",
+    "bbox": [
+     979.0565795898438,
+     1797.304931640625,
+     1650.109619140625,
+     2055.638671875
+    ],
+    "angle_deg": 90.0,
+    "frame_midpoints": [
+     [
+      1443.75,
+      1926.4722900390625
+     ],
+     [
+      1314.5831298828125,
+      2261.999267578125
+     ],
+     [
+      1185.416259765625,
+      1926.4722900390625
+     ],
+     [
+      1314.5831298828125,
+      1590.9453125
+     ]
+    ],
+    "runs": [
+     {
+      "start": 37,
+      "end": 47,
+      "style": "bold"
+     },
+     {
+      "start": 52,
+      "end": 59,
+      "style": "italic"
+     }
+    ],
+    "colors": [
+     {
+      "start": 0,
+      "end": 79,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     }
+    ],
+    "highlights": [],
+    "font_sizes": [
+     {
+      "start": 0,
+      "end": 79,
+      "size": 11.0
+     }
+    ],
+    "font_size": 11.0
+   }
+  ]
+ },
+ "OnlyTextTypeWritten_squared_260703_013624.sdocx": {
+  "a48f4f92-7563-11f1-b813-6b2530ed042f.page": [
+   {
+    "text": "testo dentro una casella di testo orizzonale",
+    "bbox": [
+     71.00000762939453,
+     1503.222900390625,
+     1133.75,
+     1737.22265625
+    ],
+    "angle_deg": 0.0,
+    "frame_midpoints": [
+     [
+      602.3748779296875,
+      1503.222900390625
+     ],
+     [
+      1133.749755859375,
+      1620.2227783203125
+     ],
+     [
+      602.3748779296875,
+      1737.22265625
+     ],
+     [
+      71.00000762939453,
+      1620.2227783203125
+     ]
+    ],
+    "runs": [],
+    "colors": [
+     {
+      "start": 0,
+      "end": 44,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     }
+    ],
+    "highlights": [],
+    "font_sizes": [
+     {
+      "start": 0,
+      "end": 44,
+      "size": 11.0
+     }
+    ],
+    "font_size": 11.0
+   },
+   {
+    "text": "testo dentro una casella di testo su 2 righe inclinata",
+    "bbox": [
+     71.00000762939453,
+     1635.22265625,
+     556.3333740234375,
+     1869.22265625
+    ],
+    "angle_deg": 16.0,
+    "frame_midpoints": [
+     [
+      345.916259765625,
+      1639.7550048828125
+     ],
+     [
+      546.932861328125,
+      1819.110595703125
+     ],
+     [
+      281.4171142578125,
+      1864.6903076171875
+     ],
+     [
+      80.40049743652344,
+      1685.334716796875
+     ]
+    ],
+    "runs": [],
+    "colors": [
+     {
+      "start": 0,
+      "end": 54,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     }
+    ],
+    "highlights": [],
+    "font_sizes": [
+     {
+      "start": 0,
+      "end": 54,
+      "size": 11.0
+     }
+    ],
+    "font_size": 11.0
+   },
+   {
+    "text": "testo dentro una casella di testo in grassetto e in corsivo ruotato di 90 gradi",
+    "bbox": [
+     979.0565795898438,
+     1797.304931640625,
+     1650.109619140625,
+     2055.638671875
+    ],
+    "angle_deg": 90.0,
+    "frame_midpoints": [
+     [
+      1443.75,
+      1926.471923828125
+     ],
+     [
+      1314.5831298828125,
+      2261.9990234375
+     ],
+     [
+      1185.416259765625,
+      1926.471923828125
+     ],
+     [
+      1314.5831298828125,
+      1590.9449462890625
+     ]
+    ],
+    "runs": [
+     {
+      "start": 37,
+      "end": 47,
+      "style": "bold"
+     },
+     {
+      "start": 52,
+      "end": 59,
+      "style": "italic"
+     }
+    ],
+    "colors": [
+     {
+      "start": 0,
+      "end": 79,
+      "color": [
+       37,
+       37,
+       37
+      ]
+     }
+    ],
+    "highlights": [],
+    "font_sizes": [
+     {
+      "start": 0,
+      "end": 79,
+      "size": 11.0
+     }
+    ],
+    "font_size": 11.0
+   }
+  ]
+ }
+}

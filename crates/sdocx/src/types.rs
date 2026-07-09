@@ -28,6 +28,55 @@ pub struct DocumentMetadata {
     pub media_assets: Vec<MediaAsset>,
     /// Top-level typed note text from `note.note`, if present.
     pub note_text: Option<RichTextBox>,
+    /// Tables decoded from `note.note` (document-level, like the typed text;
+    /// note.note carries no page reference, so placement is a render decision).
+    pub tables: Vec<Table>,
+}
+
+/// A table reconstructed from `note.note`'s cell records (ported from pysdocx
+/// `parse_tables`: cells are read in row-major order and the grid is rebuilt by
+/// clustering the cell anchor points — Samsung tables use equal-sized cells).
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Table {
+    /// Number of rows.
+    pub rows: usize,
+    /// Number of columns.
+    pub cols: usize,
+    /// Table bounds in page coordinates, when the grid reconstructed cleanly.
+    pub bbox: Option<BoundingBox>,
+    /// X coordinates of the column grid lines (cols + 1 entries).
+    pub x_edges: Vec<f64>,
+    /// Y coordinates of the row grid lines (rows + 1 entries).
+    pub y_edges: Vec<f64>,
+    /// The cells, in document (row-major) order.
+    pub cells: Vec<TableCell>,
+}
+
+/// One table cell: text, grid position, and its own rich-text style
+/// (the same per-run TLV markers as the typed text, scoped to the cell).
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TableCell {
+    /// Row index (0-based).
+    pub row: usize,
+    /// Column index (0-based).
+    pub col: usize,
+    /// Cell text.
+    pub text: String,
+    /// Cell anchor (bottom-left corner) in page coordinates.
+    pub anchor: Point,
+    /// Whether the whole cell is bold.
+    pub bold: bool,
+    /// Whether the whole cell is italic.
+    pub italic: bool,
+    /// Whether the whole cell is underlined.
+    pub underline: bool,
+    /// Explicit cell text color (includes the body-default gray; renderers
+    /// decide what counts as "no explicit color").
+    pub color: Option<Color>,
+    /// Explicit cell font size in Samsung Notes logical units.
+    pub font_size: Option<f32>,
 }
 
 /// A single page within a document.
@@ -79,6 +128,19 @@ pub enum PageElement {
     TextBox(RichTextBox),
     /// An inserted shape object (shape tool / line-arrow tool).
     Shape(Shape),
+    /// A sticky-note (attached sub-note) placement, shown collapsed. The
+    /// attachment itself is a nested `.sdocx` media member and is not
+    /// rendered recursively (matches pysdocx's "enumerate them" bar).
+    StickyNote {
+        /// Collapsed-square placement in page coordinates.
+        bbox: BoundingBox,
+        /// Archive media index of the attached sub-document
+        /// (the `<index>@` prefix of its `media/` member).
+        media_index: usize,
+        /// Collapsed-square background color, when the property bag
+        /// carries one (`skn_bg_color`, an Android ARGB color int).
+        bg_color: Option<Color>,
+    },
 }
 
 /// Decoded shape family. Mirrors pysdocx `SHAPE_TYPES` (pysdocx/page.py); codes not
@@ -173,6 +235,15 @@ pub struct RichTextBox {
     pub font_size: Option<f32>,
     /// Style runs using character indexes into `text`.
     pub runs: Vec<RichTextRun>,
+    /// Per-run foreground colors (character indexes into `text`).
+    pub colors: Vec<ColorRun>,
+    /// Per-run highlight colors (character indexes into `text`).
+    pub highlights: Vec<ColorRun>,
+    /// Per-run font sizes in Samsung Notes logical units.
+    pub font_sizes: Vec<FontSizeRun>,
+    /// The 4 stored edge-midpoints of a rotated text-box frame, when present
+    /// and self-consistent with `bbox` (see pysdocx `_text_box_frame_midpoints`).
+    pub frame_midpoints: Option<[Point; 4]>,
 }
 
 /// A rich text style run.
@@ -187,6 +258,34 @@ pub struct RichTextRun {
     pub bold: bool,
     /// Whether the run is italic.
     pub italic: bool,
+    /// Whether the run is underlined.
+    pub underline: bool,
+    /// Whether the run is struck through.
+    pub strikethrough: bool,
+}
+
+/// A per-run color (foreground or highlight) over character indexes.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ColorRun {
+    /// Start character index, inclusive.
+    pub start: usize,
+    /// End character index, exclusive.
+    pub end: usize,
+    /// The run's color.
+    pub color: Color,
+}
+
+/// A per-run font size over character indexes.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FontSizeRun {
+    /// Start character index, inclusive.
+    pub start: usize,
+    /// End character index, exclusive.
+    pub end: usize,
+    /// Font size in Samsung Notes logical units.
+    pub size: f32,
 }
 
 /// Page template metadata.

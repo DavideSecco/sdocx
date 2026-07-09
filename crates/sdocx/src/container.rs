@@ -4,7 +4,7 @@ use crate::error::{Error, Result};
 use crate::page::parse_page;
 use crate::types::{
     BoundingBox, Color, Document, DocumentMetadata, MediaAsset, Page, PageElement, RichTextBox,
-    RichTextRun,
+    Table, TableCell,
 };
 
 /// Parse a `.sdocx` ZIP archive from a reader.
@@ -27,6 +27,7 @@ pub fn parse_from_reader<R: Read + Seek>(reader: R) -> Result<Document> {
         let mut buf = Vec::new();
         entry.read_to_end(&mut buf)?;
         parse_note_note(&buf, &mut metadata);
+        metadata.tables = parse_tables(&buf);
         note_text = parse_note_text(&buf);
     }
 
@@ -94,6 +95,14 @@ fn parse_end_tag(data: &[u8], metadata: &mut DocumentMetadata) {
 
 /// Extract background color and page dimensions from `note.note`.
 fn parse_note_note(data: &[u8], metadata: &mut DocumentMetadata) {
+    // ⚠ MISLABEL (RE 2026-07-09): this reads `(u32 @ 0x04) & 0x0800`, but 0x04 is
+    // inside note.note's length-prefixed `property_flags` bitfield, so this masks
+    // no clean semantic bit. The decoded format has NO "dark mode" flag; the only
+    // theme signal is `fixed_background_theme` (field-flags bit 19: 0 light/1 dark/
+    // 2 default), which is `default`/absent across the whole corpus. This value is
+    // therefore meaningless and MUST NOT drive rendering — the page paper color
+    // (per-`.page`, see page.rs `page_background_color`) is the real signal.
+    // Kept only until sdocx-render/-cli (reference SVG path) stop reading it.
     if data.len() >= 0x08 {
         let flags = u32::from_le_bytes(data[0x04..0x08].try_into().unwrap());
         metadata.dark_mode_compatibility = Some(flags & 0x0800 != 0);
@@ -202,11 +211,10 @@ fn media_index_positions(names: &[String]) -> std::collections::HashMap<usize, u
 /// out-of-range index as "asset unavailable").
 pub fn remap_media_indices(page: &mut Page, map: &std::collections::HashMap<usize, usize>) {
     for el in &mut page.elements {
-        if let PageElement::Image { media_index, .. } = el {
-            if let Some(&pos) = map.get(media_index) {
+        if let PageElement::Image { media_index, .. } = el
+            && let Some(&pos) = map.get(media_index) {
                 *media_index = pos;
             }
-        }
     }
 }
 
@@ -246,10 +254,10 @@ fn order_pages(page_ids: &[String], present: &mut Vec<String>) -> Vec<String> {
 
 fn parse_note_text(data: &[u8]) -> Option<RichTextBox> {
     let (text, text_end) = first_utf16_text(data)?;
-    let styles = &data[text_end..];
-    let color = tlv_color(styles, 0x01);
-    let font_size = tlv_f32(styles, 0x03);
-    let runs = parse_rich_text_runs(styles, text.chars().count());
+    // note.note's typed text reuses the same TLV style-run families as in-page
+    // text boxes, with global character indexes (see pysdocx note.py).
+    let text_len = text.chars().count();
+    let styles = crate::page::scan_rich_text_styles(data, text_end, text_len, text_len);
     Some(RichTextBox {
         // `note.note` stores the typed note body as the default page text layer. The body itself
         // carries leading blank lines, so the renderer can place it from the page origin.
@@ -261,12 +269,217 @@ fn parse_note_text(data: &[u8]) -> Option<RichTextBox> {
         },
         rotation_degrees: None,
         text,
-        color,
-        highlight_color: None,
-        underline: false,
-        font_size,
-        runs,
+        color: styles.colors.first().map(|c| c.color),
+        highlight_color: styles.highlights.first().map(|c| c.color),
+        underline: styles.runs.iter().any(|r| r.underline),
+        font_size: styles.font_sizes.first().map(|f| f.size),
+        runs: styles.runs,
+        colors: styles.colors,
+        highlights: styles.highlights,
+        font_sizes: styles.font_sizes,
+        frame_midpoints: None,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Tables — ported from pysdocx note.py `parse_tables` + `_cell_style`.
+//
+// Cell records in note.note: `06 00 <u16 kind> 00 00 <u32 char_count>` with
+// kind ∈ {0x8D, 0x95, 0xCD}, UTF-16LE text after, and the cell's page-coords
+// anchor (bottom-left corner) as two f64 right before the marker. Each cell's
+// TLV style block follows its text. The row/column grid is reconstructed by
+// clustering the anchors (Samsung tables use equal-sized cells).
+// ---------------------------------------------------------------------------
+
+const TABLE_CELL_PREFIX: [u8; 2] = [0x06, 0x00];
+const TABLE_CELL_KINDS: [u16; 3] = [0x8D, 0x95, 0xCD];
+const TABLE_CELL_MARKER_LEN: usize = 10;
+const TABLE_ANCHOR_X_BACK: usize = 16;
+const TABLE_ANCHOR_Y_BACK: usize = 8;
+const CELL_STYLE_WINDOW: usize = 200;
+
+fn read_u16_at(data: &[u8], off: usize) -> Option<u16> {
+    Some(u16::from_le_bytes(data.get(off..off + 2)?.try_into().ok()?))
+}
+fn read_u32_at(data: &[u8], off: usize) -> Option<u32> {
+    Some(u32::from_le_bytes(data.get(off..off + 4)?.try_into().ok()?))
+}
+fn read_f64_at(data: &[u8], off: usize) -> Option<f64> {
+    Some(f64::from_le_bytes(data.get(off..off + 8)?.try_into().ok()?))
+}
+
+/// One cell's whole-cell style runs from the TLV block right after its text.
+/// Only runs spanning the cell exactly (start=0, end=char_count) are accepted,
+/// so a run window overrunning into the next cell can't be mistaken for this
+/// one's (pysdocx `_cell_style`).
+fn cell_style(note: &[u8], cell_end: usize, char_count: usize) -> (bool, bool, bool, Option<Color>, Option<f32>) {
+    let window = &note[cell_end..note.len().min(cell_end + CELL_STYLE_WINDOW)];
+    let find = |tag: u8| -> Option<(usize, usize, u32)> {
+        let marker = [0x18, 0x00, tag, 0x00];
+        let i = window.windows(4).position(|w| w == marker)?;
+        if i + 22 > window.len() {
+            return None;
+        }
+        Some((
+            read_u32_at(window, i + 6)? as usize,
+            read_u32_at(window, i + 10)? as usize,
+            read_u32_at(window, i + 18)?,
+        ))
+    };
+    let whole_cell = |run: Option<(usize, usize, u32)>| -> Option<u32> {
+        run.filter(|&(start, end, _)| start == 0 && end == char_count)
+            .map(|(_, _, enabled)| enabled)
+    };
+
+    let bold = whole_cell(find(0x05)).is_some_and(|v| v != 0);
+    let italic = whole_cell(find(0x06)).is_some_and(|v| v != 0);
+    let underline = whole_cell(find(0x07)).is_some_and(|v| v != 0);
+    let color = whole_cell(find(0x01))
+        .filter(|argb| argb >> 24 == 0xFF)
+        .map(|argb| Color {
+            r: (argb >> 16) as u8,
+            g: (argb >> 8) as u8,
+            b: argb as u8,
+        });
+    let font_size = whole_cell(find(0x03))
+        .map(|bits| f32::from_le_bytes(bits.to_le_bytes()))
+        .filter(|size| size.is_finite() && (4.0..=200.0).contains(size));
+    (bold, italic, underline, color, font_size)
+}
+
+/// Collapse near-equal coordinates (grid lines) into single averaged values.
+fn cluster(mut values: Vec<f64>, tol: f64) -> Vec<f64> {
+    values.sort_by(|a, b| a.total_cmp(b));
+    let mut clusters: Vec<Vec<f64>> = Vec::new();
+    for v in values {
+        match clusters.last_mut() {
+            Some(c) if v - *c.last().unwrap() <= tol => c.push(v),
+            _ => clusters.push(vec![v]),
+        }
+    }
+    clusters
+        .iter()
+        .map(|c| c.iter().sum::<f64>() / c.len() as f64)
+        .collect()
+}
+
+/// Extract tables from `note.note` (pysdocx `parse_tables`).
+fn parse_tables(note: &[u8]) -> Vec<Table> {
+    struct RawCell {
+        text: String,
+        anchor: (f64, f64),
+        style: (bool, bool, bool, Option<Color>, Option<f32>),
+    }
+    let mut cells: Vec<RawCell> = Vec::new();
+    let mut off = 0usize;
+    while let Some(rel) = note[off..]
+        .windows(2)
+        .position(|w| w == TABLE_CELL_PREFIX)
+    {
+        let m = off + rel;
+        off = m + 1;
+        if m + TABLE_CELL_MARKER_LEN > note.len() {
+            break;
+        }
+        let Some(kind) = read_u16_at(note, m + 2) else { break };
+        let Some(char_count) = read_u32_at(note, m + 6).map(|v| v as usize) else { break };
+        if !TABLE_CELL_KINDS.contains(&kind) || !(1..=512).contains(&char_count) {
+            continue;
+        }
+        let text_start = m + TABLE_CELL_MARKER_LEN;
+        let text_end = text_start + char_count * 2;
+        if text_end > note.len() {
+            continue;
+        }
+        let mut units: Vec<u16> = Vec::new();
+        let mut end = text_start;
+        while end + 2 <= text_end {
+            let unit = u16::from_le_bytes([note[end], note[end + 1]]);
+            if !(0x20..=0xD7FF).contains(&unit) {
+                break;
+            }
+            units.push(unit);
+            end += 2;
+        }
+        if units.is_empty() {
+            continue;
+        }
+        let Some(x) = m.checked_sub(TABLE_ANCHOR_X_BACK).and_then(|o| read_f64_at(note, o)) else {
+            continue;
+        };
+        let Some(y) = m.checked_sub(TABLE_ANCHOR_Y_BACK).and_then(|o| read_f64_at(note, o)) else {
+            continue;
+        };
+        if !(0.0..=3000.0).contains(&x) || !(0.0..=4000.0).contains(&y) {
+            continue;
+        }
+        let Ok(text) = String::from_utf16(&units) else {
+            continue;
+        };
+        cells.push(RawCell {
+            text,
+            anchor: (x, y),
+            style: cell_style(note, text_end, char_count),
+        });
+    }
+
+    if cells.is_empty() {
+        return Vec::new();
+    }
+
+    let xs = cluster(cells.iter().map(|c| c.anchor.0).collect(), 8.0);
+    let ys = cluster(cells.iter().map(|c| c.anchor.1).collect(), 8.0);
+    let (cols, rows) = (xs.len(), ys.len());
+
+    let col_w = if cols > 1 { (xs[cols - 1] - xs[0]) / (cols - 1) as f64 } else { 0.0 };
+    let row_h = if rows > 1 { (ys[rows - 1] - ys[0]) / (rows - 1) as f64 } else { 0.0 };
+    // Anchors are bottom-left corners: xs[0] is the table's left edge; the row
+    // anchors are bottoms, so the table top is one row-height above row 0's.
+    let x_edges: Vec<f64> = (0..=cols).map(|i| xs[0] + i as f64 * col_w).collect();
+    let y_edges: Vec<f64> = (0..=rows).map(|i| ys[0] - row_h + i as f64 * row_h).collect();
+
+    let nearest = |edges: &[f64], v: f64| -> usize {
+        edges
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| (*a - v).abs().total_cmp(&(*b - v).abs()))
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    let table_cells = cells
+        .into_iter()
+        .map(|c| {
+            let (bold, italic, underline, color, font_size) = c.style;
+            TableCell {
+                row: nearest(&ys, c.anchor.1),
+                col: nearest(&xs, c.anchor.0),
+                text: c.text,
+                anchor: crate::types::Point {
+                    x: c.anchor.0,
+                    y: c.anchor.1,
+                },
+                bold,
+                italic,
+                underline,
+                color,
+                font_size,
+            }
+        })
+        .collect();
+
+    vec![Table {
+        rows,
+        cols,
+        bbox: Some(BoundingBox {
+            x_min: x_edges[0],
+            y_min: y_edges[0],
+            x_max: x_edges[cols],
+            y_max: y_edges[rows],
+        }),
+        x_edges,
+        y_edges,
+        cells: table_cells,
+    }]
 }
 
 fn first_utf16_text(data: &[u8]) -> Option<(String, usize)> {
@@ -308,73 +521,6 @@ fn looks_like_note_text(text: &str) -> bool {
         }
     }
     total >= 3 && common * 4 >= total * 3
-}
-
-fn tlv_color(data: &[u8], tag: u16) -> Option<Color> {
-    let marker = [0x18, 0x00, tag as u8, (tag >> 8) as u8];
-    for offset in 0..data.len().saturating_sub(22) {
-        if data[offset..offset + 4] == marker && data[offset + 21] == 0xFF {
-            return Some(Color {
-                r: data[offset + 20],
-                g: data[offset + 19],
-                b: data[offset + 18],
-            });
-        }
-    }
-    None
-}
-
-fn tlv_f32(data: &[u8], tag: u16) -> Option<f32> {
-    let marker = [0x18, 0x00, tag as u8, (tag >> 8) as u8];
-    for offset in 0..data.len().saturating_sub(24) {
-        if data[offset..offset + 4] == marker {
-            for value_offset in [18, 20, 24] {
-                let value = f32::from_le_bytes(
-                    data[offset + value_offset..offset + value_offset + 4]
-                        .try_into()
-                        .ok()?,
-                );
-                if value.is_finite() && (4.0..=96.0).contains(&value) {
-                    return Some(value);
-                }
-            }
-        }
-    }
-    None
-}
-
-fn parse_rich_text_runs(data: &[u8], text_len: usize) -> Vec<RichTextRun> {
-    let mut runs = Vec::new();
-    collect_style_runs(data, text_len, 0x05, true, false, &mut runs);
-    collect_style_runs(data, text_len, 0x06, false, true, &mut runs);
-    runs
-}
-
-fn collect_style_runs(
-    data: &[u8],
-    text_len: usize,
-    tag: u16,
-    bold: bool,
-    italic: bool,
-    runs: &mut Vec<RichTextRun>,
-) {
-    let marker = [0x18, 0x00, tag as u8, (tag >> 8) as u8];
-    for offset in 0..data.len().saturating_sub(22) {
-        if data[offset..offset + 4] != marker {
-            continue;
-        }
-        let start = u32::from_le_bytes(data[offset + 6..offset + 10].try_into().unwrap()) as usize;
-        let end = u32::from_le_bytes(data[offset + 10..offset + 14].try_into().unwrap()) as usize;
-        let enabled = u32::from_le_bytes(data[offset + 18..offset + 22].try_into().unwrap()) != 0;
-        if enabled && start < end && end <= text_len {
-            runs.push(RichTextRun {
-                start,
-                end,
-                bold,
-                italic,
-            });
-        }
-    }
 }
 
 /// Extract page UUIDs from `pageIdInfo.dat`.
@@ -436,6 +582,7 @@ impl<R: Read + Seek> Reader<R> {
             let mut buf = Vec::new();
             entry.read_to_end(&mut buf)?;
             parse_note_note(&buf, &mut metadata);
+            metadata.tables = parse_tables(&buf);
             note_text = parse_note_text(&buf);
         }
         if let Ok(mut entry) = archive.by_name("pageIdInfo.dat") {
@@ -509,11 +656,10 @@ impl<R: Read + Seek> Reader<R> {
         remap_media_indices(&mut page, &self.media_index_map);
         // The typed note body is rendered as the first page's text layer, matching
         // `parse_from_reader`.
-        if index == 0 {
-            if let Some(text) = self.metadata.note_text.clone() {
+        if index == 0
+            && let Some(text) = self.metadata.note_text.clone() {
                 page.elements.push(crate::types::PageElement::TextBox(text));
             }
-        }
         Ok(page)
     }
 
