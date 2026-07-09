@@ -47,16 +47,44 @@ struct SceneImage {
     media_index: usize,
 }
 
+/// One uniform-style piece of a text line. The worker measures and wraps these
+/// with real font metrics (the one text step that can't be done here), then
+/// draws text + highlight/underline/strikethrough decorations.
+#[derive(Serialize)]
+struct SceneTextSeg {
+    text: String,
+    /// Em size in page units.
+    font: f64,
+    bold: bool,
+    italic: bool,
+    underline: bool,
+    strike: bool,
+    /// Foreground color; `None` = contrast ink (the stored default #252525 is
+    /// mapped to `None`, mirroring pysdocx's contrast fallback).
+    color: Option<[u8; 3]>,
+    highlight: Option<[u8; 3]>,
+}
+
+#[derive(Serialize)]
+struct SceneTextLine {
+    /// Baseline-to-baseline advance to the NEXT line, in page units.
+    advance: f64,
+    /// Empty for a blank line (the advance still applies).
+    segs: Vec<SceneTextSeg>,
+}
+
+/// A rich text block with layout fully resolved here in the Scene builder
+/// (anchor/wrap/rotation per pysdocx `_text_box_layout`); only glyph
+/// measurement — and thus the actual wrap points — happens in the worker.
 #[derive(Serialize)]
 struct SceneText {
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    text: String,
-    color: Option<[u8; 3]>,
-    font_size: Option<f32>,
-    rotation: Option<f64>,
+    /// Logical top-left origin of the (unrotated) text flow, page coords.
+    anchor: [f64; 2],
+    /// Max line width in page units before wrapping.
+    wrap_width: f64,
+    /// Clockwise rotation applied around `anchor`, degrees.
+    angle_deg: f64,
+    lines: Vec<SceneTextLine>,
 }
 
 // ⚠ Render heuristics, NOT format facts (docs/format/heuristics.md "Grid template
@@ -173,16 +201,87 @@ struct SceneShape {
     heads: Vec<[[f64; 2]; 3]>,
 }
 
+/// One table cell, fully resolved: position, final font size (shrink-to-fit
+/// already applied), style, and an optional underline segment.
+#[derive(Serialize)]
+struct SceneTableCell {
+    /// Text start x (cell left edge + padding), page units.
+    x: f64,
+    /// Vertical center of the cell row, page units (draw middle-aligned).
+    y: f64,
+    text: String,
+    /// Em size in page units.
+    font: f64,
+    bold: bool,
+    italic: bool,
+    /// Foreground; `None` = contrast ink.
+    color: Option<[u8; 3]>,
+    /// Underline segment `[x0, x1, y]` in page units, when the cell is underlined.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    underline: Option<[f64; 3]>,
+}
+
+/// A table resolved to grid lines + positioned cells (pysdocx `render_table`).
+#[derive(Serialize)]
+struct SceneTable {
+    x_edges: Vec<f64>,
+    y_edges: Vec<f64>,
+    line_color: [u8; 3],
+    /// Grid line width in page units.
+    line_width: f64,
+    cells: Vec<SceneTableCell>,
+}
+
+/// A collapsed sticky-note (attached sub-note) placement. The attachment is a
+/// nested `.sdocx` that is not rendered recursively; the worker draws the
+/// collapsed square (bg fill + dashed border + label), mirroring pysdocx's
+/// "at least enumerate them" bar with the decoded bg color on top.
+#[derive(Serialize)]
+struct SceneSticky {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    media_index: usize,
+    bg_color: Option<[u8; 3]>,
+}
+
 #[derive(Serialize)]
 struct PageScene {
     width: u32,
     height: u32,
-    background: Option<[u8; 3]>,
+    /// Paper (background) fill color, RE-decoded from the `.page` header
+    /// (`sdocx::Page::background_color`; every page carries one). Default white
+    /// if ever absent.
+    paper: [u8; 3],
+    /// Ink for content with NO stored color (or color == paper), resolved here in
+    /// Rust (single source) from the paper luminance — NOT the old bogus "dark
+    /// mode" flag. Mirrors pysdocx `_contrast_ink` (white on dark paper, dark on
+    /// light). Content that HAS a stored color is drawn with that color literally
+    /// (see `inkFor` in the worker), so a dark-inked note on a dark paper stays
+    /// dark-on-dark — faithful to Samsung (verified: the `Nera` note's strokes are
+    /// stored `(37,37,37)`, drawn dark on `#010101`, not flipped to white).
+    default_ink: [u8; 3],
     template: Option<SceneTemplate>,
     strokes: Vec<SceneStroke>,
     images: Vec<SceneImage>,
     shapes: Vec<SceneShape>,
     texts: Vec<SceneText>,
+    sticky_notes: Vec<SceneSticky>,
+    tables: Vec<SceneTable>,
+}
+
+/// ⚠ Render heuristic (pysdocx `_contrast_ink`): legible default ink for a paper
+/// color — near-black on light paper, white on dark. The 140 luminance threshold
+/// and the `#1a1a1a` near-black match the app's existing ink.
+fn contrast_ink(paper: [u8; 3]) -> [u8; 3] {
+    let [r, g, b] = paper;
+    let luminance = 0.299 * r as f64 + 0.587 * g as f64 + 0.114 * b as f64;
+    if luminance > 140.0 {
+        [0x1a, 0x1a, 0x1a]
+    } else {
+        [0xff, 0xff, 0xff]
+    }
 }
 
 #[derive(Serialize)]
@@ -331,6 +430,291 @@ fn build_scene_shape(s: &sdocx::Shape) -> SceneShape {
     }
 }
 
+// ⚠ Render heuristics, NOT format facts — the text-box layout constants mirror
+// pysdocx render.py (render_page's text-box path + _text_box_layout +
+// TYPED_TEXT_*): font scale 1.36 Samsung-units→matplotlib-pt, 12pt floor,
+// line height 3.2·font (36 floor), blank-line height 2·font (24 floor),
+// 8px inner padding, 18px wrap inset on rotated frames, and the typed-note
+// margins (64, 80) with 66/75 line/blank heights at 17pt. Glyph sizes reuse
+// the same pt→page-units bridge as line widths (MPL_PT_TO_PAGE_UNITS).
+const TEXT_DEFAULT_COLOR: [u8; 3] = [37, 37, 37];
+const TEXT_BOX_FRAME_WRAP_INSET: f64 = 18.0;
+const TYPED_TEXT_X0: f64 = 64.0;
+const TYPED_TEXT_Y0: f64 = 80.0;
+const TYPED_TEXT_FONTPT: f64 = 17.0;
+const TYPED_TEXT_LINE_H: f64 = 66.0;
+const TYPED_TEXT_BLANK_H: f64 = 75.0;
+
+/// Anchor/wrap parameters resolved from the box bbox + rotation
+/// (pysdocx `_text_box_layout`).
+fn text_box_layout(tb: &sdocx::RichTextBox) -> ([f64; 2], f64) {
+    let (x0, y0, x1, y1) = (tb.bbox.x_min, tb.bbox.y_min, tb.bbox.x_max, tb.bbox.y_max);
+    let angle = tb.rotation_degrees.unwrap_or(0.0).rem_euclid(360.0);
+    let box_w = f64::max(x1 - x0 - 16.0, 1.0);
+    let box_h = f64::max(y1 - y0 - 16.0, 1.0);
+
+    // Stored frame edge-midpoints give the exact logical origin and
+    // half-extents of a rotated frame; the bbox-only branches are fallbacks.
+    if let (Some(pts), true) = (tb.frame_midpoints, angle != 0.0) {
+        let cx = pts.iter().map(|p| p.x).sum::<f64>() / 4.0;
+        let cy = pts.iter().map(|p| p.y).sum::<f64>() / 4.0;
+        let theta = angle.to_radians();
+        let (ux, uy) = (theta.cos(), theta.sin());
+        let (vx, vy) = (-theta.sin(), theta.cos());
+        let half = |ax: f64, ay: f64| {
+            pts.iter()
+                .map(|p| ((p.x - cx) * ax + (p.y - cy) * ay).abs())
+                .fold(0.0, f64::max)
+        };
+        let (half_w, half_h) = (half(ux, uy), half(vx, vy));
+        if half_w > 1.0 && half_h > 1.0 {
+            let near_vertical = (angle - 90.0).abs() <= 15.0 || (angle - 270.0).abs() <= 15.0;
+            let wrap_inset = if near_vertical {
+                0.0
+            } else {
+                f64::min(TEXT_BOX_FRAME_WRAP_INSET, half_w - 1.0)
+            };
+            return (
+                [cx - ux * half_w - vx * half_h, cy - uy * half_w - vy * half_h],
+                f64::max(half_w * 2.0 - 2.0 * wrap_inset, 1.0),
+            );
+        }
+    }
+
+    let vertical_wrap_w = f64::min(box_w, f64::max(box_h, box_h * 1.6));
+    let vertical_anchor_pad = f64::min(f64::max(box_h * 0.1, 20.0), 36.0);
+    if (angle - 90.0).abs() <= 15.0 {
+        return ([x1 - vertical_anchor_pad, y0 + 8.0], vertical_wrap_w);
+    }
+    if (angle - 270.0).abs() <= 15.0 {
+        return ([x0 + vertical_anchor_pad, y1 - 8.0], vertical_wrap_w);
+    }
+    ([x0 + 8.0, y0 + 8.0], box_w)
+}
+
+/// Resolve a rich text block into positioned, styled, pre-measured-height lines
+/// (pysdocx `_render_rich_text`'s style expansion + line advances, minus the
+/// glyph-metric wrapping, which the worker does). A zero-area bbox marks the
+/// document-level typed note body, laid out from the page margins instead.
+fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
+    let is_note_body = tb.bbox.x_max <= tb.bbox.x_min || tb.bbox.y_max <= tb.bbox.y_min;
+    let (anchor, wrap_width, fontpt, line_h, blank_h) = if is_note_body {
+        (
+            [TYPED_TEXT_X0, TYPED_TEXT_Y0],
+            page_width - TYPED_TEXT_X0,
+            TYPED_TEXT_FONTPT,
+            TYPED_TEXT_LINE_H,
+            TYPED_TEXT_BLANK_H,
+        )
+    } else {
+        let (anchor, wrap_width) = text_box_layout(tb);
+        let fontpt = f64::max(tb.font_size.unwrap_or(11.0) as f64 * 1.36, 12.0);
+        (
+            anchor,
+            wrap_width,
+            fontpt,
+            f64::max(fontpt * 3.2, 36.0),
+            f64::max(fontpt * 2.0, 24.0),
+        )
+    };
+
+    // Per-character style arrays (pysdocx `_char_styles`).
+    let n = tb.text.chars().count();
+    let mut bold = vec![false; n];
+    let mut italic = vec![false; n];
+    let mut underline = vec![false; n];
+    let mut strike = vec![false; n];
+    let mut color: Vec<Option<[u8; 3]>> = vec![None; n];
+    let mut highlight: Vec<Option<[u8; 3]>> = vec![None; n];
+    let mut font_pt: Vec<Option<f64>> = vec![None; n];
+    for r in &tb.runs {
+        for i in r.start..r.end.min(n) {
+            bold[i] |= r.bold;
+            italic[i] |= r.italic;
+            underline[i] |= r.underline;
+            strike[i] |= r.strikethrough;
+        }
+    }
+    for c in &tb.colors {
+        let rgb = [c.color.r, c.color.g, c.color.b];
+        // The stored default color renders as contrast ink, not literally.
+        if rgb != TEXT_DEFAULT_COLOR {
+            for slot in color.iter_mut().take(c.end.min(n)).skip(c.start) {
+                *slot = Some(rgb);
+            }
+        }
+    }
+    for h in &tb.highlights {
+        for slot in highlight.iter_mut().take(h.end.min(n)).skip(h.start) {
+            *slot = Some([h.color.r, h.color.g, h.color.b]);
+        }
+    }
+    for f in &tb.font_sizes {
+        for slot in font_pt.iter_mut().take(f.end.min(n)).skip(f.start) {
+            *slot = Some(f.size as f64 * 1.36);
+        }
+    }
+
+    let chars: Vec<char> = tb.text.chars().collect();
+    let mut lines = Vec::new();
+    let mut gi = 0usize;
+    for line in tb.text.split('\n') {
+        let len = line.chars().count();
+        if len == 0 {
+            lines.push(SceneTextLine {
+                advance: blank_h,
+                segs: Vec::new(),
+            });
+            gi += 1;
+            continue;
+        }
+        // Line advance scales with the largest per-run font on the line
+        // (pysdocx `_line_advance` with no paragraph metadata).
+        let line_fontpt = (gi..gi + len)
+            .filter_map(|i| font_pt.get(i).copied().flatten())
+            .fold(fontpt, f64::max);
+        let advance = f64::max(
+            line_h * f64::max(line_fontpt / fontpt, 1.0),
+            line_fontpt * 2.25,
+        );
+
+        // Group consecutive equal-style characters into segments.
+        let mut segs = Vec::new();
+        let mut i = 0usize;
+        while i < len {
+            let style_at = |k: usize| {
+                (
+                    bold[gi + k],
+                    italic[gi + k],
+                    underline[gi + k],
+                    strike[gi + k],
+                    color[gi + k],
+                    highlight[gi + k],
+                    font_pt[gi + k].map(|v| v.to_bits()),
+                )
+            };
+            let here = style_at(i);
+            let mut j = i + 1;
+            while j < len && style_at(j) == here {
+                j += 1;
+            }
+            let seg_fontpt = font_pt[gi + i].unwrap_or(fontpt);
+            segs.push(SceneTextSeg {
+                text: chars[gi + i..gi + j].iter().collect(),
+                font: seg_fontpt * MPL_PT_TO_PAGE_UNITS,
+                bold: here.0,
+                italic: here.1,
+                underline: here.2,
+                strike: here.3,
+                color: here.4,
+                highlight: here.5,
+            });
+            i = j;
+        }
+        lines.push(SceneTextLine { advance, segs });
+        gi += len + 1;
+    }
+
+    SceneText {
+        anchor,
+        wrap_width,
+        angle_deg: tb.rotation_degrees.unwrap_or(0.0).rem_euclid(360.0),
+        lines,
+    }
+}
+
+// ⚠ Render heuristics, NOT format facts — table drawing constants mirror
+// pysdocx render.py `render_table`: grid line #8a8f9a at 1.2pt, 18px cell
+// padding, 15pt base font with a shrink-to-fit approximation, and the
+// (unit-mixing but calibrated) underline offset `cy - font_pt * 0.55`.
+const TABLE_LINE_COLOR: [u8; 3] = [0x8A, 0x8F, 0x9A];
+const TABLE_FONTPT: f64 = 15.0;
+const TABLE_PAD: f64 = 18.0;
+
+fn build_scene_table(t: &sdocx::Table) -> SceneTable {
+    let cells = t
+        .cells
+        .iter()
+        .filter(|c| c.col + 1 < t.x_edges.len() && c.row + 1 < t.y_edges.len())
+        .map(|c| {
+            let x0 = t.x_edges[c.col];
+            let x1 = t.x_edges[c.col + 1];
+            let cx = x0 + TABLE_PAD;
+            let cy = (t.y_edges[c.row] + t.y_edges[c.row + 1]) / 2.0;
+            let base_pt = f64::min(c.font_size.map(f64::from).unwrap_or(TABLE_FONTPT), TABLE_FONTPT);
+            let usable = f64::max(x1 - x0 - 2.0 * TABLE_PAD, 1.0);
+            let approx_width = c.text.chars().count().max(1) as f64 * base_pt * 7.0;
+            let cell_fontpt = f64::max(5.5, f64::min(base_pt, base_pt * usable / approx_width));
+            let rgb = c.color.as_ref().map(color_arr).filter(|&v| v != TEXT_DEFAULT_COLOR);
+            SceneTableCell {
+                x: cx,
+                y: cy,
+                text: c.text.clone(),
+                font: cell_fontpt * MPL_PT_TO_PAGE_UNITS,
+                bold: c.bold,
+                italic: c.italic,
+                color: rgb,
+                underline: c
+                    .underline
+                    .then_some([cx, x1 - TABLE_PAD, cy - cell_fontpt * 0.55]),
+            }
+        })
+        .collect();
+    SceneTable {
+        x_edges: t.x_edges.clone(),
+        y_edges: t.y_edges.clone(),
+        line_color: TABLE_LINE_COLOR,
+        line_width: 1.2 * MPL_PT_TO_PAGE_UNITS,
+        cells,
+    }
+}
+
+/// ⚠ Heuristic (pysdocx `render_document`/`_typed_text_target_page`): note.note
+/// carries no page reference for its document-level tables, so the page is
+/// guessed — if the typed text names a target page ("pagina N"), the table goes
+/// on the previous page; otherwise page 4 (matches the benchmark sample).
+/// Returned 0-based.
+fn table_target_page(typed_text: Option<&str>) -> usize {
+    if let Some(text) = typed_text {
+        let lower = text.to_lowercase();
+        let bytes = lower.as_bytes();
+        let mut search = 0usize;
+        while let Some(rel) = lower[search..].find("pagina") {
+            let at = search + rel;
+            search = at + 1;
+            // \b before
+            if at > 0 && (bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_') {
+                continue;
+            }
+            // \s+ then digits then \b
+            let mut i = at + "pagina".len();
+            let ws_start = i;
+            while i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'\t' || bytes[i] == b'\n') {
+                i += 1;
+            }
+            if i == ws_start {
+                continue;
+            }
+            let digit_start = i;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+            if i == digit_start
+                || (i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_'))
+            {
+                continue;
+            }
+            if let Ok(n) = lower[digit_start..i].parse::<usize>() {
+                if n > 1 {
+                    return n - 2; // 1-based "previous page" → 0-based
+                }
+                break;
+            }
+        }
+    }
+    3 // 1-based page 4
+}
+
 fn build_page_scene(page: &sdocx::Page) -> PageScene {
     let strokes = page
         .strokes
@@ -353,6 +737,7 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
     let mut images = Vec::new();
     let mut shapes = Vec::new();
     let mut texts = Vec::new();
+    let mut sticky_notes = Vec::new();
     for el in &page.elements {
         match el {
             sdocx::PageElement::Shape(s) => shapes.push(build_scene_shape(s)),
@@ -363,15 +748,20 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
                 h: bbox.y_max - bbox.y_min,
                 media_index: *media_index,
             }),
-            sdocx::PageElement::TextBox(tb) => texts.push(SceneText {
-                x: tb.bbox.x_min,
-                y: tb.bbox.y_min,
-                w: tb.bbox.x_max - tb.bbox.x_min,
-                h: tb.bbox.y_max - tb.bbox.y_min,
-                text: tb.text.clone(),
-                color: tb.color.as_ref().map(color_arr),
-                font_size: tb.font_size,
-                rotation: tb.rotation_degrees,
+            sdocx::PageElement::TextBox(tb) => {
+                texts.push(build_scene_text(tb, page.width as f64))
+            }
+            sdocx::PageElement::StickyNote {
+                bbox,
+                media_index,
+                bg_color,
+            } => sticky_notes.push(SceneSticky {
+                x: bbox.x_min,
+                y: bbox.y_min,
+                w: bbox.x_max - bbox.x_min,
+                h: bbox.y_max - bbox.y_min,
+                media_index: *media_index,
+                bg_color: bg_color.as_ref().map(color_arr),
             }),
         }
     }
@@ -392,15 +782,19 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
         }
     });
 
+    let paper = page.background_color.as_ref().map(color_arr).unwrap_or([255, 255, 255]);
     PageScene {
         width: page.width,
         height: page.height,
-        background: page.background_color.as_ref().map(color_arr),
+        paper,
+        default_ink: contrast_ink(paper),
         template,
         strokes,
         images,
         shapes,
         texts,
+        sticky_notes,
+        tables: Vec::new(),
     }
 }
 
@@ -426,7 +820,7 @@ async fn open_document(path: String, state: State<'_, AppState>) -> Result<DocMe
 /// prefetch) parse in parallel instead of queueing on one page at a time.
 #[tauri::command]
 async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<PageScene, String> {
-    let (bytes, note_text, media_map) = {
+    let (bytes, note_text, media_map, tables) = {
         let mut guard = state.reader.lock().unwrap();
         let reader = guard.as_mut().ok_or("no document loaded")?;
         let bytes = reader.page_bytes(index).map_err(|e| e.to_string())?;
@@ -434,14 +828,21 @@ async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<Page
         let note_text = (index == 0)
             .then(|| reader.metadata().note_text.clone())
             .flatten();
-        (bytes, note_text, reader.media_index_map().clone())
+        // Document-level tables go on their heuristic target page (see
+        // table_target_page).
+        let meta = reader.metadata();
+        let typed = meta.note_text.as_ref().map(|t| t.text.clone());
+        let tables = if !meta.tables.is_empty() && index == table_target_page(typed.as_deref()) { meta.tables.clone() } else { Default::default() };
+        (bytes, note_text, reader.media_index_map().clone(), tables)
     };
     let mut page = sdocx::parse_page(&bytes).map_err(|e| e.to_string())?;
     sdocx::remap_media_indices(&mut page, &media_map);
     if let Some(text) = note_text {
         page.elements.push(sdocx::PageElement::TextBox(text));
     }
-    Ok(build_page_scene(&page))
+    let mut scene = build_page_scene(&page);
+    scene.tables = tables.iter().map(build_scene_table).collect();
+    Ok(scene)
 }
 
 /// Read every page's pixel size cheaply (headers only) for continuous-scroll layout.
@@ -503,6 +904,46 @@ mod tests {
         let bytes = reader.page_bytes(index).expect("page bytes");
         let page = sdocx::parse_page(&bytes).expect("parse page");
         build_page_scene(&page)
+    }
+
+    /// `contrast_ink` mirrors pysdocx `_contrast_ink`: near-black on light paper,
+    /// white on dark.
+    #[test]
+    fn contrast_ink_by_luminance() {
+        assert_eq!(contrast_ink([252, 252, 252]), [0x1a, 0x1a, 0x1a]); // white paper
+        assert_eq!(contrast_ink([245, 221, 221]), [0x1a, 0x1a, 0x1a]); // pink paper
+        assert_eq!(contrast_ink([37, 37, 37]), [0xff, 0xff, 0xff]); // dark paper
+    }
+
+    /// The Scene resolves paper + default_ink per page from the RE-decoded `.page`
+    /// paper color (NOT the bogus dark-mode flag): the `Rosina` pink sample proves
+    /// the light path (dark ink), and the `Nera` black-paper sample proves the dark
+    /// path — luminance flips the ink to white automatically.
+    #[test]
+    fn scene_resolves_paper_and_ink() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../samples/test-background");
+        let cases = [
+            ("Rosina-Liscio_260709_125531.sdocx", [245, 221, 221], [0x1a, 0x1a, 0x1a]),
+            ("Nera-Liscio_260709_140421.sdocx", [1, 1, 1], [0xff, 0xff, 0xff]),
+        ];
+        let mut checked = 0;
+        for (name, paper, ink) in cases {
+            let path = dir.join(name);
+            if !path.exists() {
+                eprintln!("skipping: {name} not present");
+                continue;
+            }
+            let mut reader = sdocx::open(&path).expect("open sample");
+            for i in 0..reader.page_count() {
+                let sc = scene(&mut reader, i);
+                assert_eq!(sc.paper, paper, "{name} paper page {i}");
+                assert_eq!(sc.default_ink, ink, "{name} ink page {i}");
+                checked += 1;
+            }
+        }
+        if checked == 0 {
+            eprintln!("no test-background samples present");
+        }
     }
 
     /// The squared sample uses built-in template id 4 → grid at 72.5 pitch.
@@ -578,6 +1019,106 @@ mod tests {
         // 3 single arrows + 2 double arrows on the lines/arrows page (the other
         // 24 "arrow" objects are plain lines with no heads).
         assert_eq!((single_heads, double_heads), (3, 2));
+    }
+
+    /// The text sample carries 3 boxes: horizontal, 16°-rotated, and a
+    /// 90°-vertical one with a bold run (chars 37..47) and an italic run
+    /// (52..59). The Scene must expose resolved layout + styled segments.
+    #[test]
+    fn text_boxes_scene_resolves_layout_and_styles() {
+        let Some(mut reader) = sample("OnlyTextTypeWritten_260701_180427.sdocx") else {
+            return;
+        };
+        let page_idx = (0..reader.page_count())
+            .find(|&i| !scene(&mut reader, i).texts.is_empty())
+            .expect("a page with text boxes");
+        let texts = scene(&mut reader, page_idx).texts;
+        assert_eq!(texts.len(), 3);
+
+        for t in &texts {
+            assert!(t.wrap_width > 1.0, "wrap width resolved");
+            assert!(!t.lines.is_empty());
+            for line in &t.lines {
+                assert!(line.advance > 0.0);
+            }
+            // Default 11-unit font → 14.96pt → page units via the pt bridge.
+            let seg = t.lines.iter().flat_map(|l| &l.segs).next().expect("segs");
+            let expected_font = 11.0 * 1.36 * MPL_PT_TO_PAGE_UNITS;
+            assert!((seg.font - expected_font).abs() < 1e-6, "font {}", seg.font);
+        }
+
+        let vertical = texts
+            .iter()
+            .find(|t| (t.angle_deg - 90.0).abs() < 0.01)
+            .expect("90° box");
+        // Bold 37..47 and italic 52..59 split the flow into styled segments.
+        let flat: String = vertical
+            .lines
+            .iter()
+            .flat_map(|l| &l.segs)
+            .map(|s| s.text.as_str())
+            .collect::<Vec<_>>()
+            .join("");
+        let bold_text: String = vertical
+            .lines
+            .iter()
+            .flat_map(|l| &l.segs)
+            .filter(|s| s.bold)
+            .map(|s| s.text.as_str())
+            .collect();
+        let italic_text: String = vertical
+            .lines
+            .iter()
+            .flat_map(|l| &l.segs)
+            .filter(|s| s.italic)
+            .map(|s| s.text.as_str())
+            .collect();
+        let chars: Vec<char> = flat.chars().collect();
+        assert_eq!(bold_text, chars[37..47].iter().collect::<String>());
+        assert_eq!(italic_text, chars[52..59].iter().collect::<String>());
+
+        // The rotated boxes resolve their anchor from the stored frame
+        // midpoints: the anchor must sit inside a page-sized region, not at
+        // the raw bbox corner.
+        let rotated = texts
+            .iter()
+            .find(|t| (t.angle_deg - 16.0).abs() < 0.5)
+            .expect("16° box");
+        assert!(rotated.anchor[0].is_finite() && rotated.anchor[1].is_finite());
+    }
+
+    /// "pagina N" in the typed text places tables on the previous page
+    /// (0-based N-2); no match falls back to page 4 (0-based 3).
+    #[test]
+    fn table_target_page_heuristic() {
+        assert_eq!(table_target_page(Some("vedi tabella a Pagina 5 ok")), 3);
+        assert_eq!(table_target_page(Some("pagina 2")), 0);
+        assert_eq!(table_target_page(Some("nessun riferimento")), 3);
+        assert_eq!(table_target_page(None), 3);
+        // No word boundary / no digits → fallback.
+        assert_eq!(table_target_page(Some("impaginazione 7")), 3);
+        assert_eq!(table_target_page(Some("pagina uno")), 3);
+    }
+
+    /// The 4×3 table sample resolves to grid edges + 12 positioned cells with
+    /// shrink-to-fit fonts.
+    #[test]
+    fn table_scene_resolves_cells() {
+        let Some(reader) = sample("Allsamsungnotes_260630_113259.sdocx") else {
+            return;
+        };
+        let tables = reader.metadata().tables.clone();
+        assert_eq!(tables.len(), 1);
+        let st = build_scene_table(&tables[0]);
+        assert_eq!((st.x_edges.len(), st.y_edges.len()), (4, 5));
+        assert_eq!(st.cells.len(), 12);
+        for cell in &st.cells {
+            assert!(cell.font > 0.0);
+            assert!(cell.x > st.x_edges[0] && cell.x < st.x_edges[3]);
+            assert!(cell.y > st.y_edges[0] && cell.y < st.y_edges[4]);
+            // The stored default gray maps to None (contrast ink).
+            assert_eq!(cell.color, None);
+        }
     }
 }
 

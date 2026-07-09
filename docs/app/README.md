@@ -9,7 +9,7 @@ this is the single, living plan for the app built on top of them.
 > the handoff between sessions for the app work, the way `future_todo.md` is for
 > the format RE.
 >
-> Status legend: ☐ todo · ◐ in progress · ☑ done. Last updated 2026-07-08.
+> Status legend: ☐ todo · ◐ in progress · ☑ done. Last updated 2026-07-09.
 
 ---
 
@@ -244,6 +244,21 @@ Each phase ends with a concrete, checkable deliverable.
   Rust and the worker drawer). The image render-diff harness was deferred (see
   Decision log); these two ports are gated by the parser parity test + scene unit
   tests + visual check vs pysdocx renders instead.
+  *Progress (2026-07-09):* **text boxes ☑** (parser rewritten to pysdocx parity —
+  marker-based text, full TLV style runs incl. underline/strike/per-run
+  colors/highlights/font-sizes, header-decoded rotation + frame midpoints; 8/8
+  boxes byte-equal vs the pysdocx fixture in `crates/sdocx/tests/text_boxes.rs`;
+  `SceneText` resolves anchor/wrap/rotation + styled segments in Rust, the worker
+  does measured wrapping + decorations), **sticky notes ☑**
+  (`PageElement::StickyNote` from the `co_attach_file` property-bag scan, 3/3
+  placements vs pysdocx in `tests/sticky_notes.rs`; drawn as the collapsed square
+  with the decoded `skn_bg_color` fill + dashed border) and **tables ☑**
+  (`parse_tables` port — anchor-clustered grid + per-cell whole-cell styles,
+  gated by `tests/tables.rs` vs the pysdocx fixture 18/18 cells; `SceneTable`
+  resolves grid + shrink-to-fit cell fonts, placement uses pysdocx's
+  page-heuristic). Remaining in Phase 1: typed-text pagination + substitute
+  font, absolute-f64 strokes (blocked on a sample), audio indicators, and the
+  deferred SSIM harness.
 
 - **☐ Phase 2 — Performance (priority #2).**
   Confirm/optimize lazy per-page rendering; resolve any SVG-vs-canvas or
@@ -294,6 +309,27 @@ Append-only; newest last. Record what changed and why.
   Scene builder (`opensdocx/src-tauri/src/lib.rs`), flagged `⚠ Heuristic`; the
   worker draws only what the Scene says. Dev affordance added: `VITE_OPEN_FILE`
   (+ optional `VITE_OPEN_PAGE`) auto-opens a file in `tauri dev` for verification.
+
+- **2026-07-09** — Phase 1 round 2 (text boxes / sticky notes / tables), still
+  without the §7 image-diff harness (same gate as 2026-07-08: parser parity
+  fixtures + scene unit tests + manual visual check). Notable choices:
+  (a) the `crates/sdocx` text-box parser was **rewritten to pysdocx parity**
+  (object-header bbox/rotation/frame-midpoints instead of the legacy heuristic
+  scan) and the TLV style-run scanner is now **shared** between page text boxes
+  and note.note typed text; (b) rich-text **glyph measurement stays in the
+  worker** (canvas `measureText`) while everything else (anchor, wrap width,
+  per-run styles, line advances, shrink-to-fit table fonts) is resolved in the
+  Rust Scene builder — same split as stroke smoothing (risk ②), to be
+  centralized when the SVG/diff path is built; (c) sticky notes render as their
+  collapsed square **filled with the decoded `skn_bg_color`** (Android ARGB
+  color-int in the attachment property bag, `-6482` = the default sticky
+  yellow — ⚠ interpretation verified on 3/3 records, one distinct value seen);
+  (d) tables keep pysdocx's **page-placement heuristic** ("pagina N" in the
+  typed text → page N−1, else page 4) — note.note has no page reference for
+  document-level content, so any placement is a render decision; (e) tables use
+  the scan-based `parse_tables` model, NOT the byte-exact type-22 object parse —
+  the latter needs the full sequential note-doc port, which lands with the
+  typed-text work.
 
 ## 10b. Rendering architecture (decided 2026-07-07)
 

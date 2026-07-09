@@ -12,7 +12,21 @@ interface Stroke {
   pressures?: number[];
 }
 interface SImage { x: number; y: number; w: number; h: number; media_index: number }
-interface SText { x: number; y: number; w: number; h: number; text: string; color: RGB | null; font_size: number | null }
+// Rich text: layout (anchor/wrap/rotation/line advances) and styling come fully
+// resolved from the Rust Scene builder; only glyph measurement — and thus the
+// actual wrap points — happens here, since Rust has no font metrics.
+interface STextSeg {
+  text: string;
+  font: number; // em size in page units
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strike: boolean;
+  color: RGB | null;
+  highlight: RGB | null;
+}
+interface STextLine { advance: number; segs: STextSeg[] }
+interface SText { anchor: [number, number]; wrap_width: number; angle_deg: number; lines: STextLine[] }
 // Grid style (spacing/origin/color/line_width) comes fully resolved from the Rust
 // Scene builder — no style constants here (single source, docs/app/README.md risk ②).
 interface STemplate { id: number; kind: string; spacing?: number; origin?: [number, number]; color?: RGB; line_width?: number }
@@ -35,41 +49,56 @@ interface SShape {
   outline?: SOutlineOp[];
   heads?: [number, number][][];
 }
+interface SSticky { x: number; y: number; w: number; h: number; media_index: number; bg_color: RGB | null }
+// Table cells arrive fully resolved (position, shrink-to-fit font, style,
+// underline segment) from the Scene builder; the worker only strokes the grid
+// and fills the texts.
+interface STableCell {
+  x: number;
+  y: number;
+  text: string;
+  font: number;
+  bold: boolean;
+  italic: boolean;
+  color: RGB | null;
+  underline?: [number, number, number]; // x0, x1, y
+}
+interface STable { x_edges: number[]; y_edges: number[]; line_color: RGB; line_width: number; cells: STableCell[] }
 interface PageScene {
   width: number;
   height: number;
-  background: RGB | null;
+  paper: RGB;        // RE-decoded page paper color (fill)
+  default_ink: RGB;  // paper-contrast ink, resolved in Rust
   template: STemplate | null;
   strokes: Stroke[];
   images: SImage[];
   shapes: SShape[];
   texts: SText[];
+  sticky_notes: SSticky[];
+  tables: STable[];
 }
 interface Job {
   id: number;
   scene: PageScene;
   scale: number; // device px per page unit
-  darkMode: boolean;
-  docBg: RGB | null;
   images: { index: number; bitmap: ImageBitmap }[];
 }
 
 function rgb(c: RGB | null, fb: string): string {
   return c ? `rgb(${c[0]},${c[1]},${c[2]})` : fb;
 }
-function ink(c: RGB | null, dark: boolean): string {
-  return rgb(c, dark ? "#ffffff" : "#1a1a1a");
+function css(c: RGB): string {
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
-// A shape whose stored color matches the canvas exactly is using the "default ink"
-// indicator, not a deliberate same-as-background color — fall back to a contrasting
-// ink (mirrors pysdocx render_shape; a failed color scan defaults to 37,37,37 there).
-function shapeInk(c: RGB | null, bg: RGB | null, dark: boolean): string {
-  const eff: RGB = c ?? [37, 37, 37];
-  const bgEff: RGB = bg ?? (dark ? [37, 37, 37] : [255, 255, 255]);
-  if (eff[0] === bgEff[0] && eff[1] === bgEff[1] && eff[2] === bgEff[2]) {
-    return dark ? "#ffffff" : "#1a1a1a";
-  }
-  return rgb(eff, "#1a1a1a");
+// Effective ink for a piece of content: its own color, unless that color is
+// absent OR equal to the paper (the "default ink" indicator) — then the
+// paper-contrast ink resolved in Rust (scene.default_ink). Mirrors pysdocx
+// `if color is None or color == bg_color: color = default_ink`. Both `paper`
+// and `di` come per-page from the Scene builder (single source), so the old
+// document-level "dark mode" flag is gone.
+function inkFor(c: RGB | null, paper: RGB, di: RGB): string {
+  if (!c || (c[0] === paper[0] && c[1] === paper[1] && c[2] === paper[2])) return css(di);
+  return css(c);
 }
 
 function drawShape(c: OffscreenCanvasRenderingContext2D, s: SShape): void {
@@ -155,6 +184,139 @@ function drawTapered(c: OffscreenCanvasRenderingContext2D, s: Stroke, base: numb
   c.stroke(strokePath(pts, from, pts.length - 1));
 }
 
+function segFont(seg: STextSeg): string {
+  return `${seg.italic ? "italic " : ""}${seg.bold ? "bold " : ""}${seg.font}px sans-serif`;
+}
+
+// Longest prefix of `text` whose measured width fits in `max` (binary search,
+// mirrors pysdocx _fit_segment_prefix).
+function fitPrefix(c: OffscreenCanvasRenderingContext2D, text: string, max: number): number {
+  let lo = 1, hi = text.length, best = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (c.measureText(text.slice(0, mid)).width <= max) { best = mid; lo = mid + 1; }
+    else hi = mid - 1;
+  }
+  return best;
+}
+
+// Split for wrapping: cut at the last whitespace at/before fitLen when there is
+// one, else hard-cut (pysdocx _wrap_cut).
+function wrapCut(text: string, fitLen: number): [string, string] {
+  if (fitLen >= text.length) return [text, ""];
+  let cut = fitLen;
+  const ws = Math.max(text.lastIndexOf(" ", fitLen), text.lastIndexOf("\t", fitLen));
+  if (ws > 0) cut = ws + 1;
+  const head = text.slice(0, cut);
+  const tail = text.slice(cut).replace(/^[ \t]+/, "");
+  if (!head && text) return [text.slice(0, 1), text.slice(1)];
+  return [head, tail];
+}
+
+// Draw one measured segment piece at (x, y): highlight box behind, glyphs, then
+// underline/strikethrough decoration lines (pysdocx _draw_text_segment).
+function drawSegPiece(
+  c: OffscreenCanvasRenderingContext2D,
+  seg: STextSeg,
+  text: string,
+  x: number,
+  y: number,
+  paper: RGB,
+  di: RGB,
+): number {
+  c.font = segFont(seg);
+  const m = c.measureText(text);
+  const w = m.width;
+  const asc = m.fontBoundingBoxAscent, desc = m.fontBoundingBoxDescent;
+  const h = Number.isFinite(asc + desc) && asc + desc > 0 ? asc + desc : seg.font * 1.2;
+  if (seg.highlight) {
+    c.fillStyle = rgb(seg.highlight, "#ffff00");
+    c.fillRect(x, y, w, h);
+  }
+  const fg = inkFor(seg.color, paper, di);
+  c.fillStyle = fg;
+  c.fillText(text, x, y);
+  if (seg.underline || seg.strike) {
+    c.strokeStyle = fg;
+    // pysdocx decoration lines are 1.3 matplotlib pt (the Scene's pt→page-units
+    // bridge is 3.40).
+    c.lineWidth = 1.3 * 3.4;
+    if (seg.underline) {
+      c.beginPath();
+      c.moveTo(x, y + h);
+      c.lineTo(x + w, y + h);
+      c.stroke();
+    }
+    if (seg.strike) {
+      c.beginPath();
+      c.moveTo(x, y + h / 2);
+      c.lineTo(x + w, y + h / 2);
+      c.stroke();
+    }
+  }
+  return w;
+}
+
+// Lay out and draw one rich text block: rotate around the anchor, then flow
+// each line's styled segments with measured wrapping (pysdocx
+// _render_rich_text's segment loop, paragraphs excluded — text boxes have none).
+function drawRichText(c: OffscreenCanvasRenderingContext2D, t: SText, paper: RGB, di: RGB): void {
+  c.save();
+  c.translate(t.anchor[0], t.anchor[1]);
+  if (t.angle_deg) c.rotate((t.angle_deg * Math.PI) / 180);
+  c.lineCap = "butt";
+  let y = 0;
+  for (const line of t.lines) {
+    let x = 0;
+    for (const seg of line.segs) {
+      let rest = seg.text;
+      while (rest) {
+        c.font = segFont(seg);
+        const w = c.measureText(rest).width;
+        if (x + w <= t.wrap_width) {
+          x += drawSegPiece(c, seg, rest, x, y, paper, di);
+          rest = "";
+          continue;
+        }
+        const fit = fitPrefix(c, rest, t.wrap_width - x);
+        if (fit <= 0) {
+          if (x === 0) {
+            // Nothing fits even from the margin: draw one char to guarantee progress.
+            x += drawSegPiece(c, seg, rest.slice(0, 1), x, y, paper, di);
+            rest = rest.slice(1);
+          }
+          x = 0;
+          y += line.advance;
+          continue;
+        }
+        // A styled segment that would split mid-word only because the line is
+        // already partially filled moves to the next line whole (pysdocx rule).
+        if (x > 0 && fit < rest.length && !/[ \t]/.test(rest.slice(0, fit))) {
+          if (c.measureText(rest).width <= t.wrap_width) {
+            x = 0;
+            y += line.advance;
+            continue;
+          }
+        }
+        const [head, tail] = wrapCut(rest, fit);
+        if (!head) {
+          x = 0;
+          y += line.advance;
+          continue;
+        }
+        x += drawSegPiece(c, seg, head, x, y, paper, di);
+        if (tail) {
+          x = 0;
+          y += line.advance;
+        }
+        rest = tail;
+      }
+    }
+    y += line.advance;
+  }
+  c.restore();
+}
+
 self.onmessage = (e: MessageEvent<Job>) => {
   const { id } = e.data;
   try {
@@ -167,15 +329,16 @@ self.onmessage = (e: MessageEvent<Job>) => {
 };
 
 function renderJob(job: Job): void {
-  const { id, scene, scale, darkMode, docBg, images } = job;
+  const { id, scene, scale, images } = job;
+  const paper = scene.paper;
+  const di = scene.default_ink; // paper-contrast ink (resolved in Rust)
   const bw = Math.max(1, Math.round(scene.width * scale));
   const bh = Math.max(1, Math.round(scene.height * scale));
   const canvas = new OffscreenCanvas(bw, bh);
   const c = canvas.getContext("2d")!;
   c.scale(scale, scale);
 
-  const bg = scene.background ?? docBg;
-  c.fillStyle = rgb(bg, darkMode ? "#252525" : "#ffffff");
+  c.fillStyle = css(paper);
   c.fillRect(0, 0, scene.width, scene.height);
 
   // Squared-paper template: above the flat fill, below everything else (matches
@@ -209,13 +372,13 @@ function renderJob(job: Job): void {
     if (s.points.length === 0) continue;
     const base = Math.max(s.width, 0.5);
     if (s.points.length === 1) {
-      c.fillStyle = ink(s.color, darkMode);
+      c.fillStyle = inkFor(s.color, paper, di);
       c.beginPath();
       c.arc(s.points[0][0], s.points[0][1], base / 2, 0, Math.PI * 2);
       c.fill();
       continue;
     }
-    c.strokeStyle = ink(s.color, darkMode);
+    c.strokeStyle = inkFor(s.color, paper, di);
     if (s.tapered && s.pressures && s.pressures.length > 0) {
       drawTapered(c, s, base);
     } else {
@@ -227,7 +390,7 @@ function renderJob(job: Job): void {
   // Inserted shapes sit above strokes (pysdocx render_page adds them after the
   // stroke collections at the same z), outline only, round joins like pysdocx.
   for (const s of scene.shapes ?? []) {
-    const col = shapeInk(s.color, bg, darkMode);
+    const col = inkFor(s.color, paper, di);
     c.strokeStyle = col;
     c.fillStyle = col;
     c.lineWidth = Math.max(s.width, 0.5);
@@ -236,15 +399,59 @@ function renderJob(job: Job): void {
 
   c.textBaseline = "top";
   for (const t of scene.texts) {
-    if (!t.text.trim()) continue;
-    c.fillStyle = ink(t.color, darkMode);
-    const fs = t.font_size ?? 30;
-    c.font = `${fs}px sans-serif`;
-    let y = t.y;
-    for (const line of t.text.split("\n")) {
-      c.fillText(line, t.x, y);
-      y += fs * 1.3;
+    drawRichText(c, t, paper, di);
+  }
+
+  // Tables: grid lines then middle-aligned cell texts (pysdocx render_table;
+  // everything is precomputed in the Scene builder).
+  for (const tb of scene.tables ?? []) {
+    const xs = tb.x_edges, ys = tb.y_edges;
+    c.strokeStyle = rgb(tb.line_color, "#8a8f9a");
+    c.lineWidth = tb.line_width;
+    const grid = new Path2D();
+    for (const x of xs) {
+      grid.moveTo(x, ys[0]);
+      grid.lineTo(x, ys[ys.length - 1]);
     }
+    for (const y of ys) {
+      grid.moveTo(xs[0], y);
+      grid.lineTo(xs[xs.length - 1], y);
+    }
+    c.stroke(grid);
+    c.textBaseline = "middle";
+    for (const cell of tb.cells) {
+      const fg = inkFor(cell.color, paper, di);
+      c.fillStyle = fg;
+      c.font = `${cell.italic ? "italic " : ""}${cell.bold ? "bold " : ""}${cell.font}px sans-serif`;
+      c.fillText(cell.text, cell.x, cell.y);
+      if (cell.underline) {
+        c.strokeStyle = fg;
+        c.lineWidth = 1.0 * 3.4;
+        c.beginPath();
+        c.moveTo(cell.underline[0], cell.underline[2]);
+        c.lineTo(cell.underline[1], cell.underline[2]);
+        c.stroke();
+      }
+    }
+    c.textBaseline = "top";
+  }
+
+  // Sticky notes draw as their collapsed square: decoded bg fill (default
+  // sticky yellow) + a dashed contrast border, with a small label — the nested
+  // sub-document is not rendered (matches pysdocx's "enumerate them" bar).
+  for (const n of scene.sticky_notes ?? []) {
+    c.fillStyle = rgb(n.bg_color, "#ffe6ae");
+    c.fillRect(n.x, n.y, n.w, n.h);
+    // Sticky fill is always light (bg_color or the yellow fallback), so a dark
+    // border/label reads regardless of the page paper.
+    c.strokeStyle = "#1a1a1a";
+    c.lineWidth = 1.0 * 3.4;
+    c.setLineDash([10, 8]);
+    c.strokeRect(n.x, n.y, n.w, n.h);
+    c.setLineDash([]);
+    c.fillStyle = "#1a1a1a"; // on the light sticky fill, always dark
+    c.font = `${9 * 3.4}px sans-serif`;
+    c.fillText("sticky", n.x + 6, n.y + 6);
   }
 
   const bitmap = canvas.transferToImageBitmap();

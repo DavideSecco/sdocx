@@ -6,10 +6,10 @@ type RGB = [number, number, number];
 interface DocMeta { page_count: number; dark_mode: boolean; background: RGB | null }
 interface Stroke { points: [number, number][]; color: RGB | null; width: number; tapered: boolean; tool_id: number | null; pressures?: number[] }
 interface SImage { x: number; y: number; w: number; h: number; media_index: number }
-interface SText { x: number; y: number; w: number; h: number; text: string; color: RGB | null; font_size: number | null; rotation: number | null }
+interface SText { anchor: [number, number]; wrap_width: number; angle_deg: number; lines: unknown[] }
 interface STemplate { id: number; kind: string; spacing?: number; origin?: [number, number]; color?: RGB; line_width?: number }
 interface SShape { kind: string; points: [number, number][]; color: RGB | null; width: number; closed: boolean; ellipse?: unknown; round_rect?: unknown; outline?: unknown[]; heads?: [number, number][][] }
-interface PageScene { width: number; height: number; background: RGB | null; template: STemplate | null; strokes: Stroke[]; images: SImage[]; shapes: SShape[]; texts: SText[] }
+interface PageScene { width: number; height: number; paper: RGB; default_ink: RGB; template: STemplate | null; strokes: Stroke[]; images: SImage[]; shapes: SShape[]; texts: SText[] }
 
 const GAP = 16;
 const MAX_BITMAP_DIM = 8192; // cap the offscreen raster per page (webview canvas limit)
@@ -95,7 +95,7 @@ function renderViaWorker(
   return new Promise((resolve) => {
     const id = ++jobSeq;
     jobs.set(id, resolve);
-    worker.postMessage({ id, scene, scale, darkMode: meta!.dark_mode, docBg: meta!.background, images });
+    worker.postMessage({ id, scene, scale, images });
   });
 }
 
