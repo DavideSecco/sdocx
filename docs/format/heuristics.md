@@ -28,12 +28,31 @@ to the next page) mirrors observed Samsung behaviour but the trigger geometry is
 calibrated, not read from a field. Calibrated against
 `OnlyTextTypeWritten_squared_260703_013624.sdocx` (grid GT).
 
-## Grid template pitches
+## Grid/line/dot/oxford template pitches
 
-Grid template ids are decoded; their **pitch** is a per-id constant, not stored
-in the `.page` (checked — the page is only ~340 bytes). `GRID_SPACING_BY_ID` maps
-each known id (e.g. id 5 ≈ 102.5, id 4 ≈ 72.5 page units). New template ids would
-need a new measured pitch.
+Background template ids are decoded; their **pitch** is a per-id constant, not
+stored in the `.page` (checked — the page is only ~340 bytes). Measured from
+905px-wide GT photos in `samples/AllTypeofPageBasic/` (RE 2026-07-09: line
+projection for line/grid/oxford rules, blob-centroid clustering for dot
+lattices; *1600/905 to page units):
+
+| Constant (`pysdocx/page.py`) | Values |
+|---|---|
+| `GRID_SPACING_BY_ID` | id 4≈72.5, 5≈102.5, 6≈168.0 (square: row==col) |
+| `LINE_SPACING_BY_ID` | id 1≈72.5, 2≈102.5, 3≈168.0 (row/horizontal-rule pitch only) |
+| `DOT_SPACING_BY_ID` | id 7≈(72.5, 79.7), 8≈(102.5, 110.0), 9≈(168.0, 174.8) as (row, col) — **not square**, col consistently ~7-10% wider than row |
+| `OXFORD_LINE_SPACING` | ≈65.5 (its own constant, not the shared triple above) |
+| `OXFORD_MARGIN_X` / `OXFORD_MARGIN_COLOR` | ≈235 page units from left edge; color is a JPEG-averaged approximation from a single photo |
+
+New template ids (e.g. id 10, unseen in any sample so far) would need a new
+measured pitch. `GRID_ORIGIN` (the ~44-page-unit top margin) is reused as-is
+for line/dot/oxford — not independently re-measured per category.
+
+The **id → category/name** mapping itself (`TEMPLATE_NAMES` in `pysdocx/page.py`,
+see [`container/page/README.md`](./container/page/README.md#basic-background-template-ids--decoded-naming-heuristic-pitch))
+is a decoded fact, not a heuristic — it comes from user-handwritten labels on
+`samples/AlltypeofPageBasic_260709_200911.sdocx`, not a pixel measurement. The
+*pitches* above are all heuristic/calibrated, same as the original grid ones.
 
 ## Rotated text-box wrapping
 

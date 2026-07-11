@@ -53,6 +53,24 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   [heuristic](./heuristics.md#rotated-text-box-wrapping)).
 
 ## `.page`
+- **Header preamble structure** (between the fixed leading fields and `base`):
+  still not modeled. It is what forces the paper record `[BGRA][u32
+  display_width]` — and the template fields that follow it — to be located **by
+  signature** instead of a fixed offset: the record sits at 0x80/0xa4/0x13e/0x15e
+  depending on the (unknown) preamble, the `kind` u32 before it is 2/3 on most
+  notes but not present at all on some families (PDF-template content pages match
+  only via the display-width fallback), and imported-PDF notes put ~4000 where
+  `kind` normally sits. **This is the single unlock for modeling the paper color
+  + template/PDF-link fields in `sdocx_page.ksy`** — until the preamble is
+  decoded, they stay procedural (`_locate_paper_record` in pysdocx/Rust) per the
+  "no scans in a .ksy" rule. A grounded attack is viable: 150+ corpus pages, and
+  the preamble length correlates with `base`.
+- **PDF-template record `flag` (M+8)**: `== 1` on all 15 observed PDF-backed
+  pages (2 Academic PDFs + 1 imported). A count for multi-template pages? Needs
+  a sample with >1 template PDF on one page family.
+- **Basic template id 10**: never appeared in the AlltypeofPageBasic sample
+  (ids 1-9, 11 all named from the user's handwritten labels); name and pitch
+  unknown. Needs a dedicated capture.
 - **Object header `flags`** (u16): constant `0x1bf` on non-stroke objects; on
   strokes only bit `0x1` varies (an invariant, not a clean semantic).
 - **`ext_block.seq` / `ext_block.counter`**: `seq` near-constant per note (not

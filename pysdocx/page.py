@@ -209,23 +209,70 @@ ATTACHMENT_PROPERTY_BAG_MAX_KEYS = 16
 # Page background templates. The builtin template id lives at a base-dependent offset in the
 # page header (see page_template(), ported from crates/sdocx/src/page.rs::page_template). Both
 # id 5 (benchmark, all 6 pages) and id 4 (OnlyTextTypeWritten_squared) are confirmed squared
-# grids from the ground truth; other ids (lined/plain/etc.) stay "plain" until we map them.
-GRID_TEMPLATE_IDS = frozenset({4, 5})
+# grids from the ground truth.
+
+# id -> (category, display name), read directly off the user-handwritten label on each page of
+# `samples/AlltypeofPageBasic_260709_200911.sdocx` (one page per id, RE 2026-07-09). `category`
+# groups render treatment (line/grid/dot draw the same way at different pitches; oxford is a
+# distinct ruled+margin layout). Absent template field (no id at all) is the "blank" page, not
+# modeled here. id 10 never appeared in the sample — missing from this table, not yet named.
+TEMPLATE_NAMES = {
+    1: ("line", "Lined (narrow)"),
+    2: ("line", "Lined"),
+    3: ("line", "Line (wide)"),
+    4: ("grid", "Grid (narrow)"),
+    5: ("grid", "Grid"),
+    6: ("grid", "Grid (wide)"),
+    7: ("dot", "Dot (narrow)"),
+    8: ("dot", "Dot"),
+    9: ("dot", "Dot (wide)"),
+    11: ("oxford", "Oxford"),
+}
 
 # Grid cell size in page coordinates (page is 1600x2262). The pitch is NOT stored in the .page
 # file (searched the header, and the squared page is only ~340 bytes) — it is a property of the
-# template id itself, so we map each measured id to its pitch. Both measured from the 905px-wide
-# GT photos which span the page width with no crop: id 5 = 58px -> 58*1600/905 ≈ 102.5; id 4 =
-# 41px -> 41*1600/905 ≈ 72.5, same vertically and horizontally. Unknown grid ids fall back to 102.5.
+# template id itself, so we map each measured id to its pitch. Measured from 905px-wide GT
+# photos of `samples/AllTypeofPageBasic/` (RE 2026-07-09, blob/line-projection pixel measurement,
+# *1600/905 to page units): id 5 (row 57.5px/col 58.5px) -> 102.5, id 4 (row 40.75px/col 41.5px)
+# -> 72.5, id 6 (row 95.0px/col 95.0px, cleanest of the three — both axes landed on the exact same
+# pixel pitch) -> 168.0. Same narrow/default/wide triple as LINE_SPACING_BY_ID (id 1-3) — line and
+# grid templates appear to share one underlying pitch family, only "dot" (below) diverges.
 GRID_SPACING = 102.5
-GRID_SPACING_BY_ID = {5: 102.5, 4: 72.5}
+GRID_SPACING_BY_ID = {4: 72.5, 5: 102.5, 6: 168.0}
 
 # Grid origin (page coords of the first vertical/horizontal line). Measured from the GT photos:
 # vertical lines start flush at x=0 (0,103,206,...) but horizontal lines start ~44px down
 # (44,146,249,...) — the template has a small top margin, not a symmetric offset. Rendering the
 # grid from y=0 (no offset) put the first line too high and left too little space above the top
-# line of text; using this origin matches the photos.
+# line of text; using this origin matches the photos. Reused as-is for line/dot/oxford (not
+# independently re-measured per category — the top margin is presumably a page-wide constant, not
+# a per-template one, but this is an assumption, not verified).
 GRID_ORIGIN = (0.0, 44.0)
+
+# "Lined"/"Line (wide)" horizontal-rule pitch — same measurement method and source as
+# GRID_SPACING_BY_ID, same narrow/default/wide values (72.5/102.5/168.0): id 2 (row 57.5px) ->
+# 102.5, id 1 (row 41.0px) -> 72.5, id 3 (row 95.0px) -> 168.0. Only vertical pitch; line
+# templates have no vertical rules.
+LINE_SPACING_BY_ID = {1: 72.5, 2: 102.5, 3: 168.0}
+
+# Dot-grid pitch, `(row_spacing, col_spacing)` page units — unlike grid/line, the dot lattice is
+# **not square**: columns are consistently ~7-10% wider-spaced than rows across all three
+# measured ids (blob-centroid clustering, 15-27 dots per axis per id, RE 2026-07-09): id 7 (row
+# 40.75px/72.0 vs col 45.05px/79.7), id 8 (row 57.72px/102.1 vs col 62.15px/109.9), id 9 (row
+# 95.07px/168.1 vs col 98.9px/174.8). Row pitch matches the line/grid narrow/default/wide triple
+# (within photo-measurement noise); col pitch is a distinct, dot-only constant.
+DOT_SPACING_BY_ID = {7: (72.5, 79.7), 8: (102.5, 110.0), 9: (168.0, 174.8)}
+
+# Oxford (ruled + red margin) layout, measured from the single "Oxford" GT photo (id 11,
+# RE 2026-07-09): horizontal rule pitch is its own constant, tighter than any line/grid/dot
+# variant and not shared with them (row 37.35px clean median over 23 diffs -> ~65.5 page units).
+# The margin is a single vertical rule at x≈133px -> ~235 page units from the left edge, in a
+# light red/pink (photo-compressed average ~RGB(234,210,209); JPEG washes out a photographed
+# screen, so the true on-device color is likely more saturated — this hex is a rendering
+# approximation, not a decoded value).
+OXFORD_LINE_SPACING = 65.5
+OXFORD_MARGIN_X = 235.0
+OXFORD_MARGIN_COLOR = "#e0a8a8"
 
 
 def _read_u16(data: bytes, offset: int) -> int | None:
@@ -1108,18 +1155,106 @@ def is_builtin_template_id(template_id: int) -> bool:
     return template_id != 0 and template_id <= 0xFFFF
 
 
-def page_template(data: bytes) -> dict | None:
-    """Read the page background template: `{id, kind, source}` or None if absent.
+def _locate_paper_record(data: bytes) -> int | None:
+    """Offset `M` of the page's paper record `[BGRA (alpha 0xFF)][u32 display_width]`, or None.
 
-    Ported from crates/sdocx/src/page.rs::page_template. The id's offset depends on `base`
-    (`u32 @0x00`): base==0x90 -> `u32 @0x8C` (compact builtin header); base==0xA6 ->
-    `u32 @0x8C >> 16` (custom PDF template, value is the zero-based PDF page index); otherwise
-    `u32 @0xAC` if base>=0xE7 else `u32 @0xB4`. `kind` is "grid" for known grid ids
-    (GRID_TEMPLATE_IDS), else "plain". Verified to yield id 5 on all 6 benchmark pages.
+    Located by signature within `[0x7c, base)`. Primary gate: `kind` (u32 at M-4) in 1..8 with a
+    plausible width — matches all 122 corpus + 4 background pages exactly. Fallback: a record whose
+    `display_width` equals the page width (u32 @ 0x16). The fallback exists for PDF-template /
+    PDF-import notes, whose header preamble puts a value outside 1..8 where `kind` normally sits
+    (e.g. 4000 on the Notebook&Planner Academic sample), so the primary gate misses them; those
+    pages still carry the same `[BGRA][width]` record. Shared by `page_background_color` and
+    `page_pdf_template`.
+    """
+    if len(data) < 0x1A + 4:
+        return None
+    base = struct.unpack_from("<I", data, 0)[0]
+    page_w = struct.unpack_from("<I", data, 0x16)[0]
+    # Bound by room for the paper record itself ([BGRA][u32 width], i.e. M+8); the PDF fields
+    # (M+16) are read separately by page_pdf_template, which guards a short page.
+    hi = min(base, len(data) - 8)
+    for off in range(0x7C, hi):
+        if data[off + 3] != 0xFF:
+            continue
+        kind = struct.unpack_from("<I", data, off - 4)[0]
+        width = struct.unpack_from("<I", data, off + 4)[0]
+        if 1 <= kind <= 8 and 256 <= width <= 40000:
+            return off
+    for off in range(0x7C, hi):
+        if data[off + 3] == 0xFF and struct.unpack_from("<I", data, off + 4)[0] == page_w:
+            return off
+    return None
+
+
+def page_pdf_template(data: bytes) -> dict | None:
+    """Decode a page's PDF-template / PDF-import reference, or None if the page uses no PDF.
+
+    Multi-page "Academic" templates (Notebook, Planner, …) and imported PDFs are NOT procedural
+    like the "Basic" backgrounds: the artwork is a real PDF embedded under `media/`, and each
+    `.page` references one of its pages. The reference lives in the 8 bytes right after the paper
+    record `M` (see `_locate_paper_record`):
+
+        M+8  u16 flag   (== 1 on every observed PDF page; meaning — count? — assumed)
+        M+A  u16 pdf_media_index   -> media/<index>@<name>.pdf in the archive
+        M+C  u16 reserved (== 0 on PDF pages; == 1 on Basic pages, where M+8 holds the template id)
+        M+E  u16 pdf_page_index    -> 0-based page within that PDF
+
+    `flag == 1 and reserved == 0` cleanly separates PDF pages from Basic ones with zero
+    counterexamples across the 150-page corpus. RE 2026-07-09 on
+    `samples/Notebook&Planner1_260709_213306.sdocx` (StudyTemplates.pdf 7pp @ media 0 +
+    PlannerTemplates.pdf 6pp @ media 2, each ref_count 7 = 6 template pages + 1 content page,
+    0-based indices), cross-checked against the imported-PDF page in `quiz.sdocx` (media 0, page 0).
+    Content pages (the ones the user wrote on) reference the PDF the same way, at page index 0.
+    """
+    M = _locate_paper_record(data)
+    if M is None or M + 16 > len(data):
+        return None
+    flag = struct.unpack_from("<H", data, M + 8)[0]
+    reserved = struct.unpack_from("<H", data, M + 0xC)[0]
+    if flag != 1 or reserved != 0:
+        return None
+    return {
+        "pdf_media_index": struct.unpack_from("<H", data, M + 0xA)[0],
+        "pdf_page_index": struct.unpack_from("<H", data, M + 0xE)[0],
+    }
+
+
+def page_template(data: bytes) -> dict | None:
+    """Read the page background template, or None if absent.
+
+    Two families:
+
+    * **PDF** (`kind: "pdf"`) — multi-page "Academic" templates and imported PDFs, whose artwork is
+      an embedded `media/…​.pdf`. Detected via `page_pdf_template`; the result carries
+      `pdf_media_index` + `pdf_page_index` (0-based) instead of a pitch. `category`/`name` are None
+      here — the template's identity is the PDF's archive filename, not a stored id.
+    * **Basic** (procedural) — the id's offset depends on `base` (`u32 @0x00`): base==0x90 ->
+      `u32 @0x8C` (compact builtin header); otherwise `u32 @0xAC` if base>=0xE7 else `u32 @0xB4`.
+      `category`/`name` (from TEMPLATE_NAMES) are the decoded identity; `kind` mirrors `category`
+      and gates rendering, with the pitch under a category-specific key when calibrated:
+      `spacing`/`row_spacing`/`col_spacing` for grid (square), `row_spacing` for line,
+      `row_spacing`/`col_spacing` for dot (non-square — see DOT_SPACING_BY_ID),
+      `line_spacing`/`margin_x` for oxford. Verified to yield id 5 on all 6 benchmark pages.
+
+    (Kept in sync with crates/sdocx/src/page.rs::page_template — both decode the PDF link via the
+    marker + the built-in id fallback. The Rust core returns id + source{BuiltIn|CustomPdf{media,
+    page}}; the category/name/pitch here are pysdocx render-side extras the Rust app derives in its
+    own Scene layer.)
     """
     base = _read_u32(data, 0x00)
     if base is None:
         return None
+
+    pdf = page_pdf_template(data)
+    if pdf is not None:
+        return {
+            "kind": "pdf",
+            "source": "pdf",
+            "category": "pdf",
+            "name": None,
+            "pdf_media_index": pdf["pdf_media_index"],
+            "pdf_page_index": pdf["pdf_page_index"],
+        }
 
     if base == 0x90:
         template_id = _read_u32(data, 0x8C)
@@ -1136,10 +1271,20 @@ def page_template(data: bytes) -> dict | None:
 
     if template_id is None or not is_builtin_template_id(template_id):
         return None
-    kind = "grid" if template_id in GRID_TEMPLATE_IDS else "plain"
-    result = {"id": template_id, "kind": kind, "source": source}
-    if kind == "grid":
-        result["spacing"] = GRID_SPACING_BY_ID.get(template_id, GRID_SPACING)
+    category, name = TEMPLATE_NAMES.get(template_id, (None, None))
+    result = {"id": template_id, "kind": category or "plain", "source": source, "category": category, "name": name}
+    if category == "grid":
+        spacing = GRID_SPACING_BY_ID.get(template_id, GRID_SPACING)
+        result["spacing"] = spacing
+        result["row_spacing"] = spacing
+        result["col_spacing"] = spacing
+    elif category == "line" and template_id in LINE_SPACING_BY_ID:
+        result["row_spacing"] = LINE_SPACING_BY_ID[template_id]
+    elif category == "dot" and template_id in DOT_SPACING_BY_ID:
+        result["row_spacing"], result["col_spacing"] = DOT_SPACING_BY_ID[template_id]
+    elif category == "oxford":
+        result["line_spacing"] = OXFORD_LINE_SPACING
+        result["margin_x"] = OXFORD_MARGIN_X
     return result
 
 
@@ -1159,22 +1304,15 @@ def page_background_color(data: bytes) -> tuple[int, int, int] | None:
     a `BGRA` quad (alpha == 0xFF) inside the record `[u32 kind][BGRA][u32 display_width]` — `kind`
     is 2 (3 on some devices), `display_width` is the device paper width. Its absolute offset varies
     with a variable-length header preamble (0x84 / 0xa4 / 0x13e / 0x15e seen), so it is located by
-    that signature within `[0x7c, base)`, not a fixed offset. Exactly one match on all 122 pages of
-    the corpus + the 4 background samples (the `Rosina` pink `(245,221,221)` pins the field). Unlike
+    signature (`_locate_paper_record`), not a fixed offset. Exactly one match on all 122 pages of
+    the corpus + the 4 background samples (the `Rosina` pink `(245,221,221)` pins the field); the
+    width fallback in the locator also resolves the white paper of PDF-template pages. Unlike
     `bg_color_from_note` (which is empty on the corpus), this is the authoritative paper source.
     """
-    if len(data) < 4:
+    M = _locate_paper_record(data)
+    if M is None:
         return None
-    base = struct.unpack_from("<I", data, 0)[0]
-    hi = min(base, len(data) - 8)
-    for off in range(0x7C, hi):
-        if data[off + 3] != 0xFF:
-            continue
-        kind = struct.unpack_from("<I", data, off - 4)[0]
-        width = struct.unpack_from("<I", data, off + 4)[0]
-        if 1 <= kind <= 8 and 256 <= width <= 40000:
-            return (data[off + 2], data[off + 1], data[off])
-    return None
+    return (data[M + 2], data[M + 1], data[M])
 
 
 def parse_page_footer(data: bytes) -> dict | None:
