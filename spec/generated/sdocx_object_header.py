@@ -122,4 +122,3 @@ class SdocxObjectHeader(KaitaiStruct):
             pass
 
 
-

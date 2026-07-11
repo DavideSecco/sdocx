@@ -42,9 +42,11 @@ def main() -> int:
                     diffs.append("height")
                 if k.uuid != ref["uuid"]:
                     diffs.append("uuid")
-                # Compare bytewise: empty pages leave content_bbox uninitialised
-                # (NaN + denormals), and NaN != NaN would give a false mismatch.
-                if struct.pack("<4d", *k.content_bbox) != struct.pack("<4d", *ref["content_bbox"]):
+                kb = getattr(k, "content_bbox", None)
+                rb = ref["content_bbox"]
+                if (kb is None) != (rb is None):
+                    diffs.append("content_bbox_presence")
+                elif kb is not None and struct.pack("<4d", *kb) != struct.pack("<4d", *rb):
                     diffs.append("content_bbox")
                 if k.footer_signature != "Page for SAMSUNG S-Pen SDK":
                     diffs.append("footer_signature")

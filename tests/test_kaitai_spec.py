@@ -283,12 +283,15 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                     self.assertEqual(k.page_width, ref["width"], where)
                     self.assertEqual(k.page_height, ref["height"], where)
                     self.assertEqual(k.uuid, ref["uuid"], where)
-                    # Bytewise: empty pages leave content_bbox uninitialised (NaN).
-                    self.assertEqual(
-                        struct.pack("<4d", *k.content_bbox),
-                        struct.pack("<4d", *ref["content_bbox"]),
-                        f"{where}: content_bbox",
-                    )
+                    kb = getattr(k, "content_bbox", None)
+                    rb = ref["content_bbox"]
+                    self.assertEqual(kb is not None, rb is not None, f"{where}: content_bbox presence")
+                    if kb is not None:
+                        self.assertEqual(
+                            struct.pack("<4d", *kb),
+                            struct.pack("<4d", *rb),
+                            f"{where}: content_bbox",
+                        )
                     self.assertEqual(k.footer_signature, "Page for SAMSUNG S-Pen SDK", where)
                     self.assertEqual(k.page_hash.hex(), ref["footer"]["page_hash"], f"{where}: page_hash")
                     # Cross-file linkage: page footer hash IS the pageIdInfo manifest hash.

@@ -89,8 +89,8 @@ pub struct Page {
     pub width: u32,
     /// Page height in pixels.
     pub height: u32,
-    /// Bounding box enclosing all stroke content.
-    pub content_bbox: BoundingBox,
+    /// Bounding box enclosing page content; omitted when the serialized layer tree has no objects.
+    pub content_bbox: Option<BoundingBox>,
     /// Page background color, if present in the page header.
     pub background_color: Option<Color>,
     /// Page template metadata, if present in the page header.

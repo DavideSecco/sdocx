@@ -315,7 +315,7 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
         .collect();
 
     // Content bounding box at 0x80 (4 x f64)
-    let content_bbox = BoundingBox {
+    let stored_content_bbox = BoundingBox {
         x_min: f64::from_le_bytes(data[0x80..0x88].try_into().unwrap()),
         y_min: f64::from_le_bytes(data[0x88..0x90].try_into().unwrap()),
         x_max: f64::from_le_bytes(data[0x90..0x98].try_into().unwrap()),
@@ -331,6 +331,7 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
     // every stroke after it — up to ~75% of a mixed page (see pysdocx
     // parse_page, which this mirrors).
     let objects = parse_object_tree(data, base);
+    let content_bbox = (!objects.is_empty()).then_some(stored_content_bbox);
     let mut strokes = Vec::new();
 
     for obj in &objects {

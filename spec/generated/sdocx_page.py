@@ -207,6 +207,15 @@ class SdocxPage(KaitaiStruct):
                 self.layers[i]._fetch_instances()
 
 
+        @property
+        def has_objects(self):
+            """Current corpus has one layer; its declared object count gates the preamble content_bbox."""
+            if hasattr(self, '_m_has_objects'):
+                return self._m_has_objects
+
+            self._m_has_objects = (len(self.layers) > 0) and (self.layers[0].object_count > 0)
+            return getattr(self, '_m_has_objects', None)
+
 
     class Utf16String(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
@@ -226,17 +235,20 @@ class SdocxPage(KaitaiStruct):
 
     @property
     def content_bbox(self):
-        """Content bounding box [x_min, y_min, x_max, y_max] as f64."""
+        """Optional content bounding box [x_min, y_min, x_max, y_max] as f64; present iff the layer tree declares objects."""
         if hasattr(self, '_m_content_bbox'):
             return self._m_content_bbox
 
-        _pos = self._io.pos()
-        self._io.seek(128)
-        self._m_content_bbox = []
-        for i in range(4):
-            self._m_content_bbox.append(self._io.read_f8le())
+        if self.tree.has_objects:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(128)
+            self._m_content_bbox = []
+            for i in range(4):
+                self._m_content_bbox.append(self._io.read_f8le())
 
-        self._io.seek(_pos)
+            self._io.seek(_pos)
+
         return getattr(self, '_m_content_bbox', None)
 
     @property
@@ -326,5 +338,4 @@ class SdocxPage(KaitaiStruct):
         self._m_uuid_char_len = self._io.read_u2le()
         self._io.seek(_pos)
         return getattr(self, '_m_uuid_char_len', None)
-
 

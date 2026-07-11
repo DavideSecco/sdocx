@@ -60,7 +60,8 @@ instances:
     type: f8
     repeat: expr
     repeat-expr: 4
-    doc: Content bounding box [x_min, y_min, x_max, y_max] as f64.
+    if: tree.has_objects
+    doc: Optional content bounding box [x_min, y_min, x_max, y_max] as f64; present iff the layer tree declares objects.
   page_hash:
     pos: _io.size - 58
     size: 32
@@ -86,6 +87,10 @@ types:
         type: layer
         repeat: expr
         repeat-expr: layer_count
+    instances:
+      has_objects:
+        value: 'layers.size > 0 and layers[0].object_count > 0'
+        doc: Current corpus has one layer; its declared object count gates the preamble content_bbox.
   layer:
     seq:
       - id: layer_prefix

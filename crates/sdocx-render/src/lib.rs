@@ -420,7 +420,7 @@ mod tests {
             uuid: "page".into(),
             width: 1080,
             height: 1527,
-            content_bbox: BoundingBox::default(),
+            content_bbox: Some(BoundingBox::default()),
             background_color: Some(Color {
                 r: 0xcb,
                 g: 0xda,
@@ -444,7 +444,7 @@ mod tests {
             uuid: "blank".into(),
             width: 100,
             height: 100,
-            content_bbox: BoundingBox::default(),
+            content_bbox: Some(BoundingBox::default()),
             background_color: None,
             template: None,
             strokes: Vec::new(),
@@ -464,7 +464,7 @@ mod tests {
             uuid: "page".into(),
             width: 100,
             height: 100,
-            content_bbox: BoundingBox::default(),
+            content_bbox: Some(BoundingBox::default()),
             background_color: None,
             template: None,
             strokes: vec![Stroke {

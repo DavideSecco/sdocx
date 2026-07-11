@@ -1352,9 +1352,8 @@ def parse_page(data: bytes) -> dict:
     uuid_bytes = data[0x28 : 0x28 + uuid_char_len * 2]
     uuid = uuid_bytes.decode("utf-16-le", errors="replace")
 
-    content_bbox = struct.unpack_from("<4d", data, 0x80)
-
     tree = parse_page_tree(data, width, height, base)
+    content_bbox = struct.unpack_from("<4d", data, 0x80) if tree["object_count"] > 0 else None
 
     strokes = []
     attempts = []
