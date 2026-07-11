@@ -11,6 +11,10 @@ render = [
     "matplotlib>=3.10.8",
     "numpy>=2.4.2",
     "pillow>=11",
+    # Rasterises embedded PDF-backed templates (Academic multi-page / imported PDF) as page
+    # backgrounds. pdfium — the same engine the Rust/Tauri app targets. Optional at runtime:
+    # without it the renderer just omits the PDF background (rasterize_pdf_page returns None).
+    "pypdfium2>=5",
 ]
 
 [dependency-groups]
@@ -20,5 +24,6 @@ dev = [
     "matplotlib>=3.10.8",
     "numpy>=2.4.2",
     "pillow>=11",
+    "pypdfium2>=5",
     "ruff>=0.15.5",
 ]

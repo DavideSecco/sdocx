@@ -31,11 +31,15 @@ from pysdocx.container import (
 )
 from pysdocx.ink import color_hex
 from pysdocx.note import parse_tables, parse_typed_text
-from pysdocx.page import GRID_ORIGIN, GRID_SPACING, page_background_color, parse_page
+from pysdocx.page import GRID_ORIGIN, GRID_SPACING, OXFORD_MARGIN_COLOR, page_background_color, parse_page
 
 MAX_PRESSURE = 1400.0
 DEFAULT_INK = "#ffffff"
-GRID_COLOR = "#d3dae8"  # faint blue-gray, as in the Samsung Notes squared template
+# Blue-gray of the Samsung rule/grid/dot templates. Deliberately DARKER than the GT-photo value
+# (grid ~#d3dae8, dots ~#b7bfce there) at the user's request (2026-07-10): the true-to-photo tint
+# is too faint to read on screen. Kept in sync with opensdocx lib.rs GRID_COLOR/DOT_COLOR.
+GRID_COLOR = "#a6afca"
+DOT_COLOR = "#8f98b0"
 TEXT_DEFAULT_COLOR = (37, 37, 37)  # body default; ≈ the dark page bg, so we contrast it below
 TODO_DONE_COLOR = (150, 150, 150)
 TABLE_LINE_COLOR = "#8a8f9a"
@@ -87,6 +91,35 @@ def _contrast_ink(bg_color):
     return "#000000" if luminance > 140 else DEFAULT_INK
 
 
+def rasterize_pdf_page(pdf_bytes, page_index, target_width):
+    """Rasterize one page of an embedded template / imported PDF to an RGBA numpy array,
+    scaled so its width is `target_width` px (aspect preserved).
+
+    Returns None if pypdfium2 is unavailable or the page can't be rendered — the caller then
+    draws no background, the same graceful degradation as before rasterization existed. Uses
+    pdfium, the same engine the Rust/Tauri app targets (`pdfium-render`), so this workbench and
+    the shipped renderer rasterize identically. This is faithful rasterization of embedded
+    artwork, not a calibrated heuristic — the (media index, page index) link it renders is the
+    decoded `page_pdf_template` reference.
+    """
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        return None
+    try:
+        doc = pdfium.PdfDocument(pdf_bytes)
+        if page_index < 0 or page_index >= len(doc):
+            return None
+        page = doc[page_index]
+        pdf_w, _ = page.get_size()
+        if pdf_w <= 0:
+            return None
+        bitmap = page.render(scale=target_width / pdf_w)
+        return np.asarray(bitmap.to_pil().convert("RGBA"))
+    except Exception:
+        return None
+
+
 def draw_grid(ax, width, height, spacing=GRID_SPACING, origin=GRID_ORIGIN, color=GRID_COLOR, lw=0.6):
     """Draw the squared-paper template: light vertical + horizontal lines every `spacing`
     page units, spanning the whole page (0..width, 0..height). `origin` is the page-coord
@@ -96,6 +129,32 @@ def draw_grid(ax, width, height, spacing=GRID_SPACING, origin=GRID_ORIGIN, color
     ys = np.arange(origin[1] % spacing, height + 0.5, spacing)
     segments = [((x, 0.0), (x, height)) for x in xs] + [((0.0, y), (width, y)) for y in ys]
     ax.add_collection(LineCollection(segments, colors=color, linewidths=lw, zorder=0.5))
+
+
+def draw_lines(ax, width, height, spacing, origin=GRID_ORIGIN, color=GRID_COLOR, lw=0.6):
+    """Draw the "Lined" template: horizontal rules only, every `spacing` page units."""
+    ys = np.arange(origin[1] % spacing, height + 0.5, spacing)
+    segments = [((0.0, y), (width, y)) for y in ys]
+    ax.add_collection(LineCollection(segments, colors=color, linewidths=lw, zorder=0.5))
+
+
+def draw_dots(ax, width, height, row_spacing, col_spacing, origin=GRID_ORIGIN, color=DOT_COLOR, size=3.0):
+    """Draw the "Dot" template: a lattice of dots. Unlike the grid, row/col pitch genuinely
+    differ (DOT_SPACING_BY_ID in pysdocx.page) — this is not a square lattice."""
+    xs = np.arange(origin[0] % col_spacing, width + 0.5, col_spacing)
+    ys = np.arange(origin[1] % row_spacing, height + 0.5, row_spacing)
+    xx, yy = np.meshgrid(xs, ys)
+    ax.scatter(xx.ravel(), yy.ravel(), s=size, c=color, marker="o", linewidths=0, zorder=0.5)
+
+
+def draw_oxford(ax, width, height, line_spacing, margin_x, origin=GRID_ORIGIN,
+                 color=GRID_COLOR, margin_color=OXFORD_MARGIN_COLOR, lw=0.6, margin_lw=1.0):
+    """Draw the "Oxford" template: horizontal rules at their own (tighter) pitch, plus a single
+    vertical margin rule in a light red — the classic ruled-with-margin school-notebook layout."""
+    ys = np.arange(origin[1] % line_spacing, height + 0.5, line_spacing)
+    segments = [((0.0, y), (width, y)) for y in ys]
+    ax.add_collection(LineCollection(segments, colors=color, linewidths=lw, zorder=0.5))
+    ax.plot([margin_x, margin_x], [0.0, height], color=margin_color, lw=margin_lw, zorder=0.5)
 
 
 def oriented_corners(points):
@@ -365,12 +424,15 @@ def debug_text_box_layout(box, page_size=(1600, 2262), figsize=(9, 12), default_
 
 
 def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_boxes=(),
-                sticky_notes=(), page_size=None, template=None, default_ink=DEFAULT_INK):
+                sticky_notes=(), page_size=None, template=None, default_ink=DEFAULT_INK,
+                template_image=None):
     """Draw a parsed page (strokes, inserted shapes, imported images) onto a matplotlib Axes.
 
     `images` is a list of {"bbox": (x0, y0, x1, y1), "data": <image bytes>}. When `page_size`
     (width, height) is given, the axes are fixed to the whole page (not autoscaled to content)
     and, if `template` is a grid template, the squared background is drawn under everything.
+    `template_image` is a pre-rasterised full-page RGBA background (numpy array) for a
+    `kind: "pdf"` template — see `rasterize_pdf_page`; drawn to fill the page under everything.
     `default_ink` is the fallback color for strokes/shapes whose stored color matches the
     background (contrast against the page); it is white on a dark page, black on a light one.
     """
@@ -379,9 +441,28 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
         ax.set_xlim(0, page_size[0])
         ax.set_ylim(page_size[1], 0)  # y increases downward in page coords
 
-    # Squared-paper background goes above the flat fill but below images/strokes.
-    if page_size is not None and template is not None and template["kind"] == "grid":
-        draw_grid(ax, page_size[0], page_size[1], spacing=template.get("spacing", GRID_SPACING))
+    # Template background goes above the flat fill but below images/strokes.
+    if page_size is not None and template is not None:
+        kind = template["kind"]
+        if kind == "grid":
+            draw_grid(ax, page_size[0], page_size[1], spacing=template.get("spacing", GRID_SPACING))
+        elif kind == "line" and "row_spacing" in template:
+            draw_lines(ax, page_size[0], page_size[1], spacing=template["row_spacing"])
+        elif kind == "dot" and "row_spacing" in template and "col_spacing" in template:
+            draw_dots(ax, page_size[0], page_size[1],
+                      row_spacing=template["row_spacing"], col_spacing=template["col_spacing"])
+        elif kind == "oxford" and "line_spacing" in template:
+            draw_oxford(ax, page_size[0], page_size[1],
+                        line_spacing=template["line_spacing"], margin_x=template["margin_x"])
+        elif kind == "pdf" and template_image is not None:
+            # Academic multi-page / imported PDF: the background is an embedded media/….pdf page
+            # (template["pdf_media_index"]/["pdf_page_index"]), pre-rasterised by the caller. The
+            # PDF page is A4, the same aspect as the sdocx page, so it fills 0..w × 0..h upright:
+            # origin="upper" puts image row 0 at the extent's `top` (y=0 = screen top, since the
+            # y-axis is inverted below). If pypdfium2 is missing, template_image is None and no
+            # background is drawn (graceful degradation).
+            ax.imshow(template_image, extent=(0, page_size[0], page_size[1], 0),
+                      origin="upper", aspect="auto", zorder=0.4)
 
     # Imported images go underneath everything else. The axis is y-inverted at
     # the end (page coords have y increasing downward), so use origin="lower"
@@ -1097,6 +1178,15 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
             if media is not None:
                 images.append({"bbox": pl["bbox"], "data": media[1], "angle_deg": pl.get("angle_deg", 0.0)})
 
+        # PDF-backed template (Academic / imported PDF): rasterise the referenced embedded PDF page
+        # as the full-page background. Decoded link -> page_pdf_template; rasteriser is optional.
+        template_image = None
+        tmpl = page_result["template"]
+        if tmpl is not None and tmpl.get("kind") == "pdf":
+            media = load_media_by_index(path, tmpl["pdf_media_index"])
+            if media is not None:
+                template_image = rasterize_pdf_page(media[1], tmpl["pdf_page_index"], page_result["width"])
+
         page_tables = [t for t in tables if t["bbox"] is not None] if idx == table_target_page else []
         is_empty = (
             kept == 0 and not shapes and not images and not text_boxes
@@ -1131,7 +1221,7 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
             ax, page_result["strokes"], page_bg, title=title, shapes=shapes, images=images,
             text_boxes=text_boxes, sticky_notes=sticky_notes,
             page_size=(page_result["width"], page_result["height"]), template=page_result["template"],
-            default_ink=default_ink,
+            default_ink=default_ink, template_image=template_image,
         )
         for table in page_tables:
             render_table(ax, table, text_color=default_ink)
