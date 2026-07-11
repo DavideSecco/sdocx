@@ -30,7 +30,8 @@ class CorpusProfileTest(unittest.TestCase):
     """Corpus-wide regression, split into invariants (always true) + a golden fingerprint.
 
     `test_invariants` asserts the corpus-*independent* truths: every file parses, the note.note
-    tail is fully accounted for (zero unknown bytes), no sha/eof/size/signature corruption,
+    note.note parses sequentially through every flex field to its trailing hash, with no
+    sha/eof/size/signature corruption,
     per-file counts equal the sample count, and every "matches" equals its "surfaces". It also
     exercises the note.note sequential-parse gate — `parse_note_doc` must consume `note.note`
     bytes `0 .. len-32` exactly (the trailing 32 are `sha256(note.note[:-32])`), so landing on
@@ -71,12 +72,10 @@ class CorpusProfileTest(unittest.TestCase):
         )
         self.assertEqual(leads["page_audio_type10_objects"], 0)
 
-        # note.note tail: one sentinel + one hash block per file, and full byte coverage.
-        tail = inventory["note_tail_profiles"]
+        # The legacy marker-based note-tail scan is a diagnostic only and is superseded by the
+        # exact sequential parser below. New flex layouts (e.g. COEDIT) need not resemble its old
+        # sentinel/hash windows, so do not make those scan artifacts corpus invariants.
         self.assertEqual(inventory["sample_count"], SAMPLE_COUNT)
-        self.assertEqual(tail["kinds"]["tail_sentinel"], SAMPLE_COUNT)
-        self.assertEqual(tail["kinds"]["tail_hash_block"], SAMPLE_COUNT)
-        self.assertEqual(tail["coverage"]["unknown_bytes"], 0)
 
         # mediaInfo: one record set per file, every SHA verifies, no missing/unlisted/bad-eof.
         media = inventory["media_info_profiles"]

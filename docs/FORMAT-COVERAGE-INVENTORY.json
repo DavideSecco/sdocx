@@ -1,5 +1,5 @@
 {
-  "sample_count": 14,
+  "sample_count": 22,
   "samples": [
     {
       "file": "Allsamsungnotes_260630_113259.sdocx",
@@ -40,6 +40,40 @@
         "voice_clip",
         "voice_clip_header",
         "voice_clip_post"
+      ]
+    },
+    {
+      "file": "AlltypeofPageBasic_260709_200911.sdocx",
+      "pages": 12,
+      "objects": 150,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
       ]
     },
     {
@@ -133,6 +167,39 @@
           "meta:0x400",
           "meta:0x8000",
           "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "Notebook&Planner1_260709_213306.sdocx",
+      "pages": 14,
+      "objects": 27,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x0/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000"
         ]
       },
       "note_tail_kinds": [
@@ -361,6 +428,197 @@
           "meta_base_bits",
           "tail_hash_block_present",
           "typed_text_present"
+        ],
+        "unknown_bits": [
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "tail_hash_block",
+        "tail_post_hash_u32",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "PagLiscia&templatescustoms_260711_122117.sdocx",
+      "pages": 5,
+      "objects": 109,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 53,
+      "note_profile": {
+        "signature": "fmt4000/flags0x0/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "PaginaVuota&Paginapuntino_260711_122434.sdocx",
+      "pages": 3,
+      "objects": 1,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "Pagvuota&templatescustoms_260711_115623.sdocx",
+      "pages": 5,
+      "objects": 109,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 53,
+      "note_profile": {
+        "signature": "fmt4000/flags0x0/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "Segnalibri_260709_225650.sdocx",
+      "pages": 4,
+      "objects": 132,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 42,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "Shared Notebook1_260710_000433.sdocx",
+      "pages": 2,
+      "objects": 0,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x0/meta0xd4e80",
+        "family": "v4000_preload",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "TextboxAllAngles_260709_231912.sdocx",
+      "pages": 2,
+      "objects": 8,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 7,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc0a80",
+        "family": "v4000_hash",
+        "known_features": [
+          "meta_base_bits",
+          "tail_hash_block_present"
         ],
         "unknown_bits": [
           "0x8"
@@ -800,7 +1058,7 @@
       "object_type": "stroke",
       "family": "base",
       "signature": "121/0x6000",
-      "count": 93873,
+      "count": 94253,
       "example_files": [
         "Allsamsungnotes_260630_113259.sdocx",
         "Allsamsungnotes_260630_113259.sdocx",
@@ -813,7 +1071,7 @@
       "object_type": "stroke",
       "family": "extended",
       "signature": "137/0x46000",
-      "count": 1414,
+      "count": 1562,
       "example_files": [
         "Allsamsungnotes_260630_113259.sdocx",
         "Allsamsungnotes_260630_113259.sdocx",
@@ -878,24 +1136,26 @@
       "object_type": "text_box",
       "family": "base",
       "signature": "121/0x6000",
-      "count": 4,
+      "count": 5,
       "example_files": [
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
         "OnlyTextTypeWritten_260701_180427.sdocx",
-        "OnlyTextTypeWritten_squared_260703_013624.sdocx"
+        "OnlyTextTypeWritten_squared_260703_013624.sdocx",
+        "TextboxAllAngles_260709_231912.sdocx"
       ]
     },
     {
       "object_type": "text_box",
       "family": "extended_rotated",
       "signature": "141/0x46001",
-      "count": 4,
+      "count": 11,
       "example_files": [
         "OnlyTextTypeWritten_260701_180427.sdocx",
         "OnlyTextTypeWritten_260701_180427.sdocx",
         "OnlyTextTypeWritten_squared_260703_013624.sdocx",
-        "OnlyTextTypeWritten_squared_260703_013624.sdocx"
+        "OnlyTextTypeWritten_squared_260703_013624.sdocx",
+        "TextboxAllAngles_260709_231912.sdocx"
       ]
     }
   ],
@@ -935,12 +1195,12 @@
       {
         "family": "base",
         "signature": "121/0x6000",
-        "count": 93873
+        "count": 94253
       },
       {
         "family": "extended",
         "signature": "137/0x46000",
-        "count": 1414
+        "count": 1562
       },
       {
         "family": "extended",
@@ -967,36 +1227,54 @@
       {
         "family": "base",
         "signature": "121/0x6000",
-        "count": 4
+        "count": 5
       },
       {
         "family": "extended_rotated",
         "signature": "141/0x46001",
-        "count": 4
+        "count": 11
       }
     ]
   },
   "note_profiles": [
     {
+      "family": "v4000_hash",
+      "signature": "fmt4000/flags0x8/meta0xc0a80",
+      "count": 1,
+      "example_files": [
+        "TextboxAllAngles_260709_231912.sdocx"
+      ]
+    },
+    {
+      "family": "v4000_preload",
+      "signature": "fmt4000/flags0x0/meta0xd4e80",
+      "count": 1,
+      "example_files": [
+        "Shared Notebook1_260710_000433.sdocx"
+      ]
+    },
+    {
       "family": "v4000_preload_hash",
       "signature": "fmt4000/flags0x0/meta0xc8e80",
-      "count": 3,
+      "count": 6,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
-        "cs61bl_su22.sdocx",
-        "quiz.sdocx"
+        "Notebook&Planner1_260709_213306.sdocx",
+        "PagLiscia&templatescustoms_260711_122117.sdocx",
+        "Pagvuota&templatescustoms_260711_115623.sdocx",
+        "cs61bl_su22.sdocx"
       ]
     },
     {
       "family": "v4000_preload_hash",
       "signature": "fmt4000/flags0x8/meta0xc8e80",
-      "count": 7,
+      "count": 10,
       "example_files": [
+        "AlltypeofPageBasic_260709_200911.sdocx",
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
         "OnlyHighlighterBlack_260630_131753.sdocx",
         "OnlyImages_260702_190147.sdocx",
-        "OnlyPensBlacksize10_260630_120309.sdocx",
-        "OnlyShapesblack_260701_173146.sdocx"
+        "OnlyPensBlacksize10_260630_120309.sdocx"
       ]
     },
     {
@@ -1027,13 +1305,13 @@
   ],
   "note_tail_profiles": {
     "kinds": {
-      "pen_preload_path": 44,
-      "pen_preload_prelude": 27,
-      "pen_preload_prelude_raw": 16,
-      "pen_style_tail": 11,
-      "tail_hash_block": 14,
-      "tail_post_hash_u32": 3,
-      "tail_sentinel": 14,
+      "pen_preload_path": 78,
+      "pen_preload_prelude": 34,
+      "pen_preload_prelude_raw": 43,
+      "pen_style_tail": 17,
+      "tail_hash_block": 21,
+      "tail_post_hash_u32": 4,
+      "tail_sentinel": 22,
       "voice_clip": 2,
       "voice_clip_header": 2,
       "voice_clip_post": 2
@@ -1057,34 +1335,35 @@
         "Allsamsungnotes_260630_113259.sdocx",
         "Allsamsungnotes_260630_113259.sdocx",
         "Allsamsungnotes_260630_113259.sdocx",
-        "Appunti vari_260629_230848.sdocx",
-        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx"
+        "AlltypeofPageBasic_260709_200911.sdocx",
+        "Appunti vari_260629_230848.sdocx"
       ],
       "pen_style_tail": [
         "Allsamsungnotes_260630_113259.sdocx",
+        "AlltypeofPageBasic_260709_200911.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
-        "OnlyHighlighterBlack_260630_131753.sdocx",
-        "OnlyImages_260702_190147.sdocx"
+        "Notebook&Planner1_260709_213306.sdocx"
       ],
       "tail_hash_block": [
         "Allsamsungnotes_260630_113259.sdocx",
+        "AlltypeofPageBasic_260709_200911.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
-        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
-        "OnlyHighlighterBlack_260630_131753.sdocx"
+        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx"
       ],
       "tail_post_hash_u32": [
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
         "OnlyTextTypeWritten_260701_180427.sdocx",
-        "OnlyTextTypeWritten_squared_260703_013624.sdocx"
+        "OnlyTextTypeWritten_squared_260703_013624.sdocx",
+        "TextboxAllAngles_260709_231912.sdocx"
       ],
       "tail_sentinel": [
         "Allsamsungnotes_260630_113259.sdocx",
+        "AlltypeofPageBasic_260709_200911.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
-        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
-        "OnlyHighlighterBlack_260630_131753.sdocx"
+        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx"
       ],
       "voice_clip": [
         "Allsamsungnotes_260630_113259.sdocx",
@@ -1100,8 +1379,8 @@
       ]
     },
     "page_id_info_relations": {
-      "page_id_head_exact": 11,
-      "page_id_head_shifted_u32_2": 3
+      "page_id_head_exact": 17,
+      "page_id_head_shifted_u32_2": 4
     },
     "tail_hash_prefixes": [
       {
@@ -1109,31 +1388,44 @@
           0,
           2
         ],
-        "count": 3
+        "count": 4
       },
       {
         "prefix_u32": [
           2,
           2
         ],
-        "count": 11
+        "count": 17
       }
     ],
     "preload_paths": {
-      "com.samsung.android.sdk.pen.pen.preload.BrushPen": 3,
-      "com.samsung.android.sdk.pen.pen.preload.FountainPen": 10,
-      "com.samsung.android.sdk.pen.pen.preload.InkPen2": 13,
-      "com.samsung.android.sdk.pen.pen.preload.Marker3": 3,
-      "com.samsung.android.sdk.pen.pen.preload.Marker4": 4,
-      "com.samsung.android.sdk.pen.pen.preload.ObliquePen": 2,
-      "com.samsung.android.sdk.pen.pen.preload.Pencil2": 3,
-      "com.samsung.android.sdk.pen.pen.preload.StraightHighlighter": 3,
-      "com.samsung.android.sdk.pen.pen.preload.StraightMarker": 3
+      "com.samsung.android.sdk.pen.pen.preload.AirBrushPen": 1,
+      "com.samsung.android.sdk.pen.pen.preload.BrushPen": 4,
+      "com.samsung.android.sdk.pen.pen.preload.ChineseBrush": 1,
+      "com.samsung.android.sdk.pen.pen.preload.ColoredPencil": 1,
+      "com.samsung.android.sdk.pen.pen.preload.Crayon2": 1,
+      "com.samsung.android.sdk.pen.pen.preload.Eraser": 1,
+      "com.samsung.android.sdk.pen.pen.preload.FountainPen": 11,
+      "com.samsung.android.sdk.pen.pen.preload.FountainTipPen": 1,
+      "com.samsung.android.sdk.pen.pen.preload.InkPen": 1,
+      "com.samsung.android.sdk.pen.pen.preload.InkPen2": 26,
+      "com.samsung.android.sdk.pen.pen.preload.Marker2": 1,
+      "com.samsung.android.sdk.pen.pen.preload.Marker3": 4,
+      "com.samsung.android.sdk.pen.pen.preload.Marker4": 5,
+      "com.samsung.android.sdk.pen.pen.preload.ObliquePen": 3,
+      "com.samsung.android.sdk.pen.pen.preload.OilBrush3": 1,
+      "com.samsung.android.sdk.pen.pen.preload.Pencil2": 4,
+      "com.samsung.android.sdk.pen.pen.preload.Pencil3": 1,
+      "com.samsung.android.sdk.pen.pen.preload.Smudge": 1,
+      "com.samsung.android.sdk.pen.pen.preload.StraightHighlighter": 4,
+      "com.samsung.android.sdk.pen.pen.preload.StraightMarker": 4,
+      "com.samsung.android.sdk.pen.pen.preload.WaterColorBrush": 1,
+      "com.samsung.android.sdk.pen.pen.preload.WaterColorTipBrush": 1
     },
     "preload_param_hints": {
       "14;": 1,
       "18;0;100;": 1,
-      "8;": 6
+      "8;": 11
     },
     "preload_prelude_params": {
       "10;": 2,
@@ -1141,10 +1433,11 @@
       "14;": 3,
       "15;0;100;": 1,
       "18;0;100;": 4,
+      "22;": 1,
       "4;": 2,
       "5;": 3,
       "7;": 1,
-      "8;": 8
+      "8;": 14
     },
     "preload_prelude_shapes": [
       {
@@ -1155,6 +1448,16 @@
           0
         ],
         "count": 4
+      },
+      {
+        "prefix_u32": [
+          1
+        ],
+        "trailing_u32": [
+          0,
+          162
+        ],
+        "count": 1
       },
       {
         "prefix_u32": [
@@ -1299,7 +1602,7 @@
         "trailing_u32": [
           0
         ],
-        "count": 3
+        "count": 8
       },
       {
         "prefix_u32": [
@@ -1330,6 +1633,74 @@
           8
         ],
         "count": 1
+      },
+      {
+        "prefix_u32": [
+          2582,
+          2818092
+        ],
+        "trailing_u32": [
+          42,
+          3276803,
+          3866673,
+          41,
+          3276803,
+          3866672,
+          40,
+          3211267,
+          3866681,
+          39,
+          3211267,
+          3866680,
+          38,
+          3211267,
+          3866679,
+          37,
+          3211267,
+          3866678,
+          36,
+          3211267,
+          3866677,
+          35,
+          3211267,
+          3866676,
+          34,
+          3211267,
+          3866675,
+          33,
+          3211267,
+          3866674,
+          32,
+          3211267,
+          3866673,
+          31,
+          3211267,
+          3866672,
+          30,
+          3735554,
+          1900603,
+          131072,
+          3866680,
+          28,
+          3604482,
+          1769531,
+          131072,
+          3866678,
+          26,
+          3473410,
+          1638459,
+          131072,
+          3866676,
+          24,
+          3342338,
+          1507387,
+          131072,
+          3866674,
+          22,
+          3211266,
+          1376315
+        ],
+        "count": 1
       }
     ],
     "preload_prelude_raw_shapes": [
@@ -1337,14 +1708,14 @@
         "raw_u32": [
           0
         ],
-        "count": 1
+        "count": 2
       },
       {
         "raw_u32": [
           0,
           162
         ],
-        "count": 3
+        "count": 8
       },
       {
         "raw_u32": [
@@ -1362,7 +1733,31 @@
       },
       {
         "raw_u32": [
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
           2
+        ],
+        "count": 2
+      },
+      {
+        "raw_u32": [
+          3
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          4
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          5
         ],
         "count": 1
       },
@@ -1370,17 +1765,96 @@
         "raw_u32": [
           6
         ],
+        "count": 2
+      },
+      {
+        "raw_u32": [
+          7
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          8
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          9
+        ],
         "count": 1
       },
       {
         "raw_u32": [
           10
         ],
-        "count": 1
+        "count": 2
       },
       {
         "raw_u32": [
           11
+        ],
+        "count": 2
+      },
+      {
+        "raw_u32": [
+          12
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          13
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          14
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          15
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          16
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          17
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          18
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          19
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          20
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          112,
+          2
         ],
         "count": 1
       },
@@ -1564,7 +2038,7 @@
           0,
           0
         ],
-        "count": 3
+        "count": 9
       },
       {
         "width": 6.355,
@@ -1678,15 +2152,31 @@
       "voice_media_time_candidate": 2
     },
     "coverage": {
-      "known_bytes": 6752,
-      "unknown_bytes": 0,
-      "gap_prefixes": [],
+      "known_bytes": 11442,
+      "unknown_bytes": 144,
+      "gap_prefixes": [
+        {
+          "prefix_hex": "0000000001002a005100300039004600",
+          "count": 1
+        }
+      ],
       "per_file": [
         {
           "file": "Allsamsungnotes_260630_113259.sdocx",
           "tail_start": 12996,
           "tail_len": 1356,
           "known_bytes": 1356,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "AlltypeofPageBasic_260709_200911.sdocx",
+          "tail_start": 775,
+          "tail_len": 338,
+          "known_bytes": 338,
           "unknown_bytes": 0,
           "known_ratio": 1.0,
           "gap_count": 0,
@@ -1720,6 +2210,17 @@
           "tail_start": 49087,
           "tail_len": 814,
           "known_bytes": 814,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "Notebook&Planner1_260709_213306.sdocx",
+          "tail_start": 783,
+          "tail_len": 338,
+          "known_bytes": 338,
           "unknown_bytes": 0,
           "known_ratio": 1.0,
           "gap_count": 0,
@@ -1804,6 +2305,78 @@
           "gap_prefixes": []
         },
         {
+          "file": "PagLiscia&templatescustoms_260711_122117.sdocx",
+          "tail_start": 817,
+          "tail_len": 338,
+          "known_bytes": 338,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "PaginaVuota&Paginapuntino_260711_122434.sdocx",
+          "tail_start": 821,
+          "tail_len": 338,
+          "known_bytes": 338,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "Pagvuota&templatescustoms_260711_115623.sdocx",
+          "tail_start": 799,
+          "tail_len": 338,
+          "known_bytes": 338,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "Segnalibri_260709_225650.sdocx",
+          "tail_start": 791,
+          "tail_len": 338,
+          "known_bytes": 338,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "Shared Notebook1_260710_000433.sdocx",
+          "tail_start": 819,
+          "tail_len": 2746,
+          "known_bytes": 2602,
+          "unknown_bytes": 144,
+          "known_ratio": 0.9475600873998543,
+          "gap_count": 1,
+          "max_gap": 144,
+          "gap_prefixes": [
+            {
+              "off": 3421,
+              "size": 144,
+              "prefix_hex": "0000000001002a005100300039004600"
+            }
+          ]
+        },
+        {
+          "file": "TextboxAllAngles_260709_231912.sdocx",
+          "tail_start": 1089,
+          "tail_len": 60,
+          "known_bytes": 60,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
           "file": "cs61bl_su22.sdocx",
           "tail_start": 12561,
           "tail_len": 380,
@@ -1840,7 +2413,7 @@
     }
   },
   "object_header_ext": {
-    "count": 1690,
+    "count": 1845,
     "dimension_mismatches": [],
     "extra_key_blocks": 807,
     "extra_key_bad": [],
@@ -1989,15 +2562,83 @@
         "ext_offsets": [
           109
         ]
+      },
+      {
+        "file": "PagLiscia&templatescustoms_260711_122117.sdocx",
+        "count": 53,
+        "seq_unique": 1,
+        "seq_min": 415314,
+        "seq_max": 415314,
+        "seq_inversions": 0,
+        "counter_unique": 17,
+        "repeated_counter_groups": 15,
+        "repeated_counter_size_counts": {
+          "2": 2,
+          "3": 6,
+          "4": 6,
+          "5": 1
+        },
+        "ext_offsets": [
+          105
+        ]
+      },
+      {
+        "file": "Pagvuota&templatescustoms_260711_115623.sdocx",
+        "count": 53,
+        "seq_unique": 1,
+        "seq_min": 415314,
+        "seq_max": 415314,
+        "seq_inversions": 0,
+        "counter_unique": 17,
+        "repeated_counter_groups": 15,
+        "repeated_counter_size_counts": {
+          "2": 2,
+          "3": 6,
+          "4": 6,
+          "5": 1
+        },
+        "ext_offsets": [
+          105
+        ]
+      },
+      {
+        "file": "Segnalibri_260709_225650.sdocx",
+        "count": 42,
+        "seq_unique": 1,
+        "seq_min": 415283,
+        "seq_max": 415283,
+        "seq_inversions": 0,
+        "counter_unique": 24,
+        "repeated_counter_groups": 18,
+        "repeated_counter_size_counts": {
+          "2": 18
+        },
+        "ext_offsets": [
+          105
+        ]
+      },
+      {
+        "file": "TextboxAllAngles_260709_231912.sdocx",
+        "count": 7,
+        "seq_unique": 1,
+        "seq_min": 415284,
+        "seq_max": 415284,
+        "seq_inversions": 0,
+        "counter_unique": 7,
+        "repeated_counter_groups": 0,
+        "repeated_counter_size_counts": {},
+        "ext_offsets": [
+          109
+        ]
       }
     ]
   },
   "payload_geometry_profiles": {
-    "count": 490,
+    "count": 498,
     "by_type": {
       "image": 58,
       "shape": 424,
-      "text_box": 8
+      "text_box": 16
     },
     "point_counts": {
       "1": 10,
@@ -2006,7 +2647,7 @@
       "15": 1,
       "2": 83,
       "3": 10,
-      "4": 199,
+      "4": 207,
       "5": 28,
       "6": 79,
       "7": 1,
@@ -2014,7 +2655,7 @@
       "9": 3
     },
     "centroid": {
-      "bbox_centroid_match": 365,
+      "bbox_centroid_match": 373,
       "bbox_centroid_mismatch": 115,
       "bbox_centroid_unknown": 10
     },
@@ -2038,7 +2679,7 @@
         "marker": "text",
         "l0_delta": 123,
         "l1_delta": 0,
-        "count": 8
+        "count": 16
       }
     ],
     "shape_roles": [
@@ -2161,41 +2802,48 @@
     ]
   },
   "media_info_profiles": {
-    "parsed_files": 14,
-    "records": 222,
+    "parsed_files": 22,
+    "records": 256,
     "format_versions": {
       "5202": 1,
       "5304": 1,
-      "5400": 12
+      "5400": 20
     },
     "ref_counts": {
-      "1": 216,
+      "1": 245,
+      "100": 1,
+      "2": 2,
       "20": 1,
       "3": 4,
-      "5": 1
+      "5": 1,
+      "7": 2
     },
     "is_attached": {
-      "True": 222
+      "True": 256
     },
     "magic": {
       "0x1452": 1,
       "0x14b8": 1,
-      "0x1518": 12
+      "0x1518": 20
     },
     "tail_tags": {
-      "1": 216,
+      "1": 245,
+      "100": 1,
+      "2": 2,
       "20": 1,
       "3": 4,
-      "5": 1
+      "5": 1,
+      "7": 2
     },
     "name_kinds": {
       ".": 29,
-      ".jpg": 21,
+      ".jpg": 23,
       ".m4a": 2,
-      ".pdf": 2,
+      ".nt": 1,
+      ".pdf": 8,
       ".png": 1,
       ".sdocx": 3,
-      ".spi": 163,
+      ".spi": 188,
       ".spp": 1
     },
     "bad_eof": 0,
@@ -2207,30 +2855,30 @@
     "unlisted_media_examples": []
   },
   "end_tag_profiles": {
-    "parsed_files": 14,
+    "parsed_files": 22,
     "payload_sizes": {
       "142": 1,
-      "146": 13
+      "146": 21
     },
     "format_versions": {
-      "4000": 10,
+      "4000": 18,
       "5400": 4
     },
     "signature_offsets": {
       "122": 1,
-      "126": 13
+      "126": 21
     },
     "time_relations": {
-      "created_time_a_exact": 11,
+      "created_time_a_exact": 19,
       "created_time_a_millis_close": 3,
-      "created_time_b_exact": 11,
-      "created_time_header_exact": 14,
-      "display_created_time_exact": 11,
+      "created_time_b_exact": 19,
+      "created_time_header_exact": 22,
+      "display_created_time_exact": 19,
       "display_created_time_millis_close": 3,
-      "display_modified_time_exact": 11,
+      "display_modified_time_exact": 19,
       "extra_time_nonzero": 2,
       "last_recognised_data_modified_time_nonzero": 2,
-      "modified_exact": 14
+      "modified_exact": 22
     },
     "bad_size": 0,
     "bad_signature": 0,
@@ -2238,11 +2886,11 @@
     "modified_mismatch_examples": []
   },
   "page_id_info_profiles": {
-    "parsed_files": 14,
-    "records": 114,
+    "parsed_files": 22,
+    "records": 161,
     "bad_size": 0,
     "tail_hex": {
-      "": 114
+      "": 161
     },
     "page_hash_sha256_matches": 0
   }

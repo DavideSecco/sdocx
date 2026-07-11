@@ -54,7 +54,7 @@ def corpus_snapshot(inventory: dict, leads: dict, notedoc: dict) -> dict:
     media = inventory["media_info_profiles"]
     end_tag = inventory["end_tag_profiles"]
     geometry = inventory["payload_geometry_profiles"]
-    # tail_sentinel / tail_hash_block are per-file (== SAMPLE_COUNT), asserted as invariants.
+    # tail_sentinel / tail_hash_block are legacy scan artifacts, not structural invariants.
     kinds = {k: v for k, v in tail["kinds"].items() if k not in ("tail_sentinel", "tail_hash_block")}
     snapshot = {
         "leads": _pick(leads, (

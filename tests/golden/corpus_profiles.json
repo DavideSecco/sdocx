@@ -1,37 +1,37 @@
 {
   "end_tag": {
     "format_versions": {
-      "4000": 13,
+      "4000": 18,
       "5400": 4
     },
     "payload_sizes": {
       "142": 1,
-      "146": 16
+      "146": 21
     },
     "signature_offsets": {
       "122": 1,
-      "126": 16
+      "126": 21
     },
     "time_relations": {
-      "created_time_a_exact": 14,
+      "created_time_a_exact": 19,
       "created_time_a_millis_close": 3,
-      "created_time_b_exact": 14,
-      "created_time_header_exact": 17,
-      "display_created_time_exact": 14,
+      "created_time_b_exact": 19,
+      "created_time_header_exact": 22,
+      "display_created_time_exact": 19,
       "display_created_time_millis_close": 3,
-      "display_modified_time_exact": 14,
+      "display_modified_time_exact": 19,
       "extra_time_nonzero": 2,
       "last_recognised_data_modified_time_nonzero": 2,
-      "modified_exact": 17
+      "modified_exact": 22
     }
   },
   "geometry": {
     "by_type": {
       "image": 58,
       "shape": 424,
-      "text_box": 8
+      "text_box": 16
     },
-    "count": 490,
+    "count": 498,
     "marker_deltas": [
       {
         "count": 58,
@@ -48,7 +48,7 @@
         "object_type": "shape"
       },
       {
-        "count": 8,
+        "count": 16,
         "l0_delta": 123,
         "l1_delta": 0,
         "marker": "text",
@@ -62,7 +62,7 @@
       "15": 1,
       "2": 83,
       "3": 10,
-      "4": 199,
+      "4": 207,
       "5": 28,
       "6": 79,
       "7": 1,
@@ -164,7 +164,7 @@
   },
   "leads": {
     "end_tag_page_models": {
-      "0": 14,
+      "0": 19,
       "1": 3
     },
     "media_by_kind": {
@@ -173,16 +173,16 @@
     },
     "media_known_ref_u32_hits": 59,
     "media_objects": 59,
-    "note_text_common_frame_hits": 23,
-    "note_text_surfaces": 25,
-    "text_boxes": 8,
-    "text_common_frame_hits": 2,
+    "note_text_common_frame_hits": 28,
+    "note_text_surfaces": 30,
+    "text_boxes": 16,
+    "text_common_frame_hits": 7,
     "text_structural_frame_offs": {
-      "rotated=False:off=386": 4,
-      "rotated=True:off=406": 4
+      "rotated=False:off=386": 5,
+      "rotated=True:off=406": 11
     },
-    "text_structural_frames_found": 8,
-    "text_structural_spans_match": 8,
+    "text_structural_frames_found": 16,
+    "text_structural_spans_match": 16,
     "voice_clips": 2,
     "voice_clips_linked_to_audio_media": 2
   },
@@ -190,26 +190,30 @@
     "format_versions": {
       "5202": 1,
       "5304": 1,
-      "5400": 15
+      "5400": 20
     },
     "is_attached": {
-      "True": 240
+      "True": 256
     },
     "magic": {
       "0x1452": 1,
       "0x14b8": 1,
-      "0x1518": 15
+      "0x1518": 20
     },
-    "records": 240,
+    "records": 256,
     "ref_counts": {
-      "1": 232,
+      "1": 245,
+      "100": 1,
+      "2": 2,
       "20": 1,
       "3": 4,
       "5": 1,
       "7": 2
     },
     "tail_tags": {
-      "1": 232,
+      "1": 245,
+      "100": 1,
+      "2": 2,
       "20": 1,
       "3": 4,
       "5": 1,
@@ -217,20 +221,20 @@
     }
   },
   "note_tail": {
-    "coverage_known_bytes": 7766,
+    "coverage_known_bytes": 11442,
     "kinds": {
-      "pen_preload_path": 50,
-      "pen_preload_prelude": 30,
-      "pen_preload_prelude_raw": 19,
-      "pen_style_tail": 14,
-      "tail_post_hash_u32": 3,
+      "pen_preload_path": 78,
+      "pen_preload_prelude": 34,
+      "pen_preload_prelude_raw": 43,
+      "pen_style_tail": 17,
+      "tail_post_hash_u32": 4,
       "voice_clip": 2,
       "voice_clip_header": 2,
       "voice_clip_post": 2
     },
     "page_id_info_relations": {
-      "page_id_head_exact": 14,
-      "page_id_head_shifted_u32_2": 3
+      "page_id_head_exact": 17,
+      "page_id_head_shifted_u32_2": 4
     },
     "pen_style_tail_params": {
       "5;": 1,
@@ -242,10 +246,11 @@
       "14;": 3,
       "15;0;100;": 1,
       "18;0;100;": 4,
+      "22;": 1,
       "4;": 2,
       "5;": 3,
       "7;": 1,
-      "8;": 11
+      "8;": 14
     },
     "voice_media_links": {
       "voice_actual_duration_ms_candidate": 2,
@@ -275,12 +280,12 @@
     "cell_text_surfaces": 2,
     "gap_sizes": {
       "0": 2,
-      "8": 15
+      "8": 20
     },
     "inline_object_surfaces": 3,
     "table_cells_structural": 18,
     "tables_structural": 2,
     "voice_records": 2
   },
-  "page_id_records": 144
+  "page_id_records": 161
 }
