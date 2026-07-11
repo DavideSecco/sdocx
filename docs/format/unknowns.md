@@ -53,18 +53,39 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   [heuristic](./heuristics.md#rotated-text-box-wrapping)).
 
 ## `.page`
-- **Header preamble structure** (between the fixed leading fields and `base`):
-  still not modeled. It is what forces the paper record `[BGRA][u32
-  display_width]` — and the template fields that follow it — to be located **by
-  signature** instead of a fixed offset: the record sits at 0x80/0xa4/0x13e/0x15e
-  depending on the (unknown) preamble, the `kind` u32 before it is 2/3 on most
-  notes but not present at all on some families (PDF-template content pages match
-  only via the display-width fallback), and imported-PDF notes put ~4000 where
-  `kind` normally sits. **This is the single unlock for modeling the paper color
-  + template/PDF-link fields in `sdocx_page.ksy`** — until the preamble is
-  decoded, they stay procedural (`_locate_paper_record` in pysdocx/Rust) per the
-  "no scans in a .ksy" rule. A grounded attack is viable: 150+ corpus pages, and
-  the preamble length correlates with `base`.
+- **Header preamble — field sequence Decoded, presence gates Unknown (RE 2026-07-10).**
+  The bytes between the fixed leading fields and the paper record are now mapped
+  (`M` = paper-BGRA offset, located by `_locate_paper_record`):
+  ```
+  0x00 base · … · 0x16 width · 0x1a height · 0x26 uuid_len(=36) · 0x28 uuid[72]
+  0x70 [u32 obj_id][u32 seq≈415k][u32 4000][u32 4000]          (fixed)
+  then, in order, each OPTIONAL:
+    [content_bbox : 4×f64]        present on content pages, absent on empty/template pages
+    [template_uri : UTF-16, NUL-terminated]   a custom-image template path (see below)
+    [u32 kind = 2|3]              present on normal pages, ABSENT on the PDF family
+    [BGRA paper][u32 display_width]            = M
+    [template fields]             normal: [u32 id][u32 1] · PDF: [u16 1][u16 media][u16 0][u16 page]
+  ```
+  Observed `M` ∈ {0x80,0x84,0xa0,0xa4,0x13e,0x15e}, entirely explained by which
+  optionals are present. **What blocks modeling this in `sdocx_page.ksy`: the
+  presence GATE of each optional is not a clean structural field in the corpus.**
+  A byte-level discriminant search over 154 pages found: `content_bbox` — *no*
+  single byte separates present/absent (it tracks "page has content", i.e. the
+  object tree, which lives after `base`); `kind` — absent only for `base ∈
+  {0xa6,0xfd}` (the whole PDF family), but `base` is itself downstream of the
+  preamble length; `template_uri` — only 3 pages (one note), too few to isolate.
+  So per the "no scans in a `.ksy`" rule the paper/template records stay
+  procedural (`_locate_paper_record`) until a **targeted sample campaign** pins
+  the gates: an empty vs one-stroke page in the same note (bbox gate), and a
+  custom-image-template note vs a plain one (uri gate).
+- **`template_uri` (NEW, 2026-07-10) — a third page-template mechanism.** Beyond
+  Basic (procedural id→pitch) and PDF-backed (embedded `media/…​.pdf`), a page
+  can reference a **custom image template** by absolute path in the app's private
+  storage, e.g. `Z/data/user/0/com.samsung.android.app.notes/app_templates/added/
+  files_231229_092644_140.jpg` — stored as a UTF-16 string in the preamble. The
+  image is NOT embedded in the `.sdocx`, so such a background is unrenderable from
+  the file alone (only the path is recoverable). Seen on 3 pages of one note
+  (`Appunti vari`). Distinct from the `note.note` `template_uri` flex field.
 - **PDF-template record `flag` (M+8)**: `== 1` on all 15 observed PDF-backed
   pages (2 Academic PDFs + 1 imported). A count for multi-template pages? Needs
   a sample with >1 template PDF on one page family.

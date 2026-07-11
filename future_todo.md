@@ -162,19 +162,25 @@ procedural pending the wrapper decode.
 
 ## Next tasks
 
-- **Decode the `.page` header preamble → unlock the paper/template fields in
-  `sdocx_page.ksy` (NEXT, grounded, no new samples needed):** the paper record
-  `[BGRA][u32 display_width]` and the template/PDF-link fields after it are
-  fully decoded *as records* (zero counterexamples, 150+ pages) but located
-  **by signature**, because the variable-length header preamble before them is
-  Unknown (offsets seen 0x80/0xa4/0x13e/0x15e; `kind` u32 = 2/3 on most
-  families, absent on PDF-template content pages, ~4000 on imported-PDF
-  notes). Per the repo rule (no scans in a `.ksy`), they cannot enter the spec
-  until the preamble has a deterministic structure. This is the highest-value
-  spec task: crack the preamble across the corpus (it correlates with `base`),
-  then model paper color + template id + PDF link in `sdocx_page.ksy`, extend
-  `validate_page.py` to cross-check them field-by-field vs pysdocx, and move
-  the corresponding entries out of `unknowns.md`.
+- **`.page` header preamble — field sequence DECODED, presence gates OPEN
+  (2026-07-10; blocked on targeted samples):** the bytes before the paper
+  record are now mapped — fixed `[obj_id][seq][4000][4000]` @0x70, then optional
+  `content_bbox` / `template_uri` / `[u32 kind]`, then `[BGRA][width]` (= M),
+  then the template fields. Full sequence + evidence in
+  `docs/format/unknowns.md` (`.page`). Also surfaced a **third template
+  mechanism**, `template_uri` (a custom-image path in the app's private storage,
+  not embedded → unrenderable from the file). **The `.ksy` unlock is still
+  blocked**: a byte-discriminant search over 154 pages found NO clean structural
+  gate for the optionals (content_bbox tracks "page has content" = the object
+  tree after `base`; `kind` absent only for the PDF family `base ∈ {0xa6,0xfd}`
+  but `base` is downstream; `template_uri` only 3 pages/one note). So per the
+  no-scans-in-a-.ksy rule the paper/template records STAY procedural
+  (`_locate_paper_record`). NEXT to finish it: a **targeted sample campaign** —
+  (a) an empty page vs a one-stroke page in the SAME note (isolates the
+  content_bbox gate), (b) a custom-image-template note vs a plain one (isolates
+  the template_uri gate). Once a page-type/flag discriminant is pinned, model
+  paper+template+PDF-link in `sdocx_page.ksy` + extend `validate_page.py` +
+  move the entries out of `unknowns.md`.
 - **PDF-backed templates (Academic multi-page + imported PDF) — link decoded
   AND rasterised (DONE, 2026-07-09):** `samples/Notebook&Planner1_260709_213306.sdocx`
   is the first "Academic" template sample (+ its `…_gt.pdf`). These are NOT

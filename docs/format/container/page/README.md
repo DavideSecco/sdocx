@@ -75,9 +75,16 @@ The `test-background` samples pin the field: `Default` `(252,252,252)`, `Bianca`
 the only sample whose value is unmistakably a tint), all differing *only* in the
 paper. Every corpus note carries a **single light paper across all its pages**
 (mostly `(252,252,252)`), so `note.note` does **not** store this — the paper is a
-per-`.page` field. What sets `kind` to 2 vs 3, and the full structure of the
-variable preamble before the record, are **Unknown** (not needed to read the
-color); a full header-preamble model in the `.ksy` is future work.
+per-`.page` field. The record's **field sequence** is now decoded — a fixed
+`[obj_id][seq][4000][4000]` block at 0x70, then optional `content_bbox` /
+`template_uri` / `[u32 kind]`, then this paper record, then the template fields
+(see [unknowns.md `.page`](../../unknowns.md#page)). What is still **Unknown** is
+the *presence gate* of each optional (not a clean header flag in the corpus), so
+the record stays signature-located (`_locate_paper_record`) and out of the
+`.ksy`; cracking the gate — the single unlock for a full header model — needs a
+targeted sample campaign. The decode also surfaced a **third page-template
+mechanism**, `template_uri` (a custom-image template path in the app's private
+storage, not embedded in the file) — see unknowns.md.
 
 The **template** is *not* a single fixed field: its offset depends on `base`, so
 it is decoded procedurally (`page_template`) and documented with the object types
