@@ -280,6 +280,23 @@ procedural pending the wrapper decode.
   field. The only tempting `0,2,1` values are now decoded as ordinary `.spi`
   thumbnail media indices (12/12 cross-file). Treat bookmarks as not exported
   unless a future controlled pair changes bytes outside hashes/thumbnails.
+- **Three more targeted samples closed (2026-07-11):** `Default-darkmode-
+  Liscio_260711_153256.sdocx` confirms `note.note` `property_flags` bit 0x8
+  = `is_background_colour_inverted` (was Marker, now Decoded — docs updated
+  in `container/note-note/README.md`). `Importedlandscape_260711_153103.sdocx`
+  gives a genuinely landscape page (1600×928, builtin "Landscape Grid" PDF
+  template) but `end_tag.bin`'s `is_landscape` bit stays 0 — closed as a
+  negative result (the flag is decoupled from page aspect ratio). Basic
+  template id 10 confirmed by the user not to exist in the current app —
+  dropped from the wishlist, not a gap. Also checked `samples/
+  samsung2.sdocx.zip` (a real Android/Galaxy-Tab export from
+  `squ1dd13/sdocx2pdf#1` where it reportedly crashes that unrelated tool):
+  parses 100% cleanly here, zip framing is unremarkable — external
+  validation, not a new decode. The sample wishlist moved from agent memory
+  to `docs/format/sample-wishlist.md` (repo-visible, at the user's request)
+  and is now the canonical status list — see it for the next concrete
+  table-style-tail sample spec (4 files: merged cells / custom borders /
+  custom widths-heights / cell shading, each vs. a plain-grid baseline).
 - **Styled-table sample family** (unlocks the table style-tail semantics —
   the framing is done, only the defaults never varied): vs a plain grid, one
   change per sample — merged cells; custom border color/thickness; different

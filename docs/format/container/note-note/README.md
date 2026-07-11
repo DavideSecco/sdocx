@@ -26,8 +26,9 @@ offset  size  field                 status    note
 0       4     flex_offset           Decoded   absolute offset of the flex-field region
                                               (alias offset_to_data)
 4       1+n   property_flags        Decoded   var bitfield [u8 n][n bytes]; alias `flags`;
-                                              corpus 0x0/0x8 (bit 3: sdocx2pdf
-                                              "is_background_colour_inverted" — Marker)
+                                              corpus 0x0/0x8; bit 3 confirmed
+                                              "is_background_colour_inverted"
+                                              (2026-07-11, dark-theme sample)
 ..      1+n   field_flags           Decoded   var bitfield; alias `meta_flags`; each set
                                               bit gates one flex field (see below)
 ..      4     format_version        Decoded   4000 / 5400 (= end_tag.bin)

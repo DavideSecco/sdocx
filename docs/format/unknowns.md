@@ -23,18 +23,17 @@ hash. The former tail-record unknowns (preload param hints, pen_style_tail,
 tail_hash_block prefixes, tail_post_hash_u32, voice post fields) are resolved
 as flex fields — see `container/note-note/tail-records.md`. What remains:
 
-- **`property_flags` (alias `flags`) bit `0x8`**: sdocx2pdf names it
-  `is_background_colour_inverted`; corpus values 0x0/0x8 only, semantic
-  untested here (Marker).
 - **`pre_flex_gap`**: 0 or 8 bytes before the flex fields; when 8, a u32 pair
   `(width, round(width*sqrt(2)))` — default-page-size candidate, does not
   always match real `.page` sizes.
-- **Unexercised flex fields** (corpus 0/14, modeled from sdocx2pdf):
+- **Unexercised flex fields** (modeled from sdocx2pdf, still 0/corpus):
   `app_name`, `app_version`, `author_info`, `latitude_longitude`,
-  `template_uri`, `compatible_last_pen_info`, `attached_files`,
-  `server_check_point`, `fixed_font`, `text_summarisation`,
-  `stroke_group_size`, `app_custom_data`; field-flag bits 4, 5, 8 are not
-  modeled at all (would break the sequence if ever set).
+  `template_uri` (the note-level flex field — distinct from the per-`.page`
+  custom-image `template_uri` below, which IS decoded), `compatible_last_pen_info`,
+  `fixed_font`, `text_summarisation`, `stroke_group_size`, `app_custom_data`;
+  field-flag bits 4, 5, 8 are not modeled at all (would break the sequence if
+  ever set). `attached_files` and `server_check_point` are no longer in this
+  list — both decode cleanly on `Shared Notebook1_260710_000433.sdocx`.
 - **`text_core::Common` residue:** `section_data` pair semantics; paragraph
   type 6 (`parsing_state`, ≈ one record per character); the two non-boolean
   strikethrough span payloads on the benchmark; the trailing `(3,2)`/`(0,0)`
@@ -153,10 +152,15 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   still Unknown. First observed in `Shared Notebook1_260710_000433.sdocx`.
 
 ## `end_tag.bin`
-- **Variant coverage:** property flags are zero on the current corpus, so
-  `is_landscape` needs a landscape sample; SDK strings, skipped blocks,
-  encryption data, and non-empty custom data are structurally modeled but not
-  exercised.
+- **`is_landscape` (negative result, 2026-07-11):** `property_flags` bit 1
+  stays `0` even in `Importedlandscape_260711_153103.sdocx`, whose page is
+  genuinely landscape (1600×928, via a builtin "Landscape Grid" PDF
+  template). So document-level `is_landscape` is decoupled from per-page
+  aspect ratio — it likely tracks a separate orientation-lock setting never
+  triggered here, not the shape of the page content. Treat as closed unless
+  a way to set that device-level flag turns up.
+- **Variant coverage:** SDK strings, skipped blocks, encryption data, and
+  non-empty custom data are structurally modeled but not exercised.
 - **Older-sample display timestamp units**: `display_created_time` /
   `display_modified_time` are ms-close (not exact) on the 3 older imports.
 
@@ -173,3 +177,13 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
 - More **audio** samples (multi-audio, renamed, page-visible audio widgets)
   would settle whether the `note.note` → `.m4a` linkage is the only exported
   model here or whether some exports contain `sdocx2pdf`'s page object type 10.
+- **External validation, not a gap (2026-07-11):** `samples/samsung2.sdocx.zip`
+  is a real Android-exported (Galaxy Tab) file attached to
+  `squ1dd13/sdocx2pdf#1`, where it reportedly crashes that unrelated Rust
+  tool. It parses cleanly end-to-end here (0 unknown tail bytes, 0 sha
+  mismatches) and its zip framing is structurally identical to our other
+  samples — whatever sdocx2pdf chokes on isn't a real format variant we're
+  missing.
+
+See [`sample-wishlist.md`](./sample-wishlist.md) for the full list of
+samples that would close the remaining open questions above.
