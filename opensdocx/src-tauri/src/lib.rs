@@ -99,40 +99,83 @@ struct SceneText {
 // point maps to 3.40 page units. Reusing that factor here makes the app's line
 // widths land where pysdocx's do.
 const MPL_PT_TO_PAGE_UNITS: f64 = 3.40;
-const GRID_SPACING_DEFAULT: f64 = 102.5;
-/// Grid pitch per template id, measured from the 905px-wide GT photos (58px and
-/// 41px cells scaled to the 1600-unit page). Unknown grid ids would fall back to
-/// the default, but today only ids 4 and 5 classify as grids at all.
-fn grid_spacing(id: u32) -> f64 {
+
+/// "Basic" built-in background category for a template id, or None if unknown (→ drawn plain).
+/// Mirrors pysdocx `TEMPLATE_NAMES` (page.py): 1-3 line, 4-6 grid, 7-9 dot, 11 oxford.
+fn template_category(id: u32) -> Option<&'static str> {
     match id {
-        4 => 72.5,
-        5 => 102.5,
-        _ => GRID_SPACING_DEFAULT,
+        1..=3 => Some("line"),
+        4..=6 => Some("grid"),
+        7..=9 => Some("dot"),
+        11 => Some("oxford"),
+        _ => None,
     }
 }
-fn is_grid_template_id(id: u32) -> bool {
-    matches!(id, 4 | 5)
+/// Line/grid share one narrow/default/wide pitch triple (72.5/102.5/168.0), measured from the
+/// GT photos in samples/AllTypeofPageBasic/ (pysdocx GRID_SPACING_BY_ID / LINE_SPACING_BY_ID).
+fn line_grid_spacing(id: u32) -> f64 {
+    match id {
+        1 | 4 => 72.5,
+        3 | 6 => 168.0,
+        _ => 102.5, // 2 | 5 (and any unmeasured fallback)
+    }
 }
-/// Page coords of the first vertical/horizontal grid line: vertical lines start
-/// flush at x=0, horizontal ones ~44px down (the template's top margin).
+/// Dot lattice pitch `(row, col)` — NOT square: columns run ~7-10% wider than rows at every id
+/// (pysdocx DOT_SPACING_BY_ID, blob-centroid measurement).
+fn dot_spacing(id: u32) -> (f64, f64) {
+    match id {
+        7 => (72.5, 79.7),
+        9 => (168.0, 174.8),
+        _ => (102.5, 110.0), // 8 (and fallback)
+    }
+}
+/// Oxford (ruled + red margin): its own rule pitch + a single vertical margin rule (pysdocx
+/// OXFORD_LINE_SPACING / OXFORD_MARGIN_X / OXFORD_MARGIN_COLOR).
+const OXFORD_LINE_SPACING: f64 = 65.5;
+const OXFORD_MARGIN_X: f64 = 235.0;
+const OXFORD_MARGIN_COLOR: [u8; 3] = [0xe0, 0xa8, 0xa8];
+/// Page coords of the first vertical/horizontal line: verticals flush at x=0, horizontals ~44px
+/// down (the template's top margin). Shared by all built-in categories (pysdocx GRID_ORIGIN).
 const GRID_ORIGIN: [f64; 2] = [0.0, 44.0];
-/// Faint blue-gray of the Samsung squared template (pysdocx render.py GRID_COLOR).
-const GRID_COLOR: [u8; 3] = [0xd3, 0xda, 0xe8];
-/// pysdocx draws the grid at 0.6 matplotlib points (render.py draw_grid).
+/// Blue-gray of the Samsung rule/grid/dot templates. Deliberately DARKER than the GT-photo tint
+/// (grid ~#d3dae8 / dots ~#b7bfce) at the user's request (2026-07-10) — true-to-photo is too faint
+/// to read on screen. Kept in sync with pysdocx render.py GRID_COLOR/DOT_COLOR.
+const GRID_COLOR: [u8; 3] = [0xa6, 0xaf, 0xca];
+const DOT_COLOR: [u8; 3] = [0x8f, 0x98, 0xb0];
+/// pysdocx draws rules at 0.6 matplotlib points (render.py draw_grid).
 const GRID_LINE_WIDTH: f64 = 0.6 * MPL_PT_TO_PAGE_UNITS;
+/// Dot radius in page units (pysdocx draws scatter s≈1.6 pt² ≈ this radius once bridged).
+const DOT_RADIUS: f64 = 2.2;
 
 #[derive(Serialize)]
 struct SceneTemplate {
     id: u32,
+    /// grid | line | dot | oxford | pdf | plain — the worker draws per this.
     kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    spacing: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     origin: Option<[f64; 2]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     color: Option<[u8; 3]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     line_width: Option<f64>,
+    /// Horizontal-rule pitch (grid/line/dot/oxford).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    row_spacing: Option<f64>,
+    /// Vertical-rule / dot-column pitch (grid/dot only; line/oxford have no verticals).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    col_spacing: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dot_radius: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    margin_x: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    margin_color: Option<[u8; 3]>,
+    /// PDF-backed templates (Academic / imported PDF): which embedded PDF + which page. The
+    /// worker still needs a rasteriser to draw these; the link is carried so it can.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pdf_media_index: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pdf_page_index: Option<u32>,
 }
 
 /// An ellipse resolved from its 8 stored boundary points (pysdocx
@@ -767,19 +810,68 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
     }
 
     let template = page.template.map(|t| {
-        let grid = matches!(t.source, sdocx::PageTemplateSource::BuiltIn) && is_grid_template_id(t.id);
-        SceneTemplate {
+        let category = match t.source {
+            sdocx::PageTemplateSource::CustomPdf { .. } => "pdf",
+            sdocx::PageTemplateSource::BuiltIn => template_category(t.id).unwrap_or("plain"),
+        };
+        let mut st = SceneTemplate {
             id: t.id,
-            kind: match t.source {
-                sdocx::PageTemplateSource::BuiltIn if grid => "grid".into(),
-                sdocx::PageTemplateSource::BuiltIn => "plain".into(),
-                sdocx::PageTemplateSource::CustomPdf { .. } => "pdf".into(),
-            },
-            spacing: grid.then(|| grid_spacing(t.id)),
-            origin: grid.then_some(GRID_ORIGIN),
-            color: grid.then_some(GRID_COLOR),
-            line_width: grid.then_some(GRID_LINE_WIDTH),
+            kind: category.into(),
+            origin: None,
+            color: None,
+            line_width: None,
+            row_spacing: None,
+            col_spacing: None,
+            dot_radius: None,
+            margin_x: None,
+            margin_color: None,
+            pdf_media_index: None,
+            pdf_page_index: None,
+        };
+        match category {
+            "grid" => {
+                let s = line_grid_spacing(t.id);
+                st.origin = Some(GRID_ORIGIN);
+                st.color = Some(GRID_COLOR);
+                st.line_width = Some(GRID_LINE_WIDTH);
+                st.row_spacing = Some(s);
+                st.col_spacing = Some(s); // square
+            }
+            "line" => {
+                st.origin = Some(GRID_ORIGIN);
+                st.color = Some(GRID_COLOR);
+                st.line_width = Some(GRID_LINE_WIDTH);
+                st.row_spacing = Some(line_grid_spacing(t.id)); // horizontal rules only
+            }
+            "dot" => {
+                let (row, col) = dot_spacing(t.id);
+                st.origin = Some(GRID_ORIGIN);
+                st.color = Some(DOT_COLOR);
+                st.row_spacing = Some(row);
+                st.col_spacing = Some(col);
+                st.dot_radius = Some(DOT_RADIUS);
+            }
+            "oxford" => {
+                st.origin = Some(GRID_ORIGIN);
+                st.color = Some(GRID_COLOR);
+                st.line_width = Some(GRID_LINE_WIDTH);
+                st.row_spacing = Some(OXFORD_LINE_SPACING);
+                st.margin_x = Some(OXFORD_MARGIN_X);
+                st.margin_color = Some(OXFORD_MARGIN_COLOR);
+            }
+            "pdf" => {
+                if let sdocx::PageTemplateSource::CustomPdf {
+                    media_index,
+                    page_index,
+                } = t.source
+                {
+                    st.pdf_media_index = Some(media_index);
+                    st.pdf_page_index = Some(page_index);
+                }
+            }
+            _ => {}
         }
+        st
     });
 
     let paper = page.background_color.as_ref().map(color_arr).unwrap_or([255, 255, 255]);
@@ -820,7 +912,7 @@ async fn open_document(path: String, state: State<'_, AppState>) -> Result<DocMe
 /// prefetch) parse in parallel instead of queueing on one page at a time.
 #[tauri::command]
 async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<PageScene, String> {
-    let (bytes, note_text, media_map, tables) = {
+    let (bytes, note_text, tables) = {
         let mut guard = state.reader.lock().unwrap();
         let reader = guard.as_mut().ok_or("no document loaded")?;
         let bytes = reader.page_bytes(index).map_err(|e| e.to_string())?;
@@ -833,10 +925,11 @@ async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<Page
         let meta = reader.metadata();
         let typed = meta.note_text.as_ref().map(|t| t.text.clone());
         let tables = if !meta.tables.is_empty() && index == table_target_page(typed.as_deref()) { meta.tables.clone() } else { Default::default() };
-        (bytes, note_text, reader.media_index_map().clone(), tables)
+        (bytes, note_text, tables)
     };
+    // Media indices in the parsed page are the decoded `<index>@` archive indices
+    // (the parser's one media currency, same as pysdocx); `get_media` resolves them.
     let mut page = sdocx::parse_page(&bytes).map_err(|e| e.to_string())?;
-    sdocx::remap_media_indices(&mut page, &media_map);
     if let Some(text) = note_text {
         page.elements.push(sdocx::PageElement::TextBox(text));
     }
@@ -860,16 +953,16 @@ async fn get_page_sizes(state: State<'_, AppState>) -> Result<Vec<[u32; 2]>, Str
 }
 
 /// Read one embedded media blob (on demand) and return it base64-encoded.
+/// `index` is the decoded `<index>@` archive index carried by the Scene
+/// (images, PDF templates) — the Reader resolves it internally.
 #[tauri::command]
 async fn get_media(index: usize, state: State<'_, AppState>) -> Result<MediaOut, String> {
     let mut guard = state.reader.lock().unwrap();
     let reader = guard.as_mut().ok_or("no document loaded")?;
     let mime = reader
-        .metadata()
-        .media_assets
-        .get(index)
+        .media_asset(index)
         .map(|a| a.mime_type.clone())
-        .ok_or("media index out of range")?;
+        .ok_or("unknown media archive index")?;
     let bytes = reader.media_bytes(index).map_err(|e| e.to_string())?;
     // Pasted images are extensionless, so the name-derived mime can be wrong —
     // trust the magic bytes when they identify a known image format.
@@ -955,9 +1048,37 @@ mod tests {
         let scene = scene(&mut reader, 0);
         let t = scene.template.expect("template present");
         assert_eq!((t.id, t.kind.as_str()), (4, "grid"));
-        assert_eq!(t.spacing, Some(72.5));
+        assert_eq!(t.row_spacing, Some(72.5));
+        assert_eq!(t.col_spacing, Some(72.5)); // grid is square
         assert_eq!(t.origin, Some(GRID_ORIGIN));
         assert_eq!(t.color, Some(GRID_COLOR));
+    }
+
+    /// The Basic-templates sample cycles every built-in id — spot-check one per category resolves
+    /// to the right kind + pitch (line/dot/oxford were previously dropped to "plain" = blank).
+    #[test]
+    fn basic_templates_resolve_per_category() {
+        let Some(mut reader) = sample("AlltypeofPageBasic_260709_200911.sdocx") else {
+            return;
+        };
+        // Archive/page order: page 2 = Lined (id 2), page 6 = Grid wide (id 6), page 8 = Dot (id 8),
+        // page 11 = Oxford (id 11). Resolve by id rather than assuming an index.
+        let mut seen = std::collections::HashMap::new();
+        for i in 0..reader.page_count() {
+            if let Some(t) = scene(&mut reader, i).template {
+                seen.entry(t.id).or_insert((t.kind.clone(), t.row_spacing, t.col_spacing, t.margin_x));
+            }
+        }
+        assert_eq!(seen[&2].0, "line");
+        assert_eq!(seen[&2].1, Some(102.5));
+        assert_eq!(seen[&2].2, None); // line: no verticals
+        assert_eq!(seen[&6].0, "grid");
+        assert_eq!(seen[&6].1, Some(168.0));
+        assert_eq!(seen[&8].0, "dot");
+        assert_eq!(seen[&8].1, Some(102.5));
+        assert_eq!(seen[&8].2, Some(110.0)); // dot: non-square
+        assert_eq!(seen[&11].0, "oxford");
+        assert_eq!(seen[&11].3, Some(OXFORD_MARGIN_X));
     }
 
     /// The shapes sample carries every family; the Scene must resolve geometry:

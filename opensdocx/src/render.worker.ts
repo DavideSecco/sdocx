@@ -27,9 +27,23 @@ interface STextSeg {
 }
 interface STextLine { advance: number; segs: STextSeg[] }
 interface SText { anchor: [number, number]; wrap_width: number; angle_deg: number; lines: STextLine[] }
-// Grid style (spacing/origin/color/line_width) comes fully resolved from the Rust
-// Scene builder — no style constants here (single source, docs/app/README.md risk ②).
-interface STemplate { id: number; kind: string; spacing?: number; origin?: [number, number]; color?: RGB; line_width?: number }
+// Template style (kind + pitches/origin/color/line_width, and the PDF media/page link) comes
+// fully resolved from the Rust Scene builder — no style constants here (single source,
+// docs/app/README.md risk ②). kind: grid | line | dot | oxford | pdf | plain.
+interface STemplate {
+  id: number;
+  kind: string;
+  origin?: [number, number];
+  color?: RGB;
+  line_width?: number;
+  row_spacing?: number;
+  col_spacing?: number;
+  dot_radius?: number;
+  margin_x?: number;
+  margin_color?: RGB;
+  pdf_media_index?: number;
+  pdf_page_index?: number;
+}
 // Shape geometry is resolved in the Scene builder too: ellipse/round_rect arrive as
 // native-primitive params, arrows carry prebuilt head triangles.
 interface SEllipse { cx: number; cy: number; rx: number; ry: number; rotation_deg: number }
@@ -82,6 +96,9 @@ interface Job {
   scene: PageScene;
   scale: number; // device px per page unit
   images: { index: number; bitmap: ImageBitmap }[];
+  /** Pre-rasterized PDF-template background (kind==="pdf"), from PDF.js on the
+   * main thread. A structured clone of the cached bitmap — the worker owns it. */
+  template_bitmap?: ImageBitmap;
 }
 
 function rgb(c: RGB | null, fb: string): string {
@@ -341,23 +358,59 @@ function renderJob(job: Job): void {
   c.fillStyle = css(paper);
   c.fillRect(0, 0, scene.width, scene.height);
 
-  // Squared-paper template: above the flat fill, below everything else (matches
-  // pysdocx render_page, grid at zorder 0.5).
+  // PDF-backed template (Academic multi-page / imported PDF): pre-rasterized by
+  // the main thread (PDF.js), composited to fill the page under everything —
+  // mirrors pysdocx rasterize_pdf_page. The PDF page is A4, the same aspect as
+  // the sdocx page, so stretching to (width, height) does not distort.
+  if (job.template_bitmap) {
+    c.drawImage(job.template_bitmap, 0, 0, scene.width, scene.height);
+    job.template_bitmap.close(); // the worker's clone — free it eagerly
+  }
+
+  // Built-in "Basic" background template: above the flat fill, below everything else (matches
+  // pysdocx render_page, drawn at zorder 0.5). grid = verticals + horizontals; line = horizontals
+  // only; dot = a (non-square) lattice of dots; oxford = horizontals + one red margin rule.
   const tpl = scene.template;
-  if (tpl?.kind === "grid" && tpl.spacing) {
-    const [ox, oy] = tpl.origin ?? [0, 0];
-    const grid = new Path2D();
-    for (let x = ox % tpl.spacing; x <= scene.width + 0.5; x += tpl.spacing) {
-      grid.moveTo(x, 0);
-      grid.lineTo(x, scene.height);
+  if (tpl?.origin && tpl.row_spacing) {
+    const [ox, oy] = tpl.origin;
+    const rows = tpl.row_spacing;
+    if (tpl.kind === "dot" && tpl.col_spacing) {
+      const cols = tpl.col_spacing;
+      const r = tpl.dot_radius ?? 2;
+      c.fillStyle = rgb(tpl.color ?? null, "#8f98b0");
+      for (let y = oy % rows; y <= scene.height + 0.5; y += rows) {
+        for (let x = ox % cols; x <= scene.width + 0.5; x += cols) {
+          c.beginPath();
+          c.arc(x, y, r, 0, Math.PI * 2);
+          c.fill();
+        }
+      }
+    } else if (tpl.kind === "grid" || tpl.kind === "line" || tpl.kind === "oxford") {
+      const path = new Path2D();
+      // Vertical rules only for the square grid (line/oxford have none).
+      if (tpl.kind === "grid" && tpl.col_spacing) {
+        for (let x = ox % tpl.col_spacing; x <= scene.width + 0.5; x += tpl.col_spacing) {
+          path.moveTo(x, 0);
+          path.lineTo(x, scene.height);
+        }
+      }
+      for (let y = oy % rows; y <= scene.height + 0.5; y += rows) {
+        path.moveTo(0, y);
+        path.lineTo(scene.width, y);
+      }
+      c.strokeStyle = rgb(tpl.color ?? null, "#a6afca");
+      c.lineWidth = tpl.line_width ?? 2;
+      c.stroke(path);
+      // Oxford's single vertical margin rule, in light red.
+      if (tpl.kind === "oxford" && tpl.margin_x != null) {
+        const margin = new Path2D();
+        margin.moveTo(tpl.margin_x, 0);
+        margin.lineTo(tpl.margin_x, scene.height);
+        c.strokeStyle = rgb(tpl.margin_color ?? null, "#e0a8a8");
+        c.lineWidth = (tpl.line_width ?? 2) * 1.6;
+        c.stroke(margin);
+      }
     }
-    for (let y = oy % tpl.spacing; y <= scene.height + 0.5; y += tpl.spacing) {
-      grid.moveTo(0, y);
-      grid.lineTo(scene.width, y);
-    }
-    c.strokeStyle = rgb(tpl.color ?? null, "#d3dae8");
-    c.lineWidth = tpl.line_width ?? 2;
-    c.stroke(grid);
   }
 
   const imgMap = new Map(images.map((i) => [i.index, i.bitmap]));

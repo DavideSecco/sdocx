@@ -7,7 +7,9 @@ interface DocMeta { page_count: number; dark_mode: boolean; background: RGB | nu
 interface Stroke { points: [number, number][]; color: RGB | null; width: number; tapered: boolean; tool_id: number | null; pressures?: number[] }
 interface SImage { x: number; y: number; w: number; h: number; media_index: number }
 interface SText { anchor: [number, number]; wrap_width: number; angle_deg: number; lines: unknown[] }
-interface STemplate { id: number; kind: string; spacing?: number; origin?: [number, number]; color?: RGB; line_width?: number }
+// Only the fields the main thread acts on; the full style payload (pitches/colors) is consumed
+// by the worker (see render.worker.ts STemplate). kind==="pdf" carries the embedded-PDF link.
+interface STemplate { id: number; kind: string; pdf_media_index?: number; pdf_page_index?: number }
 interface SShape { kind: string; points: [number, number][]; color: RGB | null; width: number; closed: boolean; ellipse?: unknown; round_rect?: unknown; outline?: unknown[]; heads?: [number, number][][] }
 interface PageScene { width: number; height: number; paper: RGB; default_ink: RGB; template: STemplate | null; strokes: Stroke[]; images: SImage[]; shapes: SShape[]; texts: SText[] }
 
@@ -91,11 +93,14 @@ function renderViaWorker(
   scene: PageScene,
   scale: number,
   images: { index: number; bitmap: ImageBitmap }[],
+  templateBitmap: ImageBitmap | null,
 ): Promise<ImageBitmap | null> {
   return new Promise((resolve) => {
     const id = ++jobSeq;
     jobs.set(id, resolve);
-    worker.postMessage({ id, scene, scale, images });
+    // templateBitmap is NOT transferred (structured clone): the cached copy in
+    // templateRasterCache must survive for the next render at this zoom.
+    worker.postMessage({ id, scene, scale, images, template_bitmap: templateBitmap ?? undefined });
   });
 }
 
@@ -137,6 +142,70 @@ async function resolveImages(scene: PageScene): Promise<{ index: number; bitmap:
     if (b) out.push({ index: im.media_index, bitmap: b });
   }
   return out;
+}
+
+// ── PDF-backed templates (Academic multi-page / imported PDF) ────────────────
+// For template kind==="pdf" the Scene carries (pdf_media_index, pdf_page_index):
+// the background artwork is a real PDF embedded under media/ in the archive
+// (decoded from the .page header — see crates/sdocx page_pdf_template). PDF.js
+// rasterizes the referenced page here, once per zoom level, and the worker
+// composites the bitmap under the strokes. PDF.js over native pdfium: nothing
+// native to bundle per-OS, and the raster is a one-time cost per (page, zoom)
+// hidden by the same cache policy as the page bitmaps themselves.
+type PdfJs = typeof import("pdfjs-dist");
+type PdfDoc = import("pdfjs-dist").PDFDocumentProxy;
+let pdfjsLoad: Promise<PdfJs> | null = null;
+function pdfjs(): Promise<PdfJs> {
+  // Lazy: notes without PDF templates never pay for loading the library.
+  pdfjsLoad ??= (async () => {
+    const [lib, workerUrl] = await Promise.all([
+      import("pdfjs-dist"),
+      import("pdfjs-dist/build/pdf.worker.mjs?url"),
+    ]);
+    lib.GlobalWorkerOptions.workerSrc = workerUrl.default;
+    return lib;
+  })();
+  return pdfjsLoad;
+}
+const pdfDocCache = new Map<number, Promise<PdfDoc | null>>();
+function getPdfDoc(mediaIndex: number): Promise<PdfDoc | null> {
+  let p = pdfDocCache.get(mediaIndex);
+  if (!p) {
+    p = (async () => {
+      try {
+        const m = await invoke<{ mime: string; base64: string }>("get_media", { index: mediaIndex });
+        const bytes = Uint8Array.from(atob(m.base64), (c) => c.charCodeAt(0));
+        return await (await pdfjs()).getDocument({ data: bytes }).promise;
+      } catch {
+        return null; // missing/corrupt media: page renders without a background
+      }
+    })();
+    pdfDocCache.set(mediaIndex, p);
+  }
+  return p;
+}
+// One raster per (media, page), replaced when the zoom scale changes — the same
+// once-per-zoom policy as the page bitmaps, so scroll/zoom never re-rasterizes.
+const templateRasterCache = new Map<string, { scale: number; bitmap: ImageBitmap }>();
+async function resolveTemplateBitmap(scene: PageScene, scale: number): Promise<ImageBitmap | null> {
+  const t = scene.template;
+  if (t?.kind !== "pdf" || t.pdf_media_index == null || t.pdf_page_index == null) return null;
+  const key = `${t.pdf_media_index}:${t.pdf_page_index}`;
+  const hit = templateRasterCache.get(key);
+  if (hit && hit.scale === scale) return hit.bitmap;
+  const doc = await getPdfDoc(t.pdf_media_index);
+  if (!doc || t.pdf_page_index >= doc.numPages) return null;
+  const page = await doc.getPage(t.pdf_page_index + 1); // PDF.js pages are 1-based
+  const pdfWidth = page.getViewport({ scale: 1 }).width;
+  const viewport = page.getViewport({ scale: (scene.width * scale) / pdfWidth });
+  const canvas = new OffscreenCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+  // PDF.js v5 renders straight onto a canvas (OffscreenCanvas is supported; the
+  // typings only name HTMLCanvasElement, hence the cast).
+  await page.render({ canvas: canvas as unknown as HTMLCanvasElement, viewport }).promise;
+  const bitmap = canvas.transferToImageBitmap();
+  hit?.bitmap.close();
+  templateRasterCache.set(key, { scale, bitmap });
+  return bitmap;
 }
 
 // ── Layout ───────────────────────────────────────────────────────────────────
@@ -268,7 +337,9 @@ async function renderSlot(i: number, slot: Slot, scale: number): Promise<void> {
     if (stale()) return;
     const images = await resolveImages(scene);
     if (stale()) return;
-    const bitmap = await renderViaWorker(scene, eff, images);
+    const tplBitmap = await resolveTemplateBitmap(scene, eff);
+    if (stale()) return;
+    const bitmap = await renderViaWorker(scene, eff, images, tplBitmap);
     if (stale()) {
       bitmap?.close();
       return;
@@ -351,6 +422,10 @@ async function loadDocument(selected: string): Promise<void> {
   sceneCache.clear();
   for (const b of mediaCache.values()) b?.close();
   mediaCache.clear();
+  for (const p of pdfDocCache.values()) p.then((d) => void d?.destroy().catch(() => {}));
+  pdfDocCache.clear();
+  for (const r of templateRasterCache.values()) r.bitmap.close();
+  templateRasterCache.clear();
   curPage = 0;
   emptyEl.hidden = true;
   fitZoom();
