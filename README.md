@@ -29,10 +29,12 @@ macOS), and OpenSdocx aims to fill that gap.
 
 ## Running the app (development)
 
-Requires **Rust**, **Node.js**, and (on Linux) **`webkit2gtk-4.1`** + **`gtk3`**.
+Requires **Rust**, **Node.js 24 LTS**, and (on Linux) **`webkit2gtk-4.1`** +
+**`gtk3`**. Use the npm version bundled with Node.js; if you use `nvm`, running
+`nvm use` from the repository selects the supported Node.js release line.
 
 ```sh
-npm --prefix opensdocx install        # first time only
+npm --prefix opensdocx ci             # first time and after dependency changes
 npm --prefix opensdocx run tauri dev  # build + launch the native window
 ```
 
