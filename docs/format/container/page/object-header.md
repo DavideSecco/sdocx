@@ -7,7 +7,7 @@ strongly-grounded RE in the project.
 
 - **Formal spec:** [`spec/ksy/sdocx_object_header.ksy`](../../../../spec/ksy/sdocx_object_header.ksy)
   — fed one object blob; models the base header **and** the field_flags-gated
-  extensions. Validated field-by-field against pysdocx on **11788/11788** corpus
+  extensions. Validated field-by-field against pysdocx on every corpus
   objects by the test gate.
 - **HDR_EXT diagnostic:** [`spec/tools/analyze_header_ext.py`](../../../../spec/tools/analyze_header_ext.py)
   exports every 0x40000 extension row and summaries for `seq` / `counter`
@@ -73,19 +73,33 @@ that offset is other fields and reads as near-zero garbage. Verified against 9
 hand-labelled rotated images (exact on 5/6 non-zero angles, 1° off on a
 protractor-drawn label) and two `-45°/90°` placements.
 
-### `0x20` EXTRA_KEY — 32-byte named block
-A `u16`-length-prefixed key string after a constant `02 01 00` head. The key is
-literally `extra_key_stroke_shape` (23 chars), then a trailing `u32 = 1`.
-Identical on **40/40** objects that set the bit, and only on **strokes**.
+### `0x20` EXTRA_KEY — variable-sized named property
+The original form is a `u16`-length-prefixed key after a `02 01 00` head. Its
+key is `extra_key_stroke_shape` (23 chars), followed by `u32 = 1`.
 Interpretation: the stroke is a shape's recognised ink. Honest caveat: despite
 the name these strokes do **not** link to any inserted-shape object (shapes = 0
 on every page carrying them), so it reads as a per-stroke attribute, not a
 foreign key.
 
+`Mathsolver&Hyperlink` proves that the block is not fixed at 32 bytes. Math
+Solver uses a `04 01 00` head with `RecogUIFeature_*` keys; the
+`RecogUIFeature_MathStrokeUuidStringArray` value is `[u16 count]` followed by
+counted UTF-16 strings. Their names and values identify them as stroke UUIDs
+associated with the recognised expression (15 in the first observed group),
+but the exact relationship remains Marker. A 16-byte zero tail
+follows HDR_EXT on this family. Both Python and Kaitai decode the two property
+forms and cross-check every string.
+
+The same sample also contains `06/07 01 00` multi-property bags whose visible
+keys include `RecogUIFeature_MathExpressionString` and
+`RecogUIFeature_MathFailCodeKey`. Their complete extent and following HDR_EXT
+are structurally decoded, but their inner value sequence remains raw/Unknown
+pending a second isolating sample.
+
 ### `0x40000` HDR_EXT — 16-byte extension
 Layout `[u32 counter][u32 seq][u32 page_width][u32 page_height]`. The trailing
-`page_width`/`page_height` match the page header on **1690/1690** objects (across
-4 distinct page sizes — real signal).
+`page_width`/`page_height` match the page header on every corpus object carrying
+the block, across multiple page sizes.
 
 Diagnostic command:
 
@@ -95,7 +109,7 @@ Diagnostic command:
 
 Current corpus summary:
 
-- **1690** HDR_EXT rows; **0** page-dimension mismatches.
+- **0** HDR_EXT/page-dimension mismatches across the corpus.
 - Object types carrying it: stroke 1427, shape 251, image 8, text_box 4.
 - Extension offsets are explained by prior gated fields:
   - `105` when HDR_EXT starts immediately after the base header;
@@ -127,6 +141,4 @@ Current corpus summary:
   file/session save-generation value; `counter` behaves like a persistent
   object/group lineage id. Neither interpretation is clean enough for Decoded
   status on the current corpus.
-- **`extra_key` trailing `u32 = 1`** — decoded as constant on 40/40 blocks, all
-  on stroke objects; flag-vs-count can't be disambiguated because it never
-  varies.
+- **Scalar `extra_key` trailing `u32 = 1`** — flag-vs-count remains ambiguous.

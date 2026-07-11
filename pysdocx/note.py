@@ -317,13 +317,21 @@ def parse_typed_text(note_bytes: bytes) -> dict | None:
     }
 
 
-# Table cells also live in note.note (not the page). Each cell is preceded by a 10-byte marker:
-# `06 00 <u16 kind> 00 00 <u32 char_count>`, immediately after which its UTF-16LE text begins.
-# The cell's bottom-left corner in page coords is the f64 pair at `marker - 16` (x) and
-# `marker - 8` (y). Confirmed on benchmark page 73920cee's kind 0x95 cells ("Cell1,1"...)
-# and on Associationpages...'s kind 0x8d sparse table ("c11", "c13", "c21"...).
+# Table cells also live in note.note (not the page). Each cell is preceded by a
+# 10-byte marker `06 00` + the cell's Common frame header `[u32 frame_size]
+# [u32 char_count]`, immediately after which its UTF-16LE text begins. The
+# cell's bottom-left corner in page coords is the f64 pair at `marker - 16` (x)
+# and `marker - 8` (y). (The structural parser `note_doc.note_doc_tables` is the
+# authoritative decoder; this marker scan is the render/legacy path.)
+#
+# A cell is accepted by validating its frame header structurally: the
+# `frame_size` must be a plausible sub-64KB size that leaves room for the text.
+# An earlier version allowlisted the low byte of `frame_size` (0x8d/0x95/0xcd),
+# but that low byte tracks the frame's exact size and so varies with per-cell
+# styling and even between plain corpora — the 4x3 styled family (frame sizes
+# 137..239) is a counterexample. See docs/format/container/note-note/tables.md.
 TABLE_CELL_PREFIX = b"\x06\x00"
-TABLE_CELL_KINDS = frozenset({0x8D, 0x95, 0xCD})
+TABLE_CELL_MAX_FRAME = 0xFFFF
 TABLE_CELL_MARKER_LEN = 10
 TABLE_ANCHOR_X_BACK = 16
 TABLE_ANCHOR_Y_BACK = 8
@@ -961,9 +969,13 @@ def parse_tables(note_bytes: bytes) -> list[dict]:
     while off != -1:
         if off + TABLE_CELL_MARKER_LEN > len(note_bytes):
             break
-        kind = struct.unpack_from("<H", note_bytes, off + 2)[0]
+        frame_size = struct.unpack_from("<I", note_bytes, off + 2)[0]
         char_count = struct.unpack_from("<I", note_bytes, off + 6)[0]
-        if kind not in TABLE_CELL_KINDS or not (1 <= char_count <= 512):
+        # Frame header must be structurally plausible: a sub-64KB frame that
+        # leaves room for its own char_count field + the UTF-16 text.
+        if (not (16 <= frame_size <= TABLE_CELL_MAX_FRAME)
+                or not (1 <= char_count <= 512)
+                or frame_size < 4 + 2 * char_count):
             off = note_bytes.find(TABLE_CELL_PREFIX, off + 1)
             continue
 

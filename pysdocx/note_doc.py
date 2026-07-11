@@ -385,12 +385,13 @@ def find_common_frames(blob: bytes, format_version: int) -> list[dict]:
 # Object layout (validated byte-exact, zero counterexamples, on every type-22
 # object in the corpus — see spec/tools/analyze_note_doc.py):
 #
-#   wrap      [self-sized] uuid, ts1_us, ts2_us, page-coords bbox, n_rows-1
+#   wrap      [self-sized] uuid, ts1_us, ts2_us, page-coords bbox, table_index
 #   midpoints [self-sized] the 4 edge midpoints of the table rect (text coords)
 #   outline   [self-sized] path of the table rect (text coords)
 #   content   [self-sized] col widths, n_rows, the row chain, then the style
-#             tail (page bbox again, 2 border blocks, per-column f32 arrays,
-#             a final ARGB color)
+#             tail (page bbox again, outer-frame border block, per-column
+#             width-constraint arrays, max table width, grid-line border
+#             block, theme default-fill ARGB)
 #   row       [chain] f32 height, u32 row_index, u32 n_cols, the cell chain
 #   cell      [chain] u32 col_index, page-coords bbox, then an inner group:
 #             wrap (cell uuid, bbox again) + midpoints + outline; the cell's
@@ -442,7 +443,10 @@ def _parse_table_wrap(cur: _Cur, table_level: bool) -> dict:
     _expect(cur, cur.u32() == 0, "wrap trailing zero")
     if table_level:
         _expect(cur, cur.u8() == 3, "wrap b3 != 3")
-        out["rows_minus_1"] = cur.u32()
+        # 0-based index of this table among the note's tables (document order).
+        # (Named rows_minus_1 before the 4x3 styled-table family; that only held
+        # by coincidence on the old 2-table corpus.)
+        out["table_index"] = cur.u32()
     _expect(cur, cur.pos == start + size, "wrap size mismatch")
     return out
 
@@ -531,16 +535,23 @@ def _parse_table_outline(cur: _Cur, cell_level: bool,
 
 
 def _parse_table_borders(cur: _Cur) -> list[dict]:
-    """Chain-sized block of 4 (ARGB color, 3×f32) entries — border styles.
+    """Chain-sized block of 4 border entries: ARGB + (width, radius_x, radius_y).
 
-    Which entry is which border, and the meaning of the three floats
-    (width + two more), are Unknown pending a styled-table sample family.
+    Decoded against the Tabella4x3Regolarev2 border family (2026-07-11):
+    entries 0/2 are the vertical edges/lines and 1/3 the horizontal ones
+    (the two members of each pair have never differed, so left-vs-right and
+    top-vs-bottom stay unresolved). A disabled border is fully zeroed
+    (argb 00000000, width 0). The two radii are the rounded-corner radii:
+    26.0 on the default table frame, 0 on "sharp 90°" frames and on grid
+    lines. The first block in the style tail is the table's outer frame,
+    the second the inner grid lines.
     """
     size = cur.u32()
     end = cur.pos + size
     _expect(cur, cur.u32() == 0, "borders zero")
     _expect(cur, cur.bytes_(5) == _T5, "borders T5")
-    items = [{"argb": cur.u32(), "floats": (cur.f32(), cur.f32(), cur.f32())}
+    items = [{"argb": cur.u32(), "width": cur.f32(),
+              "radius_x": cur.f32(), "radius_y": cur.f32()}
              for _ in range(4)]
     _expect(cur, cur.pos == end, "borders size mismatch")
     return items
@@ -572,7 +583,6 @@ def parse_table_object(blob: bytes, off: int, size: int,
     col_widths = [cur.f32() for _ in range(n_cols)]
     n_rows = cur.u32()
     _expect(cur, 1 <= n_rows <= 4096, "row count implausible")
-    _expect(cur, n_rows == wrap["rows_minus_1"] + 1, "row count vs wrap")
 
     rows = []
     for r in range(n_rows):
@@ -586,11 +596,25 @@ def parse_table_object(blob: bytes, off: int, size: int,
         for k in range(n_cols):
             cell_size = cur.u32()
             cell_end = cur.pos + cell_size
-            _expect(cur, cur.bytes_(9) == _PRE9, "cell preamble")
+            # Cell preamble is `00000000` + a 5-byte `01 <styled> 02 00 00`
+            # marker. The 2nd marker byte is 0 on a default cell and 1 on a
+            # cell carrying explicit styling (background fill / bold / size /
+            # colour / strikethrough), which then shows up as extra spans in
+            # the nested Common frame.
+            _expect(cur, cur.u32() == 0, "cell preamble zeros")
+            _expect(cur, cur.u8() == 1, "cell preamble m0")
+            cell_styled = cur.u8()
+            _expect(cur, cell_styled in (0, 1), "cell preamble styled flag")
+            _expect(cur, cur.bytes_(3) == b"\x02\x00\x00", "cell preamble m2")
             _expect(cur, cur.u32() == k, "cell column index")
             _expect(cur, cur.u32() == 1, "cell one_a")
             _expect(cur, cur.u32() == 1, "cell one_b")
-            _expect(cur, cur.u32() == 0, "cell zero")
+            # Explicit cell background fill as a little-endian 0xAARRGGBB u32.
+            # 0 == no fill (the theme default). A manually set cell background
+            # ("sfondo" colour) is stored here; the "evidenzia riga/colonna"
+            # header highlight instead leaves this 0 and marks the cell via a
+            # header-style span set (see the span-type notes below).
+            cell_fill_argb = cur.u32()
             bbox = _rect(cur)  # page coordinates
             _expect(cur, cur.u8() == 1, "cell b1")
             inner_size = cur.u32()
@@ -605,7 +629,8 @@ def parse_table_object(blob: bytes, off: int, size: int,
             _expect(cur, cur.pos == cell_end, "cell size mismatch")
             cells.append({
                 "col": k, "bbox": bbox, "uuid": cwrap["uuid"],
-                "version": cwrap["version"],
+                "version": cwrap["version"], "styled": cell_styled,
+                "fill_argb": cell_fill_argb,
                 "midpoints": cmid["points"], "outline": coutline["points"],
                 "frame": coutline["frame"],
             })
@@ -614,14 +639,19 @@ def parse_table_object(blob: bytes, off: int, size: int,
 
     tail_bbox = _rect(cur)  # page coordinates
     _expect(cur, tail_bbox == wrap["bbox"], "tail bbox != table bbox")
-    borders_a = _parse_table_borders(cur)
-    _expect(cur, cur.u32() == n_cols, "arr1 count")
-    arr1 = [cur.f32() for _ in range(n_cols)]  # 291.2 each (Unknown)
-    _expect(cur, cur.u32() == n_cols, "arr2 count")
-    arr2 = [cur.f32() for _ in range(n_cols)]  # 1456.0 each (Unknown)
-    scalar = cur.f32()  # 1456.0 == table width (Unknown semantics)
-    borders_b = _parse_table_borders(cur)
-    final_argb = cur.u32()  # 0xffeeebe7 on the corpus (Unknown semantics)
+    # Style tail, decoded against the v2 border family: outer frame border
+    # block, per-column width-constraint arrays (291.2 = 1456/5 = min width
+    # with the app's 5-column cap, 1456 = max/table width — Marker, values
+    # never varied), the max-table-width scalar, the inner grid-line border
+    # block, and the theme's default header-fill ARGB.
+    outer_borders = _parse_table_borders(cur)
+    _expect(cur, cur.u32() == n_cols, "col width min count")
+    col_width_min = [cur.f32() for _ in range(n_cols)]
+    _expect(cur, cur.u32() == n_cols, "col width max count")
+    col_width_max = [cur.f32() for _ in range(n_cols)]
+    table_width_max = cur.f32()  # 1456.0 == note width - 2*72 margins
+    grid_borders = _parse_table_borders(cur)
+    theme_fill_argb = cur.u32()  # 0xffeeebe7: default header/highlight beige
     _ensure_eof(cur, "table object")
 
     return {
@@ -633,9 +663,10 @@ def parse_table_object(blob: bytes, off: int, size: int,
         "content_head_hex": content_head, "content_u16": content_u16,
         "n_rows": n_rows, "n_cols": n_cols,
         "col_widths": col_widths, "rows": rows,
-        "borders_a": borders_a, "borders_b": borders_b,
-        "arr1": arr1, "arr2": arr2, "scalar": scalar,
-        "final_argb": final_argb,
+        "outer_borders": outer_borders, "grid_borders": grid_borders,
+        "col_width_min": col_width_min, "col_width_max": col_width_max,
+        "table_width_max": table_width_max,
+        "theme_fill_argb": theme_fill_argb,
     }
 
 

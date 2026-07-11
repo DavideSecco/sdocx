@@ -1,5 +1,5 @@
 {
-  "sample_count": 22,
+  "sample_count": 27,
   "samples": [
     {
       "file": "Allsamsungnotes_260630_113259.sdocx",
@@ -142,6 +142,73 @@
         "voice_clip",
         "voice_clip_header",
         "voice_clip_post"
+      ]
+    },
+    {
+      "file": "Default-darkmode-Liscio_260711_153256.sdocx",
+      "pages": 2,
+      "objects": 135,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "Importedlandscape_260711_153103.sdocx",
+      "pages": 2,
+      "objects": 60,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x0/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
       ]
     },
     {
@@ -603,6 +670,76 @@
       ]
     },
     {
+      "file": "Tabella4x3Regolare_260711_160040.sdocx",
+      "pages": 8,
+      "objects": 434,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 1,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 146,
+      "note_profile": {
+        "signature": "fmt5400/flags0x8/meta0xc8e80",
+        "family": "v5400_tables_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present",
+          "table_cells_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "Tabella4x3Regolarev2_260711_174656.sdocx",
+      "pages": 13,
+      "objects": 645,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 1,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 146,
+      "note_profile": {
+        "signature": "fmt5400/flags0x8/meta0xc8e80",
+        "family": "v5400_tables_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present",
+          "table_cells_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
       "file": "TextboxAllAngles_260709_231912.sdocx",
       "pages": 2,
       "objects": 8,
@@ -707,6 +844,39 @@
       "sticky_placements": 0,
       "attachment_placements": 0,
       "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x0/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "samsung2.sdocx",
+      "pages": 2,
+      "objects": 413,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 79,
       "note_profile": {
         "signature": "fmt4000/flags0x0/meta0xc8e80",
         "family": "v4000_preload_hash",
@@ -1058,7 +1228,7 @@
       "object_type": "stroke",
       "family": "base",
       "signature": "121/0x6000",
-      "count": 94253,
+      "count": 95567,
       "example_files": [
         "Allsamsungnotes_260630_113259.sdocx",
         "Allsamsungnotes_260630_113259.sdocx",
@@ -1071,7 +1241,7 @@
       "object_type": "stroke",
       "family": "extended",
       "signature": "137/0x46000",
-      "count": 1562,
+      "count": 1933,
       "example_files": [
         "Allsamsungnotes_260630_113259.sdocx",
         "Allsamsungnotes_260630_113259.sdocx",
@@ -1084,7 +1254,7 @@
       "object_type": "stroke",
       "family": "extended",
       "signature": "153/0x6020",
-      "count": 364,
+      "count": 365,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
@@ -1110,7 +1280,7 @@
       "object_type": "stroke",
       "family": "extended_rotated",
       "signature": "157/0x6021",
-      "count": 430,
+      "count": 431,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
@@ -1195,17 +1365,17 @@
       {
         "family": "base",
         "signature": "121/0x6000",
-        "count": 94253
+        "count": 95567
       },
       {
         "family": "extended",
         "signature": "137/0x46000",
-        "count": 1562
+        "count": 1933
       },
       {
         "family": "extended",
         "signature": "153/0x6020",
-        "count": 364
+        "count": 365
       },
       {
         "family": "extended",
@@ -1215,7 +1385,7 @@
       {
         "family": "extended_rotated",
         "signature": "157/0x6021",
-        "count": 430
+        "count": 431
       },
       {
         "family": "extended_rotated",
@@ -1256,25 +1426,34 @@
     {
       "family": "v4000_preload_hash",
       "signature": "fmt4000/flags0x0/meta0xc8e80",
-      "count": 6,
+      "count": 8,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
+        "Importedlandscape_260711_153103.sdocx",
         "Notebook&Planner1_260709_213306.sdocx",
         "PagLiscia&templatescustoms_260711_122117.sdocx",
-        "Pagvuota&templatescustoms_260711_115623.sdocx",
-        "cs61bl_su22.sdocx"
+        "Pagvuota&templatescustoms_260711_115623.sdocx"
       ]
     },
     {
       "family": "v4000_preload_hash",
       "signature": "fmt4000/flags0x8/meta0xc8e80",
-      "count": 10,
+      "count": 11,
       "example_files": [
         "AlltypeofPageBasic_260709_200911.sdocx",
+        "Default-darkmode-Liscio_260711_153256.sdocx",
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
         "OnlyHighlighterBlack_260630_131753.sdocx",
-        "OnlyImages_260702_190147.sdocx",
-        "OnlyPensBlacksize10_260630_120309.sdocx"
+        "OnlyImages_260702_190147.sdocx"
+      ]
+    },
+    {
+      "family": "v5400_tables_preload_hash",
+      "signature": "fmt5400/flags0x8/meta0xc8e80",
+      "count": 2,
+      "example_files": [
+        "Tabella4x3Regolare_260711_160040.sdocx",
+        "Tabella4x3Regolarev2_260711_174656.sdocx"
       ]
     },
     {
@@ -1305,13 +1484,13 @@
   ],
   "note_tail_profiles": {
     "kinds": {
-      "pen_preload_path": 78,
-      "pen_preload_prelude": 34,
-      "pen_preload_prelude_raw": 43,
-      "pen_style_tail": 17,
-      "tail_hash_block": 21,
+      "pen_preload_path": 88,
+      "pen_preload_prelude": 39,
+      "pen_preload_prelude_raw": 48,
+      "pen_style_tail": 22,
+      "tail_hash_block": 26,
       "tail_post_hash_u32": 4,
-      "tail_sentinel": 22,
+      "tail_sentinel": 27,
       "voice_clip": 2,
       "voice_clip_header": 2,
       "voice_clip_post": 2
@@ -1342,15 +1521,15 @@
         "Allsamsungnotes_260630_113259.sdocx",
         "AlltypeofPageBasic_260709_200911.sdocx",
         "Appunti vari_260629_230848.sdocx",
-        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
-        "Notebook&Planner1_260709_213306.sdocx"
+        "Default-darkmode-Liscio_260711_153256.sdocx",
+        "Importedlandscape_260711_153103.sdocx"
       ],
       "tail_hash_block": [
         "Allsamsungnotes_260630_113259.sdocx",
         "AlltypeofPageBasic_260709_200911.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
-        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx"
+        "Default-darkmode-Liscio_260711_153256.sdocx"
       ],
       "tail_post_hash_u32": [
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
@@ -1363,7 +1542,7 @@
         "AlltypeofPageBasic_260709_200911.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Associationpages&stickynote&images&audio_260701_183225.sdocx",
-        "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx"
+        "Default-darkmode-Liscio_260711_153256.sdocx"
       ],
       "voice_clip": [
         "Allsamsungnotes_260630_113259.sdocx",
@@ -1379,7 +1558,7 @@
       ]
     },
     "page_id_info_relations": {
-      "page_id_head_exact": 17,
+      "page_id_head_exact": 22,
       "page_id_head_shifted_u32_2": 4
     },
     "tail_hash_prefixes": [
@@ -1395,7 +1574,7 @@
           2,
           2
         ],
-        "count": 17
+        "count": 22
       }
     ],
     "preload_paths": {
@@ -1405,10 +1584,10 @@
       "com.samsung.android.sdk.pen.pen.preload.ColoredPencil": 1,
       "com.samsung.android.sdk.pen.pen.preload.Crayon2": 1,
       "com.samsung.android.sdk.pen.pen.preload.Eraser": 1,
-      "com.samsung.android.sdk.pen.pen.preload.FountainPen": 11,
+      "com.samsung.android.sdk.pen.pen.preload.FountainPen": 13,
       "com.samsung.android.sdk.pen.pen.preload.FountainTipPen": 1,
       "com.samsung.android.sdk.pen.pen.preload.InkPen": 1,
-      "com.samsung.android.sdk.pen.pen.preload.InkPen2": 26,
+      "com.samsung.android.sdk.pen.pen.preload.InkPen2": 34,
       "com.samsung.android.sdk.pen.pen.preload.Marker2": 1,
       "com.samsung.android.sdk.pen.pen.preload.Marker3": 4,
       "com.samsung.android.sdk.pen.pen.preload.Marker4": 5,
@@ -1425,19 +1604,19 @@
     "preload_param_hints": {
       "14;": 1,
       "18;0;100;": 1,
-      "8;": 11
+      "8;": 15
     },
     "preload_prelude_params": {
       "10;": 2,
       "13;": 3,
       "14;": 3,
       "15;0;100;": 1,
-      "18;0;100;": 4,
+      "18;0;100;": 5,
       "22;": 1,
       "4;": 2,
       "5;": 3,
       "7;": 1,
-      "8;": 14
+      "8;": 18
     },
     "preload_prelude_shapes": [
       {
@@ -1485,7 +1664,7 @@
           4294967291,
           158
         ],
-        "count": 1
+        "count": 2
       },
       {
         "prefix_u32": [
@@ -1602,7 +1781,7 @@
         "trailing_u32": [
           0
         ],
-        "count": 8
+        "count": 12
       },
       {
         "prefix_u32": [
@@ -1715,7 +1894,7 @@
           0,
           162
         ],
-        "count": 8
+        "count": 12
       },
       {
         "raw_u32": [
@@ -1861,6 +2040,13 @@
       {
         "raw_u32": [
           122,
+          2
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          134,
           2
         ],
         "count": 1
@@ -2038,7 +2224,7 @@
           0,
           0
         ],
-        "count": 9
+        "count": 12
       },
       {
         "width": 6.355,
@@ -2057,6 +2243,43 @@
           0,
           0,
           1065353216
+        ],
+        "count": 1
+      },
+      {
+        "width": 6.355,
+        "argb": "0xffffffff",
+        "param": null,
+        "raw_u32": [
+          0,
+          1310720,
+          65536,
+          0,
+          0,
+          0,
+          0,
+          0,
+          16793472,
+          64,
+          0,
+          0
+        ],
+        "count": 1
+      },
+      {
+        "width": 6.861,
+        "argb": "0xff001052",
+        "param": null,
+        "raw_u32": [
+          0,
+          1114112,
+          65536,
+          0,
+          0,
+          0,
+          17252,
+          3607773056,
+          16035
         ],
         "count": 1
       },
@@ -2152,7 +2375,7 @@
       "voice_media_time_candidate": 2
     },
     "coverage": {
-      "known_bytes": 11442,
+      "known_bytes": 13150,
       "unknown_bytes": 144,
       "gap_prefixes": [
         {
@@ -2199,6 +2422,28 @@
           "tail_start": 8602,
           "tail_len": 154,
           "known_bytes": 154,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "Default-darkmode-Liscio_260711_153256.sdocx",
+          "tail_start": 833,
+          "tail_len": 338,
+          "known_bytes": 338,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "Importedlandscape_260711_153103.sdocx",
+          "tail_start": 783,
+          "tail_len": 338,
+          "known_bytes": 338,
           "unknown_bytes": 0,
           "known_ratio": 1.0,
           "gap_count": 0,
@@ -2366,6 +2611,28 @@
           ]
         },
         {
+          "file": "Tabella4x3Regolare_260711_160040.sdocx",
+          "tail_start": 54159,
+          "tail_len": 338,
+          "known_bytes": 338,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "Tabella4x3Regolarev2_260711_174656.sdocx",
+          "tail_start": 119606,
+          "tail_len": 338,
+          "known_bytes": 338,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
           "file": "TextboxAllAngles_260709_231912.sdocx",
           "tail_start": 1089,
           "tail_len": 60,
@@ -2408,14 +2675,25 @@
           "gap_count": 0,
           "max_gap": 0,
           "gap_prefixes": []
+        },
+        {
+          "file": "samsung2.sdocx",
+          "tail_start": 809,
+          "tail_len": 356,
+          "known_bytes": 356,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
         }
       ]
     }
   },
   "object_header_ext": {
-    "count": 1845,
+    "count": 2216,
     "dimension_mismatches": [],
-    "extra_key_blocks": 807,
+    "extra_key_blocks": 809,
     "extra_key_bad": [],
     "per_file": [
       {
@@ -2618,6 +2896,38 @@
         ]
       },
       {
+        "file": "Tabella4x3Regolare_260711_160040.sdocx",
+        "count": 146,
+        "seq_unique": 1,
+        "seq_min": 415318,
+        "seq_max": 415318,
+        "seq_inversions": 0,
+        "counter_unique": 89,
+        "repeated_counter_groups": 19,
+        "repeated_counter_size_counts": {
+          "4": 19
+        },
+        "ext_offsets": [
+          105
+        ]
+      },
+      {
+        "file": "Tabella4x3Regolarev2_260711_174656.sdocx",
+        "count": 146,
+        "seq_unique": 1,
+        "seq_min": 415318,
+        "seq_max": 415318,
+        "seq_inversions": 0,
+        "counter_unique": 89,
+        "repeated_counter_groups": 19,
+        "repeated_counter_size_counts": {
+          "4": 19
+        },
+        "ext_offsets": [
+          105
+        ]
+      },
+      {
         "file": "TextboxAllAngles_260709_231912.sdocx",
         "count": 7,
         "seq_unique": 1,
@@ -2629,6 +2939,27 @@
         "repeated_counter_size_counts": {},
         "ext_offsets": [
           109
+        ]
+      },
+      {
+        "file": "samsung2.sdocx",
+        "count": 79,
+        "seq_unique": 1,
+        "seq_min": 415132,
+        "seq_max": 415132,
+        "seq_inversions": 0,
+        "counter_unique": 24,
+        "repeated_counter_groups": 18,
+        "repeated_counter_size_counts": {
+          "2": 2,
+          "3": 4,
+          "4": 7,
+          "5": 2,
+          "6": 2,
+          "7": 1
+        },
+        "ext_offsets": [
+          105
         ]
       }
     ]
@@ -2802,34 +3133,34 @@
     ]
   },
   "media_info_profiles": {
-    "parsed_files": 22,
-    "records": 256,
+    "parsed_files": 27,
+    "records": 277,
     "format_versions": {
-      "5202": 1,
+      "5202": 2,
       "5304": 1,
-      "5400": 20
+      "5400": 24
     },
     "ref_counts": {
-      "1": 245,
+      "1": 265,
       "100": 1,
-      "2": 2,
+      "2": 3,
       "20": 1,
       "3": 4,
       "5": 1,
       "7": 2
     },
     "is_attached": {
-      "True": 256
+      "True": 277
     },
     "magic": {
-      "0x1452": 1,
+      "0x1452": 2,
       "0x14b8": 1,
-      "0x1518": 20
+      "0x1518": 24
     },
     "tail_tags": {
-      "1": 245,
+      "1": 265,
       "100": 1,
-      "2": 2,
+      "2": 3,
       "20": 1,
       "3": 4,
       "5": 1,
@@ -2840,10 +3171,10 @@
       ".jpg": 23,
       ".m4a": 2,
       ".nt": 1,
-      ".pdf": 8,
+      ".pdf": 9,
       ".png": 1,
       ".sdocx": 3,
-      ".spi": 188,
+      ".spi": 208,
       ".spp": 1
     },
     "bad_eof": 0,
@@ -2855,30 +3186,30 @@
     "unlisted_media_examples": []
   },
   "end_tag_profiles": {
-    "parsed_files": 22,
+    "parsed_files": 27,
     "payload_sizes": {
-      "142": 1,
-      "146": 21
+      "142": 2,
+      "146": 25
     },
     "format_versions": {
-      "4000": 18,
-      "5400": 4
+      "4000": 21,
+      "5400": 6
     },
     "signature_offsets": {
-      "122": 1,
-      "126": 21
+      "122": 2,
+      "126": 25
     },
     "time_relations": {
-      "created_time_a_exact": 19,
+      "created_time_a_exact": 24,
       "created_time_a_millis_close": 3,
-      "created_time_b_exact": 19,
-      "created_time_header_exact": 22,
-      "display_created_time_exact": 19,
+      "created_time_b_exact": 24,
+      "created_time_header_exact": 27,
+      "display_created_time_exact": 24,
       "display_created_time_millis_close": 3,
-      "display_modified_time_exact": 19,
-      "extra_time_nonzero": 2,
-      "last_recognised_data_modified_time_nonzero": 2,
-      "modified_exact": 22
+      "display_modified_time_exact": 24,
+      "extra_time_nonzero": 5,
+      "last_recognised_data_modified_time_nonzero": 5,
+      "modified_exact": 27
     },
     "bad_size": 0,
     "bad_signature": 0,
@@ -2886,11 +3217,11 @@
     "modified_mismatch_examples": []
   },
   "page_id_info_profiles": {
-    "parsed_files": 22,
-    "records": 161,
+    "parsed_files": 27,
+    "records": 188,
     "bad_size": 0,
     "tail_hex": {
-      "": 161
+      "": 188
     },
     "page_hash_sha256_matches": 0
   }

@@ -238,7 +238,10 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                                 ek = ref["extra_key_block"]
                                 self.assertIsNotNone(k.extra_key, f"{where}: extra_key")
                                 self.assertEqual(k.extra_key.key.rstrip("\x00"), ek["key"], f"{where}: extra_key.key")
-                                self.assertEqual(k.extra_key.trailing, ek["trailing"], f"{where}: extra_key.trailing")
+                                if ek["value_kind"] == "u32":
+                                    self.assertEqual(k.extra_key.trailing, ek["trailing"], f"{where}: extra_key.trailing")
+                                elif ek["value_kind"] == "utf16_string_array":
+                                    self.assertEqual([s.value for s in k.extra_key.strings], ek["strings"], f"{where}: extra_key.strings")
                             if ref["field_flags"] & 0x40000:
                                 ex = ref["ext_block"]
                                 self.assertIsNotNone(k.hdr_ext, f"{where}: hdr_ext")
@@ -356,6 +359,30 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                     checked_pages += 1
         self.assertGreater(checked_pages, 0)
         self.assertGreater(checked_objects, 0)
+
+    def test_table_object(self) -> None:
+        """The type-22 table-object spec must agree with pysdocx.
+
+        `spec.tools.validate_table_object.diffs_for_note` compares every
+        modeled field — wrap (uuid/version/timestamps/bbox/table_index),
+        midpoints/outline geometry, grid shape, per-cell preamble (styled
+        flag, fill ARGB), nested Common frames (text, spans, paragraphs,
+        margins, gravity, sections), and the style tail (border blocks,
+        width constraints, theme fill) — between the Kaitai parse and
+        `pysdocx.note_doc.parse_table_object`.
+        """
+        from spec.tools.validate_table_object import diffs_for_note
+
+        checked = 0
+        for sample in _samples():
+            data = _member(sample, "note.note")
+            if data is None:
+                continue
+            for body_off, diffs in diffs_for_note(data):
+                self.assertEqual(
+                    diffs, [], f"{sample.name} table@{body_off}")
+                checked += 1
+        self.assertGreater(checked, 0)
 
 
 if __name__ == "__main__":

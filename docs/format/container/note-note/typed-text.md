@@ -121,6 +121,14 @@ the [tables](./tables.md) scan reads as `TABLE_CELL_PREFIX` records). Inline
 images (type 3) anchor at a U+FFFC char in the body text; `position` matches
 the anchor index on 3/3 inline objects in the corpus.
 
+`Mathsolver&Hyperlink` adds the first **Web/link-preview inline object**, type
+13. It is not a page-layer object and it is not a type-9 hypertext span: the
+body carries one U+FFFC anchor, whose index exactly matches the type-13
+object's `position`. The object body is 766 bytes and retains the preview
+text, title and URL; `mediaInfo.dat` links the associated `@web_*.jpg`
+thumbnail. The outer framing/type/anchor are Decoded; the inner Web payload
+fields are still Marker/Unknown because only one instance exists.
+
 ## Finding the body text (legacy scan) — Marker
 
 `_find_text_field` locates the body as the longest printable UTF-16LE run
@@ -135,7 +143,7 @@ gracefully on hostile input.
   margins and gravity; inline-object anchoring; table cells as nested frames.
 - **Unknown:** `section_data` pair semantics; paragraph type 6 semantics; the
   non-boolean strikethrough payloads; the trailing `(3,2)`/`(0,0)` u32 pair of
-  inline objects; the inner schema of the embedded table/image objects.
+  inline objects; the inner schema of the embedded image/Web objects.
 - **Heuristic (renderer, not format):** how the decoded text is laid out and
   paginated onto pages — `PARA_SPACE_UNIT`, `TYPED_TEXT_BLANK_H`, line height,
   page placement ([`../../heuristics.md`](../../heuristics.md)).

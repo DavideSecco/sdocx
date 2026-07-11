@@ -143,17 +143,23 @@ def cross_check(path: Path, doc: dict, note: bytes) -> dict:
             sorted(o["position"] for o in objs) == anchors if objs else None
         )
 
-    # Table cells: every non-main Common frame in the body blob should be a
-    # table cell, and their texts should match the marker-scanned table cells.
+    # Table cells: every non-main Common frame in the body blob is a table cell
+    # (the structural parser is authoritative). The legacy marker scan is a
+    # non-contradicting corroborator — it may recover fewer cells (it clusters
+    # anchors globally and so cannot separate several tables in one note, e.g.
+    # the 4x3 styled family), but it must never invent a cell text the
+    # structural parser does not have. So we require the scan's cell-text
+    # multiset to be a sub-multiset of the structural one.
     if body_frame is not None:
-        scan_cell_texts = sorted(
+        scan_cell_texts = Counter(
             c["text"]
             for table in parse_tables(note)
             for c in table["cells"]
         )
+        struct_cell_texts = Counter(f["text"] for f in frames["cells"])
         checks["cell_frame_count"] = len(frames["cells"])
         checks["cell_texts_match_table_scan"] = (
-            sorted(f["text"] for f in frames["cells"]) == scan_cell_texts
+            not (scan_cell_texts - struct_cell_texts)
             if frames["cells"] or scan_cell_texts
             else None
         )
@@ -171,20 +177,32 @@ def cross_check(path: Path, doc: dict, note: bytes) -> dict:
         checks["table_structural_error"] = f"{type(exc).__name__}: {exc}"
     if structural_tables:
         scan_tables = parse_tables(note)
+        # The scan clusters cell anchors globally, so it can only align to the
+        # structural tables positionally when it reconstructed the same number
+        # of tables. On a multi-table note it collapses them into one grid; its
+        # per-table corroboration is then inapplicable (the structural parser's
+        # byte-exact parse + ground-truth PDF stand on their own).
+        scan_aligned = len(scan_tables) == len(structural_tables)
         for i, t in enumerate(structural_tables):
-            scan = scan_tables[i] if i < len(scan_tables) else None
+            scan = scan_tables[i] if scan_aligned else None
             scan_by_pos = {
                 (c["row"], c["col"]): c for c in (scan or {}).get("cells", ())
             }
             cell_rows = t["rows"]
+            # The scan corroborates but is not authoritative: where it recovers a
+            # cell at a position, its text/anchor must agree with the structural
+            # parser (non-contradiction); a cell the scan did not recover is not
+            # counted against agreement.
             texts_ok = anchors_ok = True
             for r, row in enumerate(cell_rows):
                 for c in row["cells"]:
                     sc = scan_by_pos.get((r, c["col"]))
+                    if sc is None:
+                        continue
                     # scan texts stop at the first non-BMP-printable char
-                    if sc is None or not c["frame"]["text"].startswith(sc["text"]):
+                    if not c["frame"]["text"].startswith(sc["text"]):
                         texts_ok = False
-                    if sc is None or c["outline"][-1] != sc["anchor"]:
+                    if c["outline"][-1] != sc["anchor"]:
                         anchors_ok = False
             col_x = [c["bbox"][0] for c in cell_rows[0]["cells"]]
             pitch_ok = all(
@@ -197,7 +215,18 @@ def cross_check(path: Path, doc: dict, note: bytes) -> dict:
                 max(c["bbox"][2] for r in cell_rows for c in r["cells"]),
                 max(c["bbox"][3] for r in cell_rows for c in r["cells"]),
             )
-            bbox_ok = all(abs(a - b) < 1.0 for a, b in zip(union, t["bbox"]))
+            # The wrap bbox describes the cell layout's *shape* and horizontal
+            # position exactly. Its Y-origin, however, can differ from the cell
+            # bboxes': cells are usually page-local (dy ~ 0.5) but on the
+            # column-width-edited table they carry a document-stacked Y origin
+            # (dy = a whole-page-height multiple). So compare width/height + X
+            # exactly and record the Y offset rather than forcing Y to match.
+            cell_bbox_dy = round(union[1] - t["bbox"][1], 2)
+            bbox_ok = (
+                abs(union[0] - t["bbox"][0]) < 1.0
+                and abs(union[2] - t["bbox"][2]) < 1.0
+                and abs((union[3] - union[1]) - (t["bbox"][3] - t["bbox"][1])) < 1.0
+            )
             tables_structural.append({
                 "n_rows": t["n_rows"], "n_cols": t["n_cols"],
                 "cells": sum(len(r["cells"]) for r in cell_rows),
@@ -208,14 +237,20 @@ def cross_check(path: Path, doc: dict, note: bytes) -> dict:
                 "anchors_are_outline_points": anchors_ok,
                 "widths_match_pitch": pitch_ok,
                 "bbox_is_cell_union": bbox_ok,
+                "cell_bbox_dy": cell_bbox_dy,
                 "page_width_matches_note": t["page_width"] == doc["width"],
                 "ts_us": (t["ts1_us"], t["ts2_us"]),
                 "col_widths": [round(w, 2) for w in t["col_widths"]],
                 "row_heights": [round(r["height"], 2) for r in cell_rows],
-                "borders_a": [(f"{b['argb']:08x}",
-                               tuple(round(f, 2) for f in b["floats"]))
-                              for b in t["borders_a"]],
-                "final_argb": f"{t['final_argb']:08x}",
+                "outer_borders": [
+                    (f"{b['argb']:08x}", round(b["width"], 2),
+                     round(b["radius_x"], 2), round(b["radius_y"], 2))
+                    for b in t["outer_borders"]],
+                "grid_borders": [
+                    (f"{b['argb']:08x}", round(b["width"], 2),
+                     round(b["radius_x"], 2), round(b["radius_y"], 2))
+                    for b in t["grid_borders"]],
+                "theme_fill_argb": f"{t['theme_fill_argb']:08x}",
             })
     checks["tables_structural"] = tables_structural
 
@@ -337,10 +372,13 @@ def collect(paths: list[Path]) -> dict:
             if r.get("checks", {}).get("cell_texts_match_table_scan")),
         "tables_structural": sum(
             len(r.get("checks", {}).get("tables_structural", ())) for r in rows),
+        # Gate on the structural self-consistency checks plus scan
+        # non-contradiction. `grid_matches_scan` is scan-completeness (the scan
+        # can't split multi-table notes), so it is reported but not gated.
         "tables_structural_all_checks": sum(
             1 for r in rows
             for t in r.get("checks", {}).get("tables_structural", ())
-            if t["grid_matches_scan"] and t["texts_match_scan"]
+            if t["texts_match_scan"]
             and t["anchors_are_outline_points"] and t["widths_match_pitch"]
             and t["bbox_is_cell_union"] and t["page_width_matches_note"]),
         "table_cells_structural": sum(
@@ -426,7 +464,8 @@ def main() -> int:
                   f"widths_ok={t['widths_match_pitch']} bbox_ok={t['bbox_is_cell_union']} "
                   f"page_w_ok={t['page_width_matches_note']}")
             print(f"       widths={t['col_widths']} heights={t['row_heights']} "
-                  f"borders_a={t['borders_a'][0]} final={t['final_argb']}")
+                  f"outer={t['outer_borders'][0]} grid={t['grid_borders'][0]} "
+                  f"theme_fill={t['theme_fill_argb']}")
         if checks.get("table_structural_error"):
             print(f"     TABLE-ERROR {checks['table_structural_error']}")
         for key, pen in checks.get("pens", {}).items():

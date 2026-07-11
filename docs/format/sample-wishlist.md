@@ -54,43 +54,32 @@ wanted) · **PARTIAL** (sample exists but doesn't fully close the question).
 3. **AI text summarisation used** (if the device supports it) →
    `text_summarisation` (bit 20).
 
-## Open — Priority B: table style-tail semantics
+## CLOSED (2026-07-11) — Priority B: table style-tail semantics
 
-The type-22 table object's **framing and geometry are byte-exact** (round
-14); only the *style tail* (border-block ARGB + 3 floats ×2 edges,
-per-column f32 arrays, trailing scalar + final ARGB) is still unmeasured,
-because every table in the corpus so far uses default styling.
+Closed by the `Tabella4x3Regolare` (v1) + `Tabella4x3Regolarev2` samples — a
+4×3 grid with one styling change per page, each backed by rendered-PDF ground
+truth. Everything decoded and gated (see
+[tables.md](./container/note-note/tables.md) and
+`spec/ksy/sdocx_table_object.ksy`):
 
-**What to make — 4 separate files, one change each vs. a plain baseline
-grid** (keep it isolated per the project's one-variable rule; don't combine
-into one file):
+- **Per-cell character styling** — `font_size`, `bold`, `strikethrough`,
+  `foreground_color` spans, confirming the `text_core` span-type names against
+  ground truth for the first time (italic/underline already confirmed by the
+  typed-text corpus).
+- **Per-cell background fill** — `cell_fill_argb` (`sfondo blu` = `ffdaecfb`).
+- **Custom column widths** — the `col_width` f32 array; plus a 10×4 grid with
+  empty cells and an invisible all-off 5×2 as free edge cases.
+- **Border blocks (v2)** — first block = outer frame, second = inner grid
+  lines; per entry `ARGB + width + corner radii`; entries 0/2 vertical, 1/3
+  horizontal; disabled = zeroed; radii 26 → 0 on "bordi netti a 90°".
+- Corrected: table-wrap `rows_minus_1` → 0-based **table_index**; the cell
+  preamble carries a table-wide **styled flag**.
+- **Merged cells: N/A** — the UI exposes no merge action (user, 2026-07-11).
 
-- **Baseline** (if not already just the existing plain-grid tables): a
-  simple 3×3 table, default borders, default column widths/row heights, no
-  shading, no merges. Put a short unique label in each cell (e.g. `A1`,
-  `B2`, …) so cells stay identifiable by their decoded text run regardless
-  of geometry.
-- **Sample 1 — merged cells**: same 3×3 grid, merge two adjacent cells
-  horizontally in one place and two adjacent cells vertically in another.
-  Isolates how a merge is represented in the row/cell length-chain (does a
-  merged cell still emit two cell records, or does `n_cols` drop for that
-  row?).
-- **Sample 2 — custom borders**: same 3×3 grid, change color *and*
-  thickness on a couple of edges only (not all four), ideally one outer
-  edge and one inner edge so the two border-block entries can be told
-  apart. Leave everything else default.
-- **Sample 3 — custom column widths / row heights**: same 3×3 grid, drag
-  two columns to different explicit widths and one row to a different
-  height. Isolates the per-column f32 array vs. the row `height` field
-  already known from the framing.
-- **Sample 4 — cell background shading**: same 3×3 grid, fill 2-3
-  individual cells with different background colors (not the whole table).
-  Isolates the trailing per-cell/table ARGB semantics.
-
-Keep each file **table-only, no audio, no other page objects** — the
-existing type-22 corpus is small (2 notes, 18 cells) and audio pages have
-historically added unrelated parsing noise. Any short label text is fine;
-it doesn't need to be meaningful.
+Residual micro-gaps (not worth dedicated samples unless trivial to make):
+left-vs-right / top-vs-bottom within a border pair, custom border
+colour/width (the UI may not expose them), and a recoloured "evidenzia"
+header to confirm the beige is `theme_fill_argb`.
 
 ## Open — Priority C: text/objects
 
@@ -98,12 +87,16 @@ it doesn't need to be meaningful.
    4-character text is too short to calibrate wrapping. Need a **long
    identical string in identical-size boxes at 0/90/180/270°** — same text,
    same box dimensions, only rotation varies.
-5. Typed text containing a **hyperlink**, a **formula** (if available), and
-   a run in a **different font** → span types 9/23/4.
+5. **PARTIAL — `Mathsolver&Hyperlink`:** the hyperlink is an inline Web object
+   type 13, not span type 9; Math Solver emits ordinary styled text plus
+   per-stroke `RecogUIFeature_MathStrokeUuidStringArray`, not formula span 23.
+   A different-font run (type 4), and direct span types 9/23 if the current UI
+   can produce them, remain open.
 6. Text box with **vertical alignment** centre/bottom → `Common` gravity
    values 1/2 (corpus is all 0 today).
-7. **Web object**: a shared web page / link-preview card in a note → page
-   object type 13 (`sdocx2pdf` calls it `Web`; we have no schema at all).
+7. **DONE — Web object:** `Mathsolver&Hyperlink` contains inline object type 13
+   anchored in the body text, its URL/preview payload, and an `@web_*.jpg`
+   thumbnail. Corrected: this is a text-inline object, not a page object.
 8. **Audio variants**: multi-recording note, a renamed recording, and one
    where the audio widget is visibly placed on the page → settles whether
    page object type 10 (Audio) ever appears in exports.

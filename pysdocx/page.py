@@ -145,28 +145,27 @@ IMAGE_ANGLE_FIELD_FLAG = 0x1
 # corpus reconstructs its `total_size` from a purely additive model over these bits (baseline 121 for
 # stroke/text_box, 122 for the media/shape family), with zero counterexamples:
 #   FIELD_FLAG_ANGLE     0x1     +4 bytes   rotation-angle f32 at offset 105 (see IMAGE_ANGLE_* above)
-#   FIELD_FLAG_EXTRA_KEY 0x20    +32 bytes  a named attribute block; its key is literally the ASCII string
-#                                           "extra_key_stroke_shape" (a u16-length-prefixed string after a
-#                                           constant `02 01 00` head), i.e. this stroke is a shape's ink.
-#                                           Confirmed identical on 40/40 objects that set the bit.
+#   FIELD_FLAG_EXTRA_KEY 0x20    variable-sized named property block. Legacy shape strokes carry the
+#                                           32-byte `extra_key_stroke_shape` scalar form; Math Solver strokes
+#                                           carry `RecogUIFeature_*` properties, including UUID string arrays.
 #   FIELD_FLAG_HDR_EXT   0x40000 +16 bytes  a header extension: [u32 counter][u32 seq][u32 page_width]
 #                                           [u32 page_height] — the trailing width/height match the page
-#                                           header on 1690/1690 objects; `seq`/`counter`
+#                                           header on every corpus object carrying it; `seq`/`counter`
 #                                           semantics NOT settled (seq near-constant per note; counter not
 #                                           a unique id) — see _decode_header_ext +
 #                                           docs/format/container/page/object-header.md.
 # FIELD_FLAG_MEDIA_FAMILY (0x8000) is a family discriminator, not a size contributor: it is set on every
 # image/shape/drawing object and on no stroke/text_box object across the corpus. FIELD_FLAG_BASE_PRESENT
 # bits (0x2000|0x4000) are set on every object seen so far, so they read as "record present" base bits.
-# The +16 and +32 blocks are stored in `total_size`-bit order (extra_key before hdr_ext), so when BOTH
-# 0x20 and 0x40000 are set the hdr_ext sits 32 bytes after the extra_key block.
+# The extensions are stored in bit order (extra_key before hdr_ext). Math Solver's
+# variable-sized property bag is followed by HDR_EXT and a 16-byte zero tail.
 FIELD_FLAG_ANGLE = 0x1
 FIELD_FLAG_EXTRA_KEY = 0x20
 FIELD_FLAG_MEDIA_FAMILY = 0x8000
 FIELD_FLAG_HDR_EXT = 0x40000
 FIELD_FLAG_BASE_PRESENT = 0x2000 | 0x4000
 HDR_EXT_LEN = 16
-EXTRA_KEY_BLOCK_LEN = 32
+MATH_HEADER_TAIL_LEN = 16
 EXTRA_KEY_MARKER = b"extra_key"
 EXTRA_KEY_STROKE_SHAPE = b"extra_key_stroke_shape"
 TEXT_BOX_TEXT_PREFIX = b"\x06\x00"
@@ -615,19 +614,22 @@ def _decode_header_ext(blob: bytes, field_flags: int) -> dict | None:
     """Decode the 16-byte header extension gated by FIELD_FLAG_HDR_EXT (0x40000).
 
     Layout `[u32 counter][u32 seq][u32 page_width][u32 page_height]`. The trailing width/height match
-    the page header on every object that carries the block (1690/1690 in the corpus), which is what
+    the page header on every corpus object that carries the block, which is what
     validates the decode. `seq` and `counter` semantics are NOT settled: `seq` is a small value (~415072..
     415139) that is near-constant WITHIN a note (e.g. 579 objects spanning a spread of 1) and only bumps
     occasionally, so it reads as a save-time/session/app-global counter, NOT a per-object counter; `counter`
     repeats within a file (e.g. 200 objects, 152 unique), so it is NOT a unique per-object id. Both are
-    exposed raw pending a firmer characterization (see docs/format/container/page/object-header.md). If an extra_key
-    block (0x20) is present, it is stored first and shifts this extension by 32 bytes.
+    exposed raw pending a firmer characterization (see docs/format/container/page/object-header.md).
     """
     if not (field_flags & FIELD_FLAG_HDR_EXT):
         return None
+    total_size = struct.unpack_from("<I", blob, 0)[0]
     start = OBJECT_BASE_HEADER_LEN + (4 if field_flags & FIELD_FLAG_ANGLE else 0)
     if field_flags & FIELD_FLAG_EXTRA_KEY:
-        start += EXTRA_KEY_BLOCK_LEN
+        # The scalar property is 32 bytes; Math Solver's array is variable and
+        # followed by HDR_EXT plus a 16-byte zero tail inside total_size.
+        start = (total_size - HDR_EXT_LEN - MATH_HEADER_TAIL_LEN
+                 if blob[start] != 2 else start + 32)
     if start + HDR_EXT_LEN > len(blob):
         return None
     counter, seq, page_width, page_height = struct.unpack_from("<4I", blob, start)
@@ -641,39 +643,67 @@ def _decode_header_ext(blob: bytes, field_flags: int) -> dict | None:
 
 
 def _decode_extra_key_block(blob: bytes, field_flags: int) -> dict | None:
-    """Decode the 32-byte named attribute block gated by FIELD_FLAG_EXTRA_KEY (0x20).
+    """Decode the variable-sized named property gated by field flag 0x20.
 
-    Confirmed on all 40 objects that set the bit: the block starts at the common attributes
-    offset, after the optional rotation f32, and contains `02 01 00`, a u16 byte length, the
-    NUL-terminated ASCII key `extra_key_stroke_shape`, and a trailing u32 that is always 1 in
-    the current corpus. The trailing value is exposed raw because flag-vs-count semantics are
-    still unresolved.
+    `02 01 00` carries the legacy scalar shape-ink property. Math Solver uses
+    `04 01 00` and a counted array of short UTF-16 strings (stroke UUIDs).
+    Unknown value encodings remain exposed as raw bytes.
     """
     if not (field_flags & FIELD_FLAG_EXTRA_KEY):
         return None
     start = OBJECT_BASE_HEADER_LEN + (4 if field_flags & FIELD_FLAG_ANGLE else 0)
-    if start + EXTRA_KEY_BLOCK_LEN > len(blob):
+    total_size = struct.unpack_from("<I", blob, 0)[0]
+    if blob[start] != 2:
+        end = total_size - (HDR_EXT_LEN if field_flags & FIELD_FLAG_HDR_EXT else 0) - MATH_HEADER_TAIL_LEN
+    else:
+        end = start + 32
+    if start + 5 > end or end > len(blob):
         return None
 
     head = blob[start : start + 3]
     key_len = struct.unpack_from("<H", blob, start + 3)[0]
     key_start = start + 5
     key_end = key_start + key_len
-    trailing_off = start + 28
-    if key_end > len(blob) or trailing_off + 4 > len(blob):
+    if key_end > end:
         return None
 
     raw_key = blob[key_start:key_end]
     key = raw_key.rstrip(b"\x00").decode("ascii", errors="replace")
-    trailing = struct.unpack_from("<I", blob, trailing_off)[0]
-    return {
+    value = blob[key_end:end]
+    out = {
         "off": start,
         "head": head.hex(),
-        "head_ok": head == b"\x02\x01\x00",
+        "head_ok": head[1:] == b"\x01\x00" and head[0] in (2, 4, 6, 7),
         "key_len": key_len,
         "key": key,
-        "trailing": trailing,
+        "byte_size": end - start,
+        "value_hex": value.hex(),
+        "value_kind": "raw",
+        "trailing": None,
     }
+    if head == b"\x02\x01\x00" and len(value) == 4:
+        out["value_kind"] = "u32"
+        out["trailing"] = struct.unpack_from("<I", value, 0)[0]
+    elif head == b"\x04\x01\x00" and len(value) >= 2:
+        count = struct.unpack_from("<H", value, 0)[0]
+        pos = 2
+        strings = []
+        try:
+            for _ in range(count):
+                n_chars = struct.unpack_from("<H", value, pos)[0]
+                pos += 2
+                stop = pos + 2 * n_chars
+                if stop > len(value):
+                    raise ValueError
+                strings.append(value[pos:stop].decode("utf-16-le"))
+                pos = stop
+        except (struct.error, UnicodeDecodeError, ValueError):
+            pass
+        else:
+            if pos == len(value):
+                out["value_kind"] = "utf16_string_array"
+                out["strings"] = strings
+    return out
 
 
 def _parse_object_header(blob: bytes) -> dict | None:

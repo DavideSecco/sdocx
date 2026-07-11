@@ -65,3 +65,4 @@ Expected validator output:
 | `<uuid>.page` (header + tree) | `ksy/sdocx_page.ksy` | `tools/validate_page.py`, `tools/validate_page_tree.py` | 114/114 pages ✅ |
 | `.page` object header | `ksy/sdocx_object_header.ksy` | `tools/validate_object_header.py` | all corpus objects ✅ |
 | `.page` payload geometry | `ksy/sdocx_payload_geometry.ksy` | `tools/validate_payload_geometry.py` | 490/490 wrappers ✅ |
+| `note.note` type-22 table object | `ksy/sdocx_table_object.ksy` | `tools/validate_table_object.py` | 20/20 tables, 260 cells ✅ |

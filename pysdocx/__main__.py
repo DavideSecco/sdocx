@@ -605,6 +605,35 @@ def cmd_end_tag(args: argparse.Namespace) -> None:
         print(f"  raw_footer_padding={end_tag['raw_footer_padding_hex']}")
 
 
+def _cell_style_tag(cell: dict) -> str:
+    """Compact `[...]` annotation of a table cell's explicit styling."""
+    import struct as _struct
+
+    parts = []
+    if cell.get("fill_argb"):
+        parts.append(f"fill=#{cell['fill_argb']:08x}")
+    for span in cell["frame"]["spans"]:
+        raw = bytes.fromhex(span["extra"])
+        st = span["span_type"]
+        if st == 3 and len(raw) >= 4:  # font_size
+            size = _struct.unpack("<f", raw[:4])[0]
+            if abs(size - 15.0) > 1e-3:
+                parts.append(f"size={size:g}")
+        elif st == 5 and raw[:4] == b"\x01\x00\x00\x00":
+            parts.append("bold")
+        elif st == 6 and raw[:4] == b"\x01\x00\x00\x00":
+            parts.append("italic")
+        elif st == 7 and raw[:4] == b"\x01\x00\x00\x00":
+            parts.append("underline")
+        elif st == 20 and raw[:4] == b"\x01\x00\x00\x00":
+            parts.append("strike")
+        elif st == 1 and len(raw) >= 4:  # foreground_color
+            argb = _struct.unpack("<I", raw[:4])[0]
+            if argb not in (0xFF252525, 0xFF3A3A3D):  # default / header text
+                parts.append(f"fg=#{argb:08x}")
+    return f" [{','.join(parts)}]" if parts else ""
+
+
 def cmd_note_doc(args: argparse.Namespace) -> None:
     note = load_note(args.file)
     if note is None:
@@ -676,8 +705,10 @@ def cmd_note_doc(args: argparse.Namespace) -> None:
             f"col_widths={[round(w, 2) for w in table['col_widths']]}"
         )
         for r, row in enumerate(table["rows"]):
-            texts = [c["frame"]["text"] for c in row["cells"]]
-            print(f"    row {r} h={row['height']:.1f}: {texts}")
+            cells = []
+            for c in row["cells"]:
+                cells.append(f"{c['frame']['text']!r}{_cell_style_tag(c)}")
+            print(f"    row {r} h={row['height']:.1f}: {', '.join(cells)}")
 
 
 def cmd_inventory(args: argparse.Namespace) -> None:

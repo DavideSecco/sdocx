@@ -12,19 +12,20 @@ class SdocxObjectHeader(KaitaiStruct):
     """The common header at the start of every object in a `.page` layer/object tree.
     Fed one object blob (the bytes from an object entry's stored size). The base
     header is a fixed layout ending at offset 105; its length then grows by an
-    ADDITIVE `field_flags` size model (zero counterexamples across the corpus):
+    `field_flags`-gated extension model:
 
       0x1     ANGLE      +4   rotation-angle f32 at offset 105
-      0x20    EXTRA_KEY  +32  "extra_key_stroke_shape" attribute block
+      0x20    EXTRA_KEY  variable-sized named property block
       0x40000 HDR_EXT    +16  [counter, seq, page_width, page_height]
       0x8000  MEDIA_FAMILY  0 image/shape/drawing discriminator (no size)
       0x2000|0x4000 BASE   0  present on every object
 
-    The three size-contributing blocks are stored in bit order (angle, then
-    extra_key, then hdr_ext), so this type reads them in that order. Payload data
+    The extensions are stored in bit order (angle, then extra_key, then hdr_ext).
+    The extra-key block consumes the bytes up to the optional final 16-byte
+    HDR_EXT. Payload data
     after the header (strokes, geometry wrappers) is NOT read here.
 
-    Corpus invariants baked in: `flag_len == 2` and `field_len == 4` on all 11788
+    Corpus invariants baked in: `flag_len == 2` and `field_len == 4` on all
     objects, and `uuid_len == 36`, which is what makes the base header land exactly
     at 105. A future variant that breaks these would surface as a test-gate
     mismatch against pysdocx.
@@ -59,11 +60,17 @@ class SdocxObjectHeader(KaitaiStruct):
 
         if self.field_flags & 32 != 0:
             pass
-            self.extra_key = SdocxObjectHeader.ExtraKeyBlock(self._io, self, self._root)
+            self._raw_extra_key = self._io.read_bytes((((self.total_size - self._io.pos()) - (16 if self.field_flags & 262144 != 0 else 0)) - 16 if self.extra_key_head != 2 else 32))
+            _io__raw_extra_key = KaitaiStream(BytesIO(self._raw_extra_key))
+            self.extra_key = SdocxObjectHeader.ExtraKeyBlock(_io__raw_extra_key, self, self._root)
 
         if self.field_flags & 262144 != 0:
             pass
             self.hdr_ext = SdocxObjectHeader.HeaderExt(self._io, self, self._root)
+
+        if  ((self.field_flags & 32 != 0) and (self.extra_key_head != 2)) :
+            pass
+            self.math_header_tail = self._io.read_bytes(16)
 
 
 
@@ -83,9 +90,16 @@ class SdocxObjectHeader(KaitaiStruct):
             pass
             self.hdr_ext._fetch_instances()
 
+        if  ((self.field_flags & 32 != 0) and (self.extra_key_head != 2)) :
+            pass
+
+        _ = self.extra_key_head
+        if hasattr(self, '_m_extra_key_head'):
+            pass
+
 
     class ExtraKeyBlock(KaitaiStruct):
-        """32-byte named attribute block; identical on 40/40 objects that set 0x20."""
+        """Variable-sized named property. Values are decoded by their 3-byte head."""
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxObjectHeader.ExtraKeyBlock, self).__init__(_io)
             self._parent = _parent
@@ -96,15 +110,42 @@ class SdocxObjectHeader(KaitaiStruct):
             self.head = self._io.read_bytes(3)
             self.key_len = self._io.read_u2le()
             self.key = (self._io.read_bytes(self.key_len)).decode(u"ASCII")
-            self.trailing = self._io.read_u4le()
+            if self.head == b"\x02\x01\x00":
+                pass
+                self.trailing = self._io.read_u4le()
+
+            if self.head == b"\x04\x01\x00":
+                pass
+                self.string_count = self._io.read_u2le()
+
+            if self.head == b"\x04\x01\x00":
+                pass
+                self.strings = []
+                for i in range(self.string_count):
+                    self.strings.append(SdocxObjectHeader.Utf16String(self._io, self, self._root))
+
+
 
 
         def _fetch_instances(self):
             pass
+            if self.head == b"\x02\x01\x00":
+                pass
+
+            if self.head == b"\x04\x01\x00":
+                pass
+
+            if self.head == b"\x04\x01\x00":
+                pass
+                for i in range(len(self.strings)):
+                    pass
+                    self.strings[i]._fetch_instances()
+
+
 
 
     class HeaderExt(KaitaiStruct):
-        """16-byte extension; page_width/height match the page header 1690/1690."""
+        """16-byte extension; page_width/height match every corpus page header."""
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxObjectHeader.HeaderExt, self).__init__(_io)
             self._parent = _parent
@@ -121,4 +162,34 @@ class SdocxObjectHeader(KaitaiStruct):
         def _fetch_instances(self):
             pass
 
+
+    class Utf16String(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxObjectHeader.Utf16String, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.char_count = self._io.read_u2le()
+            self.value = (self._io.read_bytes(self.char_count * 2)).decode(u"UTF-16LE")
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    @property
+    def extra_key_head(self):
+        if hasattr(self, '_m_extra_key_head'):
+            return self._m_extra_key_head
+
+        if self.field_flags & 32 != 0:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(105 + (4 if self.field_flags & 1 != 0 else 0))
+            self._m_extra_key_head = self._io.read_u1()
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_extra_key_head', None)
 

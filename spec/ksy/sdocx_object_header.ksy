@@ -8,19 +8,20 @@ doc: |
   The common header at the start of every object in a `.page` layer/object tree.
   Fed one object blob (the bytes from an object entry's stored size). The base
   header is a fixed layout ending at offset 105; its length then grows by an
-  ADDITIVE `field_flags` size model (zero counterexamples across the corpus):
+  `field_flags`-gated extension model:
 
     0x1     ANGLE      +4   rotation-angle f32 at offset 105
-    0x20    EXTRA_KEY  +32  "extra_key_stroke_shape" attribute block
+    0x20    EXTRA_KEY  variable-sized named property block
     0x40000 HDR_EXT    +16  [counter, seq, page_width, page_height]
     0x8000  MEDIA_FAMILY  0 image/shape/drawing discriminator (no size)
     0x2000|0x4000 BASE   0  present on every object
 
-  The three size-contributing blocks are stored in bit order (angle, then
-  extra_key, then hdr_ext), so this type reads them in that order. Payload data
+  The extensions are stored in bit order (angle, then extra_key, then hdr_ext).
+  The extra-key block consumes the bytes up to the optional final 16-byte
+  HDR_EXT. Payload data
   after the header (strokes, geometry wrappers) is NOT read here.
 
-  Corpus invariants baked in: `flag_len == 2` and `field_len == 4` on all 11788
+  Corpus invariants baked in: `flag_len == 2` and `field_len == 4` on all
   objects, and `uuid_len == 36`, which is what makes the base header land exactly
   at 105. A future variant that breaks these would surface as a test-gate
   mismatch against pysdocx.
@@ -74,30 +75,57 @@ seq:
     doc: Rotation angle in degrees (clockwise on screen).
   - id: extra_key
     type: extra_key_block
+    size: 'extra_key_head != 2 ? total_size - _io.pos - ((field_flags & 0x40000) != 0 ? 16 : 0) - 16 : 32'
     if: (field_flags & 0x20) != 0
   - id: hdr_ext
     type: header_ext
     if: (field_flags & 0x40000) != 0
+  - id: math_header_tail
+    size: 16
+    if: (field_flags & 0x20) != 0 and extra_key_head != 2
+    doc: Constant zero padding after Math Solver's property bag / HDR_EXT.
+instances:
+  extra_key_head:
+    pos: '105 + ((field_flags & 0x1) != 0 ? 4 : 0)'
+    type: u1
+    if: (field_flags & 0x20) != 0
 types:
   extra_key_block:
-    doc: 32-byte named attribute block; identical on 40/40 objects that set 0x20.
+    doc: Variable-sized named property. Values are decoded by their 3-byte head.
     seq:
       - id: head
         size: 3
-        doc: Constant 02 01 00.
+        doc: 02 01 00 for scalar values; 04 01 00 for string arrays.
       - id: key_len
         type: u2
-        doc: Key length; 23 (22 chars + NUL).
+        doc: ASCII key byte length including its NUL terminator.
       - id: key
         type: str
         size: key_len
         encoding: ASCII
-        doc: The ASCII key extra_key_stroke_shape plus a NUL; marks a shape's ink.
+        doc: NUL-terminated ASCII property name.
       - id: trailing
         type: u4
-        doc: Constant 1.
+        if: head == [2, 1, 0]
+        doc: Scalar value; 1 for extra_key_stroke_shape.
+      - id: string_count
+        type: u2
+        if: head == [4, 1, 0]
+      - id: strings
+        type: utf16_string
+        repeat: expr
+        repeat-expr: string_count
+        if: head == [4, 1, 0]
+  utf16_string:
+    seq:
+      - id: char_count
+        type: u2
+      - id: value
+        type: str
+        size: char_count * 2
+        encoding: UTF-16LE
   header_ext:
-    doc: 16-byte extension; page_width/height match the page header 1690/1690.
+    doc: 16-byte extension; page_width/height match every corpus page header.
     seq:
       - id: counter
         type: u4

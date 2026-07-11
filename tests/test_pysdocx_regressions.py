@@ -1,8 +1,11 @@
 import unittest
+import zipfile
 from pathlib import Path
 
 from pysdocx.container import list_pages, load_page
-from pysdocx.page import page_background_color, page_template, page_thumbnail_media_index, parse_page
+from pysdocx.note_doc import note_doc_common_frames, parse_note_doc
+from pysdocx.page import (_parse_object_header, page_background_color, page_template,
+                         page_thumbnail_media_index, parse_page, parse_page_tree)
 from pysdocx.render import debug_text_box_layout
 from tests.golden import compute_reports, corpus_snapshot, load_golden
 
@@ -10,6 +13,7 @@ from tests.golden import compute_reports, corpus_snapshot, load_golden
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = ROOT / "samples"
 ONLY_TEXT_SQUARED = SAMPLES / "OnlyTextTypeWritten_squared_260703_013624.sdocx"
+MATH_WEB = SAMPLES / "Mathsolver&Hyperlink_260711_180442.sdocx"
 # Every sample contributes exactly one end_tag.bin/mediaInfo.dat/pageIdInfo.dat/note.note, so
 # "how many of the corpus files exhibit this per-file structural fact" is definitionally the
 # sample count, not a number to hand-update each time a sample is added.
@@ -115,6 +119,32 @@ class CorpusProfileTest(unittest.TestCase):
         self.assertEqual(notedoc["tables_structural"], notedoc["tables_structural_all_checks"])
         self.assertEqual(notedoc["table_structural_errors"], 0)
         self.assertEqual(notedoc["voice_all_fields_match"], notedoc["voice_records"])
+
+
+class MathSolverWebRegressionTest(unittest.TestCase):
+    def test_web_inline_object_and_math_uuid_property(self) -> None:
+        require_sample(MATH_WEB)
+        with zipfile.ZipFile(MATH_WEB) as z:
+            note = z.read("note.note")
+            doc = parse_note_doc(note)
+            body = note_doc_common_frames(note, doc)["body"]
+            web = [o for o in body["inline"]["objects"] if o["object_type"] == 13]
+            self.assertEqual(len(web), 1)
+            self.assertEqual(web[0]["position"], body["text"].index("\ufffc"))
+
+            page_name = next(n for n in z.namelist() if n.endswith(".page") and len(z.read(n)) > 1000)
+            page_data = z.read(page_name)
+        base = parse_page(page_data)["base"]
+        tree = parse_page_tree(page_data, 0, 0, base)
+        props = []
+        for obj in tree["layers"][0]["objects"]:
+            header = _parse_object_header(page_data[obj["blob_off"]:obj["end"]])
+            if header and header.get("extra_key_block"):
+                props.append(header["extra_key_block"])
+        arrays = [p for p in props if p["key"] == "RecogUIFeature_MathStrokeUuidStringArray"]
+        self.assertTrue(arrays)
+        self.assertTrue(all(p["value_kind"] == "utf16_string_array" for p in arrays))
+        self.assertTrue(all(p["strings"] for p in arrays))
 
 
 class TextBoxLayoutRegressionTest(unittest.TestCase):
@@ -300,7 +330,7 @@ class PageThumbnailLinkTest(unittest.TestCase):
                         continue
                     self.assertTrue(media.get(index, "").endswith(".spi"), (sample.name, page_name, index))
                     checked += 1
-        self.assertEqual(checked, 12)
+        self.assertEqual(checked, 30)
 
 
 if __name__ == "__main__":

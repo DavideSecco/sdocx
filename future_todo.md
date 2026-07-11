@@ -3,10 +3,25 @@
 Start with [`CLAUDE.md`](./CLAUDE.md) (repo map, discipline, run commands) and
 [`docs/format/`](./docs/format/) (the format knowledge base). This file is the
 running "where we are + what's next". Last updated: 2026-07-11.
-The corpus is now **22 samples / 161 pages**; generated inventory and golden
-profiles were refreshed after the July 11 targeted-sample campaign.
+The top-level regression corpus is now **28 samples / 192 pages**; generated inventory and golden
+profiles were refreshed after the July 11 targeted-sample campaign (incl. the
+`Tabella4x3Regolare` v1+v2 styled-table samples that cracked table styling
+end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
 
 ## Where we are
+
+- **Math Solver + Web inline sample (NEW, 2026-07-11):**
+  `Mathsolver&Hyperlink` closes the Web-object request: link previews are
+  `text_core::Common` inline objects of type 13 (not page-layer objects),
+  anchored by U+FFFC and backed by an `@web_*.jpg` thumbnail. Its hyperlink is
+  therefore not span type 9. Math Solver does not emit formula span 23; it
+  instead adds variable-sized `0x20` named properties associated with the
+  recognised strokes (exact relationship Marker).
+  `04 01 00 + RecogUIFeature_MathStrokeUuidStringArray` carries a counted array
+  of UTF-16 stroke UUIDs. Python + Kaitai now decode these alongside the legacy
+  32-byte scalar `extra_key_stroke_shape` form; `06/07` multi-property bags
+  (expression/fail-code keys) are bounded but still raw. HDR_EXT remains
+  dimension-clean.
 
 The **outer/container format is essentially fully decoded**, and — new —
 **`note.note` is now sequentially decoded end-to-end**, backed by an
@@ -46,6 +61,29 @@ executable spec:
   table family). The old scan's "anchor + u16 6" marker = the cell outline's
   last path point + the path closepath opcode. Validated 2/2 notes, 18/18
   cells (`analyze_note_doc.py`, regression-gated).
+
+- **Table styling FULLY decoded + Kaitai-gated (NEW, 2026-07-11):** the
+  `Tabella4x3Regolare` v1+v2 samples (4×3 grid, one style change per page, PDF
+  ground truth) cracked the whole table style model. **Per-cell character
+  styling** — `font_size`, `bold`, `strikethrough`, `foreground_color` spans —
+  confirms the `text_core` span-type names against ground truth for the first
+  time. **Per-cell background fill** is the cell's `cell_fill_argb` u32 (was
+  mis-asserted as "cell zero"; `sfondo blu` = `ffdaecfb`). **Custom column
+  widths** = the `col_width` f32 array. **Style tail decoded (v2 border
+  family):** first border block = outer frame, second = inner grid lines; per
+  entry `ARGB + stroke width + corner radii` (26 → 0 on "bordi netti a 90°");
+  entries 0/2 vertical, 1/3 horizontal; disabled borders zeroed; the trailing
+  ARGB is the theme header beige and the f32 arrays are per-column width
+  constraints (Marker). Field corrections: table-wrap `rows_minus_1` → 0-based
+  **table_index**; cell-preamble `T5` 2nd byte = table-wide **styled flag**.
+  Cell-bbox **Y origin** is document-stacked (dy = page_index × page_height)
+  on geometry-edited tables, page-local otherwise — render Y relative to the
+  wrap bbox. Merged cells are N/A (no UI action). The legacy render scan's
+  overfit frame-size allowlist was replaced by a structural check; the scan is
+  now a non-contradicting corroborator (structural parser authoritative).
+  **New executable spec:** `spec/ksy/sdocx_table_object.ksy` +
+  `spec/tools/validate_table_object.py`, gated in `test_kaitai_spec`
+  (**20/20 tables, 260 cells, zero counterexamples**).
 
 - **Kaitai spec + test gate** ([`spec/`](./spec/), `tests/test_kaitai_spec.py`):
   each `spec/ksy/*.ksy` is compiled to a Python parser (vendored in
