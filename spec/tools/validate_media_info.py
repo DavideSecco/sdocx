@@ -32,6 +32,18 @@ def main() -> int:
             diffs.append("count")
         if k.eof != "EOFX":
             diffs.append("eof")
+        rext = ref["content_file_data_list"]
+        kext = getattr(k, "content_file_data_list", None)
+        if (kext is None) != (rext is None):
+            diffs.append("content_file_data_list.presence")
+        elif kext is not None:
+            if kext.record_count != rext["count"]:
+                diffs.append("content_file_data_list.count")
+            for i, (kr, rr) in enumerate(zip(kext.records, rext["records"])):
+                if kr.payload_size != rr["payload_size"]:
+                    diffs.append(f"content_file_data_list.records[{i}].payload_size")
+                if kr.body != rr["raw_body"]:
+                    diffs.append(f"content_file_data_list.records[{i}].body")
         for i, (kr, rr) in enumerate(zip(k.records, ref["records"])):
             b = kr.body
             if b.media_index != rr["media_index"]:

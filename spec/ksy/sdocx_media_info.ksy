@@ -7,7 +7,8 @@ meta:
   license: CC0-1.0
 doc: |
   The `media/mediaInfo.dat` manifest inside a `.sdocx` archive: one record per
-  attachment under `media/`, closed by the ASCII trailer `EOFX`.
+  attachment under `media/`, optionally followed by a length-framed shared-note
+  extension, and closed by the ASCII trailer `EOFX`.
 
   Fully decoded with zero counterexamples across the 13-sample corpus: a `u32`
   format version, a `u16` record count, then that many length-prefixed records. Each
@@ -32,12 +33,34 @@ seq:
     type: media_record
     repeat: expr
     repeat-expr: record_count
+  - id: content_file_data_list
+    type: content_file_data_list
+    if: _io.size - _io.pos > 4
+    doc: Optional collaboration/COEDIT extension before EOFX.
   - id: eof
     type: str
     size: 4
     encoding: ASCII
     doc: Always the ASCII trailer "EOFX".
 types:
+  content_file_data_list:
+    seq:
+      - id: marker
+        contents: [0x51, 0x30, 0x39, 0x4f, 0x56, 0x45, 0x56, 0x4f, 0x56, 0x46, 0x39, 0x47, 0x53, 0x55, 0x78, 0x46, 0x58, 0x30, 0x52, 0x42, 0x56, 0x45, 0x46, 0x66, 0x54, 0x45, 0x6c, 0x54, 0x56, 0x41]
+        doc: Unpadded base64 for "CONTENT_FILE_DATA_LIST".
+      - id: record_count
+        type: u4
+      - id: records
+        type: content_file_record
+        repeat: expr
+        repeat-expr: record_count
+  content_file_record:
+    seq:
+      - id: payload_size
+        type: u4
+      - id: body
+        size: payload_size
+        doc: Length-framed COEDIT metadata; inner semantics remain unknown.
   media_record:
     seq:
       - id: payload_size

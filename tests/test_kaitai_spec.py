@@ -159,6 +159,16 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
             self.assertEqual(k.format_version, ref["format_version"], sample.name)
             self.assertEqual(k.record_count, ref["count"], sample.name)
             self.assertEqual(k.eof, "EOFX", sample.name)
+            rext = ref["content_file_data_list"]
+            kext = getattr(k, "content_file_data_list", None)
+            self.assertEqual(kext is not None, rext is not None, sample.name)
+            if kext is not None:
+                self.assertEqual(kext.record_count, rext["count"], sample.name)
+                self.assertEqual(
+                    [r.body for r in kext.records],
+                    [r["raw_body"] for r in rext["records"]],
+                    sample.name,
+                )
             for i, (kr, rr) in enumerate(zip(k.records, ref["records"])):
                 self.assertEqual(kr.body.media_index, rr["media_index"], f"{sample.name}: rec[{i}].media_index")
                 self.assertEqual(kr.body.name, rr["name"], f"{sample.name}: rec[{i}].name")

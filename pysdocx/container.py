@@ -119,6 +119,7 @@ def load_media_by_index(path: Path, index: int) -> tuple[str, bytes] | None:
 
 
 MEDIA_INFO_EOF = b"EOFX"
+MEDIA_INFO_CONTENT_FILE_DATA_LIST = b"Q09OVEVOVF9GSUxFX0RBVEFfTElTVA"
 END_TAG_SIGNATURE = b"Document for S-Pen SDK"
 END_TAG_FOOTER_PATTERN = b"\x02\x00\x00\x00\x02\x00\x00\x00\xff\xff\xff\xff\xff\xff\xff\xff"
 
@@ -193,12 +194,44 @@ def parse_media_info(data: bytes) -> dict | None:
     except (UnicodeDecodeError, struct.error):
         return None
 
+    content_file_data_list = None
+    if data.startswith(MEDIA_INFO_CONTENT_FILE_DATA_LIST, off):
+        extension_off = off
+        off += len(MEDIA_INFO_CONTENT_FILE_DATA_LIST)
+        try:
+            extension_count = struct.unpack_from("<I", data, off)[0]
+            off += 4
+            extension_records = []
+            for _ in range(extension_count):
+                payload_size = struct.unpack_from("<I", data, off)[0]
+                record_off = off
+                off += 4
+                end = off + payload_size
+                if end > len(data):
+                    return None
+                extension_records.append({
+                    "off": record_off,
+                    "end": end,
+                    "payload_size": payload_size,
+                    "raw_body": data[off:end],
+                })
+                off = end
+        except struct.error:
+            return None
+        content_file_data_list = {
+            "off": extension_off,
+            "marker": MEDIA_INFO_CONTENT_FILE_DATA_LIST.decode("ascii"),
+            "count": extension_count,
+            "records": extension_records,
+        }
+
     return {
         "format_version": format_version,
         # Back-compat alias for older diagnostics and tests.
         "magic": format_version,
         "count": count,
         "records": records,
+        "content_file_data_list": content_file_data_list,
         "eof_off": off,
         "eof": data[off : off + len(MEDIA_INFO_EOF)].decode("ascii", errors="replace"),
         "valid_eof": data[off : off + len(MEDIA_INFO_EOF)] == MEDIA_INFO_EOF and off + 4 == len(data),

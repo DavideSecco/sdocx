@@ -10,7 +10,8 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
 
 class SdocxMediaInfo(KaitaiStruct):
     """The `media/mediaInfo.dat` manifest inside a `.sdocx` archive: one record per
-    attachment under `media/`, closed by the ASCII trailer `EOFX`.
+    attachment under `media/`, optionally followed by a length-framed shared-note
+    extension, and closed by the ASCII trailer `EOFX`.
 
     Fully decoded with zero counterexamples across the 13-sample corpus: a `u32`
     format version, a `u16` record count, then that many length-prefixed records. Each
@@ -38,6 +39,10 @@ class SdocxMediaInfo(KaitaiStruct):
         for i in range(self.record_count):
             self.records.append(SdocxMediaInfo.MediaRecord(self._io, self, self._root))
 
+        if self._io.size() - self._io.pos() > 4:
+            pass
+            self.content_file_data_list = SdocxMediaInfo.ContentFileDataList(self._io, self, self._root)
+
         self.eof = (self._io.read_bytes(4)).decode(u"ASCII")
 
 
@@ -46,6 +51,52 @@ class SdocxMediaInfo(KaitaiStruct):
         for i in range(len(self.records)):
             pass
             self.records[i]._fetch_instances()
+
+        if self._io.size() - self._io.pos() > 4:
+            pass
+            self.content_file_data_list._fetch_instances()
+
+
+    class ContentFileDataList(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxMediaInfo.ContentFileDataList, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.marker = self._io.read_bytes(30)
+            if not self.marker == b"\x51\x30\x39\x4F\x56\x45\x56\x4F\x56\x46\x39\x47\x53\x55\x78\x46\x58\x30\x52\x42\x56\x45\x46\x66\x54\x45\x6C\x54\x56\x41":
+                raise kaitaistruct.ValidationNotEqualError(b"\x51\x30\x39\x4F\x56\x45\x56\x4F\x56\x46\x39\x47\x53\x55\x78\x46\x58\x30\x52\x42\x56\x45\x46\x66\x54\x45\x6C\x54\x56\x41", self.marker, self._io, u"/types/content_file_data_list/seq/0")
+            self.record_count = self._io.read_u4le()
+            self.records = []
+            for i in range(self.record_count):
+                self.records.append(SdocxMediaInfo.ContentFileRecord(self._io, self, self._root))
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.records)):
+                pass
+                self.records[i]._fetch_instances()
+
+
+
+    class ContentFileRecord(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxMediaInfo.ContentFileRecord, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.payload_size = self._io.read_u4le()
+            self.body = self._io.read_bytes(self.payload_size)
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class MediaBody(KaitaiStruct):
@@ -104,6 +155,5 @@ class SdocxMediaInfo(KaitaiStruct):
 
         def _fetch_instances(self):
             pass
-
 
 
