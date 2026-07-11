@@ -17,13 +17,15 @@ index, archive filename, and a SHA-256 digest. Closed by the ASCII trailer
 
 Little-endian. Header, length-prefixed records, trailer — fully decoded, zero
 counterexamples across the corpus (60 records over 13 files; 60/60 point at
-existing members and every SHA-256 verifies).
+existing members and every SHA-256 verifies). Shared/COEDIT notes can add an
+optional length-framed collaboration block before the trailer.
 
 ```
 offset  size  field           status
 0       4     format_version  Decoded   5400 (x12) / 5202 (x1)
 4       2     record_count    Decoded
 6       ...   media_record[]  Decoded   record_count records
+...     ...   content_file_data_list Marker optional COEDIT extension
 ...     4     "EOFX"          Decoded   ASCII trailer
 ```
 
@@ -79,8 +81,25 @@ the actual archive bytes on **60/60** records (`sha_mismatches = 0`,
 `missing_media = 0`, `unlisted_media = 0`).
 
 ### `eof` — 4-byte ASCII trailer
-Always `EOFX`, immediately after the last record (`bad_eof = 0`), and the file
-ends there.
+Always `EOFX`, after the ordinary records and the optional COEDIT extension,
+and the file ends there.
+
+### Optional `content_file_data_list` — Structural / Marker
+
+`Shared Notebook1_260710_000433.sdocx` inserts the following block after its
+ordinary media record and before `EOFX`:
+
+```
+30 bytes  "Q09OVEVOVF9GSUxFX0RBVEFfTElTVA"  unpadded base64 CONTENT_FILE_DATA_LIST
+u32       record_count
+repeat record_count:
+  u32     payload_size
+  bytes   body[payload_size]
+```
+
+The sample has one 570-byte body. The marker, count, framing, and final `EOFX`
+boundary are decoded and modeled in Kaitai. The body's collaboration metadata
+remains opaque until controlled shared-note variants isolate its fields.
 
 ### `body.tail` — 11 bytes
 The tail is structurally fixed on 60/60 corpus records:
@@ -117,8 +136,9 @@ Current negative/partial results:
 
 ## Unknown regions
 
-There is no unbounded raw region left in `mediaInfo.dat` on the current corpus:
-the former `raw_tail` is now decoded. The remaining caveat is semantic variety:
+There is no unbounded raw region left in `mediaInfo.dat`: the former media-record
+`raw_tail` is decoded and the COEDIT body is explicitly length-framed. The
+remaining caveat is semantic variety:
 `ref_count` and `is_attached` are named from the independent implementation, but
 the current corpus does not vary attachment deletion/reference states enough to
 stress those meanings.

@@ -53,39 +53,57 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   [heuristic](./heuristics.md#rotated-text-box-wrapping)).
 
 ## `.page`
-- **Header preamble — field sequence Decoded, presence gates Unknown (RE 2026-07-10).**
+- **Header preamble — field sequence Decoded; `content_bbox` gate Decoded;
+  remaining template gates Unknown (RE 2026-07-11).**
   The bytes between the fixed leading fields and the paper record are now mapped
   (`M` = paper-BGRA offset, located by `_locate_paper_record`):
   ```
   0x00 base · … · 0x16 width · 0x1a height · 0x26 uuid_len(=36) · 0x28 uuid[72]
   0x70 [u32 obj_id][u32 seq≈415k][u32 4000][u32 4000]          (fixed)
   then, in order, each OPTIONAL:
-    [content_bbox : 4×f64]        present on content pages, absent on empty/template pages
+    [content_bbox : 4×f64]        presence correlates with the serialized object tree
     [template_uri : UTF-16, NUL-terminated]   a custom-image template path (see below)
     [u32 kind = 2|3]              present on normal pages, ABSENT on the PDF family
     [BGRA paper][u32 display_width]            = M
     [template fields]             normal: [u32 id][u32 1] · PDF: [u16 1][u16 media][u16 0][u16 page]
   ```
   Observed `M` ∈ {0x80,0x84,0xa0,0xa4,0x13e,0x15e}, entirely explained by which
-  optionals are present. **What blocks modeling this in `sdocx_page.ksy`: the
-  presence GATE of each optional is not a clean structural field in the corpus.**
-  A byte-level discriminant search over 154 pages found: `content_bbox` — *no*
-  single byte separates present/absent (it tracks "page has content", i.e. the
-  object tree, which lives after `base`); `kind` — absent only for `base ∈
+  optionals are present. There is no dedicated bbox flag byte: its gate is the
+  later layer tree's declared object count. Kaitai can nevertheless model this
+  through a lazy instance, so `content_bbox if tree.has_objects` is now formal
+  and validator-backed. The gates still blocking the rest of the preamble are:
+  `kind` — absent only for `base ∈
   {0xa6,0xfd}` (the whole PDF family), but `base` is itself downstream of the
-  preamble length; `template_uri` — only 3 pages (one note), too few to isolate.
-  So per the "no scans in a `.ksy`" rule the paper/template records stay
-  procedural (`_locate_paper_record`) until a **targeted sample campaign** pins
-  the gates: an empty vs one-stroke page in the same note (bbox gate), and a
-  custom-image-template note vs a plain one (uri gate).
+  preamble length; `template_uri` — only 4 pages (2 notes), too few to isolate.
+  So per the "no scans in a `.ksy`" rule URI/kind/paper/template records stay
+  procedural (`_locate_paper_record`).
+
+  The controlled `PaginaVuota&Paginapuntino_260711_122434.sdocx` closes the
+  presence observation: page 1 is intentionally empty (`object_count=0`, paper
+  `M=0x84`), page 2 has one stroke (`object_count=1`, bbox at `0x80`, paper
+  `M=0xa4`), and Samsung added a trailing empty page matching page 1. Thus the
+  bbox is physically omitted when this page tree is empty and inserted when the
+  dot exists. The dependency on downstream tree state is now the decoded gate;
+  it does not require a speculative signature lookahead.
 - **`template_uri` (NEW, 2026-07-10) — a third page-template mechanism.** Beyond
   Basic (procedural id→pitch) and PDF-backed (embedded `media/…​.pdf`), a page
   can reference a **custom image template** by absolute path in the app's private
   storage, e.g. `Z/data/user/0/com.samsung.android.app.notes/app_templates/added/
   files_231229_092644_140.jpg` — stored as a UTF-16 string in the preamble. The
-  image is NOT embedded in the `.sdocx`, so such a background is unrenderable from
-  the file alone (only the path is recoverable). Seen on 3 pages of one note
-  (`Appunti vari`). Distinct from the `note.note` `template_uri` flex field.
+  matching asset is embedded in both known instances: `Appunti vari` (3 pages,
+  not previously recognized as a template asset before `template_uri` decoding)
+  and `PagLiscia&templatescustoms_260711_122117.sdocx` both contain
+  `media/0@files_231229_092644_140.jpg`, whose basename exactly matches the URI;
+  in the latter the page has strokes only and no placed-image object, so that
+  member is unambiguously the custom template asset. `page_template` now
+  reports `kind: image`, and both pysdocx and OpenSdocx resolve the embedded
+  asset by basename and composite it as a full-page background. No sample with
+  the asset absent has been observed (2/2 embedded); the earlier "not embedded,
+  path only" note (2026-07-10) was written before `template_uri` decoding
+  existed and was never re-checked against `Appunti vari`, which already had
+  the matching media member. Rendering still degrades to the paper color if a
+  future sample lacks the match, but that is a defensive fallback, not an
+  observed case. Distinct from the `note.note` `template_uri` flex field.
 - **PDF-template record `flag` (M+8)**: `== 1` on all 15 observed PDF-backed
   pages (2 Academic PDFs + 1 imported). A count for multi-template pages? Needs
   a sample with >1 template PDF on one page family.
@@ -129,6 +147,10 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   `sdocx2pdf`. Remaining caveat: current corpus variety is weak for the semantic
   edge cases (`is_attached` is always true; `ref_count` needs samples that vary
   attachment references/deletion states).
+- Shared/COEDIT notes may insert a `CONTENT_FILE_DATA_LIST` block between the
+  ordinary media records and `EOFX`. Its marker, `u32` count, and length-framed
+  record boundaries are decoded; the record bodies' collaboration metadata is
+  still Unknown. First observed in `Shared Notebook1_260710_000433.sdocx`.
 
 ## `end_tag.bin`
 - **Variant coverage:** property flags are zero on the current corpus, so
@@ -139,6 +161,13 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   `display_modified_time` are ms-close (not exact) on the 3 older imports.
 
 ## Cross-file leads worth a targeted sample campaign
+- **Page bookmarks / “Segnalibri” export (negative result, 2026-07-11):** in
+  `Segnalibri_260709_225650.sdocx`, pages 1 and 3 are bookmarked and page 2 is
+  not. No differentiating bookmark field appears in `pageIdInfo.dat`,
+  `note.note`, page header/layer flags, or the stroke-only object trees. The
+  apparent per-page values `0,2,1` are instead decoded thumbnail media indices,
+  each linking to its ordinary `.spi`. No explicit bookmark state is therefore
+  recoverable from this export; Samsung Notes likely keeps it outside `.sdocx`.
 - A **"only text box at 0/90/180/270°"** family would isolate whether the rotated
   text-box wrap bug is missing geometry metadata or pure layout logic.
 - More **audio** samples (multi-audio, renamed, page-visible audio widgets)

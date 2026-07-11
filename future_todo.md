@@ -2,9 +2,9 @@
 
 Start with [`CLAUDE.md`](./CLAUDE.md) (repo map, discipline, run commands) and
 [`docs/format/`](./docs/format/) (the format knowledge base). This file is the
-running "where we are + what's next". Last updated: 2026-07-08.
-The corpus is now **14 samples** (a heavily-illustrated 14th sample joined; all
-hardcoded corpus counts in the regression tests were refreshed).
+running "where we are + what's next". Last updated: 2026-07-11.
+The corpus is now **22 samples / 161 pages**; generated inventory and golden
+profiles were refreshed after the July 11 targeted-sample campaign.
 
 ## Where we are
 
@@ -162,25 +162,30 @@ procedural pending the wrapper decode.
 
 ## Next tasks
 
-- **`.page` header preamble — field sequence DECODED, presence gates OPEN
-  (2026-07-10; blocked on targeted samples):** the bytes before the paper
+- **`.page` header preamble — field sequence DECODED, `content_bbox` gate DONE,
+  template gates OPEN
+  (2026-07-11):** the bytes before the paper
   record are now mapped — fixed `[obj_id][seq][4000][4000]` @0x70, then optional
   `content_bbox` / `template_uri` / `[u32 kind]`, then `[BGRA][width]` (= M),
   then the template fields. Full sequence + evidence in
   `docs/format/unknowns.md` (`.page`). Also surfaced a **third template
-  mechanism**, `template_uri` (a custom-image path in the app's private storage,
-  not embedded → unrenderable from the file). **The `.ksy` unlock is still
-  blocked**: a byte-discriminant search over 154 pages found NO clean structural
-  gate for the optionals (content_bbox tracks "page has content" = the object
-  tree after `base`; `kind` absent only for the PDF family `base ∈ {0xa6,0xfd}`
-  but `base` is downstream; `template_uri` only 3 pages/one note). So per the
-  no-scans-in-a-.ksy rule the paper/template records STAY procedural
-  (`_locate_paper_record`). NEXT to finish it: a **targeted sample campaign** —
-  (a) an empty page vs a one-stroke page in the SAME note (isolates the
-  content_bbox gate), (b) a custom-image-template note vs a plain one (isolates
-  the template_uri gate). Once a page-type/flag discriminant is pinned, model
-  paper+template+PDF-link in `sdocx_page.ksy` + extend `validate_page.py` +
-  move the entries out of `unknowns.md`.
+  mechanism**, `template_uri` (a custom-image path in the app's private
+  storage). There is no bbox flag byte, but the gate is now formally decoded as
+  `tree.has_objects` through a lazy Kaitai instance and cross-validated
+  corpus-wide. The remaining template gates are still blocked: `kind` is absent
+  only for the PDF family `base ∈ {0xa6,0xfd}` but `base` is downstream;
+  `template_uri` only 4 pages/2 notes). So per the no-scans-in-a-.ksy rule the
+  URI/kind/paper/template records STAY procedural (`_locate_paper_record`).
+  `PaginaVuota&Paginapuntino_260711_122434.sdocx` proves the physical bbox
+  omission with an intentional empty page vs one dot; `sdocx_page.ksy`, its
+  validator, pysdocx, and Rust now expose it as optional.
+  `PagLiscia&templatescustoms_260711_122117.sdocx` isolates the custom URI and
+  embeds the matching JPG. Pysdocx + Rust/OpenSdocx now decode `CustomImage`,
+  resolve the asset by basename, and render it beneath page content. The
+  matching asset is embedded in both known cases (2/2), including the
+  pre-existing `Appunti vari` sample — the earlier "not embedded" read (from
+  before `template_uri` decoding existed) was never re-checked against it and
+  turned out to be wrong; no genuinely-absent case has been observed.
 - **PDF-backed templates (Academic multi-page + imported PDF) — link decoded
   AND rasterised (DONE, 2026-07-09):** `samples/Notebook&Planner1_260709_213306.sdocx`
   is the first "Academic" template sample (+ its `…_gt.pdf`). These are NOT
@@ -264,6 +269,17 @@ procedural pending the wrapper decode.
 - **Targeted samples for unexercised flex fields:** a note with a template,
   a shared/authored note, and an attached (non-image) file would exercise
   `template_uri`, `author_info`/`app_name`, `attached_files`.
+  `Shared Notebook1_260710_000433.sdocx` exercises `attached_files` and
+  `server_check_point`, but not `author_info`/`app_name`/`app_version`. It also
+  adds a framed `CONTENT_FILE_DATA_LIST` collaboration extension to
+  `mediaInfo.dat`; outer framing is now modeled, inner COEDIT metadata remains
+  Unknown.
+- **Bookmarks sample explored (2026-07-11; negative export result):** pages 1
+  and 3 of `Segnalibri_260709_225650.sdocx` are bookmarked, page 2 is not, but
+  their serialized page/note/manifest structures expose no bookmark-specific
+  field. The only tempting `0,2,1` values are now decoded as ordinary `.spi`
+  thumbnail media indices (12/12 cross-file). Treat bookmarks as not exported
+  unless a future controlled pair changes bytes outside hashes/thumbnails.
 - **Styled-table sample family** (unlocks the table style-tail semantics —
   the framing is done, only the defaults never varied): vs a plain grid, one
   change per sample — merged cells; custom border color/thickness; different
@@ -291,6 +307,10 @@ procedural pending the wrapper decode.
   (`_text_box_layout` inner-wrap inset), not a decoded field — see
   `docs/format/heuristics.md`. Only worth revisiting with a dedicated
   `0/90/180/270°` text-box sample family.
+  `TextboxAllAngles_260709_231912.sdocx` now validates rotation storage and
+  midpoint geometry at all eight 45° increments (`315°` stored as `-45f`), but
+  its four-character text cannot calibrate wrapping; a long identical string
+  and identical box dimensions are still needed for that part.
 - **Absolute-f64 stroke variant**: a couple of benchmark pages store stroke
   coordinates as absolute f64 pairs (not deltas); neither known layout reads them.
   This is the main visible handwriting-fidelity gap, but it is render-side and was

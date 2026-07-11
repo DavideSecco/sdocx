@@ -69,6 +69,14 @@ type-specific.
   the box's stored inner text padding; gravity is 0 (top). After the frame,
   a fixed 48-byte tail: 16 structured bytes + what looks like a 32-byte
   object hash (Unknown).
+- **All-octant rotation sample (2026-07-11):**
+  `TextboxAllAngles_260709_231912.sdocx` contains boxes at
+  `0/45/90/135/180/225/270/315°`; 315° is stored as `-45.0f`. Every nonzero
+  angle, including 180°, sets header bit `0x1` and adds the same 20-byte wrapper
+  region; 0° omits both. The four geometry midpoints stay centred on the bbox
+  but can extend outside it at 90°/270°, confirming that projected midpoints,
+  not the axis-aligned bbox, carry the box's local extents. The sample text is
+  only `Text`, so this validates rotation geometry but cannot calibrate wrapping.
 - **Heuristic (not format):** how a rotated box wraps its text — the 90° and 16°
   boxes are laid out with a calibrated inner-wrap inset, not the decoded
   `[8, 4, 8, 4]` margins above (the renderer has not been reconciled with them
