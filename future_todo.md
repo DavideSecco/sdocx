@@ -162,6 +162,72 @@ procedural pending the wrapper decode.
 
 ## Next tasks
 
+- **Decode the `.page` header preamble → unlock the paper/template fields in
+  `sdocx_page.ksy` (NEXT, grounded, no new samples needed):** the paper record
+  `[BGRA][u32 display_width]` and the template/PDF-link fields after it are
+  fully decoded *as records* (zero counterexamples, 150+ pages) but located
+  **by signature**, because the variable-length header preamble before them is
+  Unknown (offsets seen 0x80/0xa4/0x13e/0x15e; `kind` u32 = 2/3 on most
+  families, absent on PDF-template content pages, ~4000 on imported-PDF
+  notes). Per the repo rule (no scans in a `.ksy`), they cannot enter the spec
+  until the preamble has a deterministic structure. This is the highest-value
+  spec task: crack the preamble across the corpus (it correlates with `base`),
+  then model paper color + template id + PDF link in `sdocx_page.ksy`, extend
+  `validate_page.py` to cross-check them field-by-field vs pysdocx, and move
+  the corresponding entries out of `unknowns.md`.
+- **PDF-backed templates (Academic multi-page + imported PDF) — link decoded
+  AND rasterised (DONE, 2026-07-09):** `samples/Notebook&Planner1_260709_213306.sdocx`
+  is the first "Academic" template sample (+ its `…_gt.pdf`). These are NOT
+  procedural like Basic — the artwork is a **real PDF embedded under `media/`**
+  (`0@07_StudyTemplates_A4_v2.pdf` 7pp, `2@01_PlannerTemplates_A4_v2.pdf` 6pp),
+  and each `.page` references `(pdf_media_index, pdf_page_index 0-based)` in the
+  8 bytes after the paper record (`flag@M+8==1 & reserved@M+0xC==0`, media@M+0xA,
+  page@M+0xE). Decoded in `page_pdf_template`; `page_template` now returns
+  `{kind:"pdf", pdf_media_index, pdf_page_index}`. Zero counterexamples over the
+  150-page corpus, and it **fixes a bug**: `quiz.sdocx`'s imported-PDF page was
+  mislabelled "Lined (narrow)". Also refactored `page_background_color` onto a
+  shared `_locate_paper_record` (width-match fallback) so PDF-template pages
+  resolve their white paper (they'd returned None). **Rasterisation done too:**
+  `pysdocx.render.rasterize_pdf_page` (pypdfium2 — pdfium, the same engine the
+  Rust app targets) rasterises the referenced embedded PDF page and composites
+  it as the full-page background under the strokes; A4 aspect == page aspect so
+  it fills with no distortion. Verified page-for-page against the exported
+  `…_gt.pdf` (Notebook cover + label, Planner calendar + label, empty template
+  pages). pypdfium2 is an *optional* render dep — without it the background is
+  omitted (graceful), the link still decodes. Full write-up in
+  `docs/format/container/page/README.md` ("PDF-backed templates"). Still open:
+  `flag` semantics (always 1 — count for multi-template?), and PDF-filename →
+  human catalog name (needs the Samsung Notes APK; separate concern, deferred).
+  **Rust port DONE (2026-07-09):** `crates/sdocx/src/page.rs` now decodes the PDF
+  link via the same shared `locate_paper_record` (width fallback) +
+  `page_pdf_template` (flag/reserved/media/page), `PageTemplateSource::CustomPdf`
+  gained `media_index`; verified on the real Notebook file via sdocx-cli (media 0
+  pages 0-6, media 2 pages 0-5+dup, matches pysdocx) and quiz now reads as PDF not
+  "Lined". Full workspace + opensdocx green. The actual app-side PDF *rasterisation*
+  (SceneTemplate already has a "pdf" kind; now has media+page to feed pdfium) is the
+  remaining app work, not a decode gap. Basic category/name/pitch stays pysdocx/
+  Scene-side (render heuristic), not in the core crate.
+- **Basic background templates named + rendered, all categories except id 10
+  (DONE, 2026-07-09):** `samples/AlltypeofPageBasic_260709_200911.sdocx`
+  cycles through Samsung Notes' "Basic" background picker, one id per page,
+  each hand-labelled by the user with the on-device name; a matching photo set
+  landed in `samples/AllTypeofPageBasic/` (11 GT photos, one per non-blank
+  page) and pinned every pitch by direct pixel measurement (line-projection
+  for rules, blob-centroid clustering for dots). `TEMPLATE_NAMES` (id →
+  category/name, decoded fact) plus `GRID_SPACING_BY_ID` (now 4/5/6)/
+  `LINE_SPACING_BY_ID`/`DOT_SPACING_BY_ID`/`OXFORD_LINE_SPACING`+
+  `OXFORD_MARGIN_X`/`_COLOR` (all heuristic/calibrated) are in
+  `pysdocx/page.py`; `render.py` gained `draw_lines`/`draw_dots`/`draw_oxford`
+  and `render_page` now dispatches on `template["kind"]` for all four
+  categories. Verified by re-rendering the sample and eyeballing each page
+  against its GT photo — pitch and layout match. Full table + finding that
+  line/grid share one narrow/default/wide triple (72.5/102.5/168.0) while dot
+  is a genuinely non-square lattice (~7-10% wider columns) in
+  `docs/format/container/page/README.md` and `heuristics.md`. **id 10 is
+  still missing** — never appeared in the sample, needs a dedicated capture
+  (its category and pitch are both unknown). `GRID_ORIGIN` (top margin) was
+  reused as-is for the new categories, not independently re-measured — worth
+  a sanity check if a rendered line/dot/oxford page looks vertically off.
 - **Page text-box `text_core::Common`: DONE (2026-07-08).** The frame parses
   structurally on 8/8 text-box blobs at offset 386 (406 on rotated boxes —
   the 20 extra bytes are rotation-related wrapper fields), spans equal the
@@ -239,3 +305,12 @@ corpus counterexamples; keep decoded facts separate from render heuristics
 (`heuristics.md`) and never put heuristics in a `.ksy`. When you decode something,
 extend the `.ksy` + its validator + the `docs/format/**` page together. **Never
 commit without the user's explicit OK.**
+
+**Adding a sample** (the user drops new `.sdocx` into `samples/` often): the
+regression suite's corpus-dependent counts live in a golden snapshot, so you no
+longer hand-edit numbers. Run `.venv/bin/python -m tests.regen_golden`, review the
+JSON diff (an *unexpected* change is a real regression, not a number to bless), and
+commit `tests/golden/corpus_profiles.json`. The corpus-independent invariants
+(zero unknown bytes / zero sha mismatches / per-file == SAMPLE_COUNT / matches ==
+surfaces) stay asserted in code — `CorpusProfileTest.test_invariants` — and can't
+be regenerated away. See `tests/golden.py`.

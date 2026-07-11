@@ -256,9 +256,30 @@ Each phase ends with a concrete, checkable deliverable.
   (`parse_tables` port — anchor-clustered grid + per-cell whole-cell styles,
   gated by `tests/tables.rs` vs the pysdocx fixture 18/18 cells; `SceneTable`
   resolves grid + shrink-to-fit cell fonts, placement uses pysdocx's
-  page-heuristic). Remaining in Phase 1: typed-text pagination + substitute
-  font, absolute-f64 strokes (blocked on a sample), audio indicators, and the
-  deferred SSIM harness.
+  page-heuristic).
+  *Progress (2026-07-10):* **all "Basic" background templates ☑** — the Scene
+  builder was only classifying grid ids 4/5; line (1-3), dot (7-9), grid-wide
+  (6) and oxford (11) all fell through to `"plain"` = blank. Now `template_category`
+  + the pitch maps (`line_grid_spacing`/`dot_spacing`/`OXFORD_*`, mirrored from
+  pysdocx `TEMPLATE_NAMES`/`*_SPACING_BY_ID`) resolve each category into
+  `SceneTemplate{kind, row_spacing, col_spacing, dot_radius, margin_x, margin_color}`,
+  and the worker draws grid (both axes) / line (horizontals) / dot (non-square
+  lattice) / oxford (rules + red margin). Gated by
+  `basic_templates_resolve_per_category` (scene test) + mirrors the GT-verified
+  pysdocx `draw_*`. User-verified in-app; template ink deliberately darkened vs
+  the GT-photo tint for on-screen legibility (GRID_COLOR `#a6afca`, DOT_COLOR
+  `#8f98b0`, kept in sync with pysdocx). **PDF-backed templates (Academic /
+  imported PDF) ☑ via PDF.js** — `SceneTemplate` carries
+  `pdf_media_index`/`pdf_page_index` (decoded in `crates/sdocx`
+  `page_pdf_template`); `main.ts` lazy-loads `pdfjs-dist` (code-split — notes
+  without PDF templates never fetch it), fetches the embedded PDF via
+  `get_media`, rasterizes the referenced page once per zoom level
+  (`templateRasterCache`, same once-per-zoom policy as the page bitmaps), and
+  the worker composites it under the strokes. PDF.js over native pdfium:
+  nothing native to bundle per-OS, raster cost is one-time-per-(page,zoom) and
+  hidden by the cache; pdfium remains the pysdocx workbench engine. Remaining
+  in Phase 1: typed-text pagination + substitute font, absolute-f64 strokes
+  (blocked on a sample), audio indicators, and the deferred SSIM harness.
 
 - **☐ Phase 2 — Performance (priority #2).**
   Confirm/optimize lazy per-page rendering; resolve any SVG-vs-canvas or
@@ -330,6 +351,21 @@ Append-only; newest last. Record what changed and why.
   the scan-based `parse_tables` model, NOT the byte-exact type-22 object parse —
   the latter needs the full sequential note-doc port, which lands with the
   typed-text work.
+- **2026-07-10** — **PDF-backed template rasteriser = PDF.js** (user decision
+  after weighing pdfium). Rationale: the app is a Tauri/web-UI product where
+  the PDF is a *peripheral* feature (template backgrounds), so the deciding
+  factor is shipping — PDF.js is pure JS (nothing native to bundle per-OS,
+  the pattern of Obsidian/Joplin/Zotero), while pdfium would mean packaging a
+  `libpdfium` per platform. Performance is NOT a differentiator here: the
+  background is rasterized **once per (page, zoom)** and cached — scroll/zoom
+  blit cached bitmaps, so the engines differ only in a hideable first-paint
+  cost (~20-50ms vs ~5-15ms). pdfium (pypdfium2) remains the engine of the
+  pysdocx workbench, where pip install is trivial. Implementation: lazy
+  code-split `pdfjs-dist` in `main.ts` + `templateRasterCache` keyed
+  (media,page) with once-per-zoom replacement; worker composites the bitmap
+  under all layers. Same session: template ink darkened for on-screen
+  legibility at the user's request (GT-photo tints too faint) — GRID_COLOR
+  `#d3dae8→#a6afca`, DOT_COLOR `#b7bfce→#8f98b0`, synced pysdocx↔app.
 
 ## 10b. Rendering architecture (decided 2026-07-07)
 
