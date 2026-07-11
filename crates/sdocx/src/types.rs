@@ -298,7 +298,7 @@ pub struct FontSizeRun {
 }
 
 /// Page template metadata.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PageTemplate {
     /// Raw Samsung Notes template identifier.
@@ -308,7 +308,7 @@ pub struct PageTemplate {
 }
 
 /// Page template backing source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PageTemplateSource {
     /// Built-in Samsung Notes page template (procedural background — lined / grid / dot / …).
@@ -321,6 +321,13 @@ pub enum PageTemplateSource {
         media_index: u32,
         /// Zero-based page index within that PDF.
         page_index: u32,
+    },
+    /// Custom image selected from Samsung Notes' template picker. The page
+    /// stores an app-private URI; newer exports may embed a media member whose
+    /// basename matches `filename`.
+    CustomImage {
+        /// Basename of the image path stored in the page preamble.
+        filename: String,
     },
 }
 

@@ -9,7 +9,7 @@ interface SImage { x: number; y: number; w: number; h: number; media_index: numb
 interface SText { anchor: [number, number]; wrap_width: number; angle_deg: number; lines: unknown[] }
 // Only the fields the main thread acts on; the full style payload (pitches/colors) is consumed
 // by the worker (see render.worker.ts STemplate). kind==="pdf" carries the embedded-PDF link.
-interface STemplate { id: number; kind: string; pdf_media_index?: number; pdf_page_index?: number }
+interface STemplate { id: number; kind: string; pdf_media_index?: number; pdf_page_index?: number; image_filename?: string }
 interface SShape { kind: string; points: [number, number][]; color: RGB | null; width: number; closed: boolean; ellipse?: unknown; round_rect?: unknown; outline?: unknown[]; heads?: [number, number][][] }
 interface PageScene { width: number; height: number; paper: RGB; default_ink: RGB; template: STemplate | null; strokes: Stroke[]; images: SImage[]; shapes: SShape[]; texts: SText[] }
 
@@ -189,6 +189,21 @@ function getPdfDoc(mediaIndex: number): Promise<PdfDoc | null> {
 const templateRasterCache = new Map<string, { scale: number; bitmap: ImageBitmap }>();
 async function resolveTemplateBitmap(scene: PageScene, scale: number): Promise<ImageBitmap | null> {
   const t = scene.template;
+  if (t?.kind === "image" && t.image_filename) {
+    const key = `image:${t.image_filename}`;
+    const hit = templateRasterCache.get(key);
+    if (hit) return hit.bitmap;
+    try {
+      const m = await invoke<{ mime: string; base64: string }>("get_media_by_name", { filename: t.image_filename });
+      if (!m.mime.startsWith("image/")) return null;
+      const bytes = Uint8Array.from(atob(m.base64), (c) => c.charCodeAt(0));
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: m.mime }));
+      templateRasterCache.set(key, { scale, bitmap });
+      return bitmap;
+    } catch {
+      return null;
+    }
+  }
   if (t?.kind !== "pdf" || t.pdf_media_index == null || t.pdf_page_index == null) return null;
   const key = `${t.pdf_media_index}:${t.pdf_page_index}`;
   const hit = templateRasterCache.get(key);

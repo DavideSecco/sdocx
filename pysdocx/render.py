@@ -12,6 +12,7 @@ Install the optional deps with `pip install sdocx[render]`.
 import io
 import math
 import re
+import zipfile
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -454,7 +455,7 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
         elif kind == "oxford" and "line_spacing" in template:
             draw_oxford(ax, page_size[0], page_size[1],
                         line_spacing=template["line_spacing"], margin_x=template["margin_x"])
-        elif kind == "pdf" and template_image is not None:
+        elif kind in ("pdf", "image") and template_image is not None:
             # Academic multi-page / imported PDF: the background is an embedded media/….pdf page
             # (template["pdf_media_index"]/["pdf_page_index"]), pre-rasterised by the caller. The
             # PDF page is A4, the same aspect as the sdocx page, so it fills 0..w × 0..h upright:
@@ -1178,14 +1179,20 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
             if media is not None:
                 images.append({"bbox": pl["bbox"], "data": media[1], "angle_deg": pl.get("angle_deg", 0.0)})
 
-        # PDF-backed template (Academic / imported PDF): rasterise the referenced embedded PDF page
-        # as the full-page background. Decoded link -> page_pdf_template; rasteriser is optional.
+        # Embedded PDF/custom-image template: resolve the referenced media and composite it as the
+        # full-page background. Custom images are matched by the basename stored in template_uri.
         template_image = None
         tmpl = page_result["template"]
         if tmpl is not None and tmpl.get("kind") == "pdf":
             media = load_media_by_index(path, tmpl["pdf_media_index"])
             if media is not None:
                 template_image = rasterize_pdf_page(media[1], tmpl["pdf_page_index"], page_result["width"])
+        elif tmpl is not None and tmpl.get("kind") == "image":
+            wanted = tmpl["name"]
+            with zipfile.ZipFile(path) as z:
+                match = next((n for n in z.namelist() if n.startswith("media/") and n.rsplit("@", 1)[-1] == wanted), None)
+                if match is not None:
+                    template_image = np.asarray(Image.open(io.BytesIO(z.read(match))).convert("RGBA"))
 
         page_tables = [t for t in tables if t["bbox"] is not None] if idx == table_target_page else []
         is_empty = (

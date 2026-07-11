@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 from pysdocx.container import list_pages, load_page
-from pysdocx.page import page_background_color, page_template, parse_page
+from pysdocx.page import page_background_color, page_template, page_thumbnail_media_index, parse_page
 from pysdocx.render import debug_text_box_layout
 from tests.golden import compute_reports, corpus_snapshot, load_golden
 
@@ -251,6 +251,57 @@ class PdfTemplateLinkTest(unittest.TestCase):
         self.assertGreater(raster.shape[0], 2200)
         # Out-of-range page index degrades to None rather than raising.
         self.assertIsNone(rasterize_pdf_page(media[1], 999, 1600))
+
+
+class CustomImageTemplateTest(unittest.TestCase):
+    SAMPLE = SAMPLES / "PagLiscia&templatescustoms_260711_122117.sdocx"
+    BBOX_SAMPLE = SAMPLES / "PaginaVuota&Paginapuntino_260711_122434.sdocx"
+
+    def test_custom_uri_resolves_to_embedded_image(self) -> None:
+        require_sample(self.SAMPLE)
+        import zipfile
+
+        with zipfile.ZipFile(self.SAMPLE) as z:
+            pages = list_pages(self.SAMPLE)
+            templates = [page_template(z.read(pn)) for pn in pages]
+            names = z.namelist()
+        self.assertIsNone(templates[0])  # plain page
+        custom = templates[1]
+        self.assertEqual((custom["kind"], custom["source"]), ("image", "custom_image"))
+        self.assertEqual(custom["name"], "files_231229_092644_140.jpg")
+        self.assertTrue(any(n.endswith("@" + custom["name"]) for n in names))
+        self.assertTrue(all(t and t["kind"] == "pdf" for t in templates[2:]))
+
+    def test_empty_vs_dot_control_has_one_serialized_stroke(self) -> None:
+        require_sample(self.BBOX_SAMPLE)
+        import zipfile
+        from pysdocx.page import _locate_paper_record
+
+        with zipfile.ZipFile(self.BBOX_SAMPLE) as z:
+            pages = [z.read(pn) for pn in list_pages(self.BBOX_SAMPLE)]
+        self.assertEqual([parse_page(p)["object_count"] for p in pages], [0, 1, 0])
+        self.assertEqual([_locate_paper_record(p) for p in pages], [0x84, 0xA4, 0x84])
+
+
+class PageThumbnailLinkTest(unittest.TestCase):
+    def test_plain_page_thumbnail_indices_resolve_to_spi_media(self) -> None:
+        import zipfile
+        from pysdocx.container import parse_media_info
+
+        checked = 0
+        for sample in sorted(SAMPLES.glob("*.sdocx")):
+            with zipfile.ZipFile(sample) as z:
+                media = {
+                    r["media_index"]: r["name"]
+                    for r in parse_media_info(z.read("media/mediaInfo.dat"))["records"]
+                }
+                for page_name in list_pages(sample):
+                    index = page_thumbnail_media_index(z.read(page_name))
+                    if index is None:
+                        continue
+                    self.assertTrue(media.get(index, "").endswith(".spi"), (sample.name, page_name, index))
+                    checked += 1
+        self.assertEqual(checked, 12)
 
 
 if __name__ == "__main__":

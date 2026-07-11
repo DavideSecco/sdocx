@@ -102,6 +102,7 @@ fn print_info(doc: &Document) {
                 .map(|color| format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b))
                 .unwrap_or_else(|| "none".to_string()),
             page.template
+                .as_ref()
                 .map(format_template)
                 .unwrap_or_else(|| "none".to_string()),
             page.strokes.len(),
@@ -112,8 +113,8 @@ fn print_info(doc: &Document) {
     }
 }
 
-fn format_template(template: PageTemplate) -> String {
-    match template.source {
+fn format_template(template: &PageTemplate) -> String {
+    match &template.source {
         PageTemplateSource::BuiltIn => format!("built-in {}", template.id),
         PageTemplateSource::CustomPdf {
             media_index,
@@ -121,6 +122,7 @@ fn format_template(template: PageTemplate) -> String {
         } => {
             format!("PDF template (media {media_index}, page {})", page_index + 1)
         }
+        PageTemplateSource::CustomImage { filename } => format!("image template ({filename})"),
     }
 }
 

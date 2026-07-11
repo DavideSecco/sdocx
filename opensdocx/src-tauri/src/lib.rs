@@ -176,6 +176,9 @@ struct SceneTemplate {
     pdf_media_index: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pdf_page_index: Option<u32>,
+    /// Basename of an embedded custom-image template, resolved lazily by the UI.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    image_filename: Option<String>,
 }
 
 /// An ellipse resolved from its 8 stored boundary points (pysdocx
@@ -809,9 +812,10 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
         }
     }
 
-    let template = page.template.map(|t| {
-        let category = match t.source {
+    let template = page.template.as_ref().map(|t| {
+        let category = match &t.source {
             sdocx::PageTemplateSource::CustomPdf { .. } => "pdf",
+            sdocx::PageTemplateSource::CustomImage { .. } => "image",
             sdocx::PageTemplateSource::BuiltIn => template_category(t.id).unwrap_or("plain"),
         };
         let mut st = SceneTemplate {
@@ -827,6 +831,7 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
             margin_color: None,
             pdf_media_index: None,
             pdf_page_index: None,
+            image_filename: None,
         };
         match category {
             "grid" => {
@@ -863,10 +868,15 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
                 if let sdocx::PageTemplateSource::CustomPdf {
                     media_index,
                     page_index,
-                } = t.source
+                } = &t.source
                 {
-                    st.pdf_media_index = Some(media_index);
-                    st.pdf_page_index = Some(page_index);
+                    st.pdf_media_index = Some(*media_index);
+                    st.pdf_page_index = Some(*page_index);
+                }
+            }
+            "image" => {
+                if let sdocx::PageTemplateSource::CustomImage { filename } = &t.source {
+                    st.image_filename = Some(filename.clone());
                 }
             }
             _ => {}
@@ -979,6 +989,28 @@ async fn get_media(index: usize, state: State<'_, AppState>) -> Result<MediaOut,
     })
 }
 
+/// Read a custom-template image by the basename stored in its app-private URI.
+/// Samsung prefixes embedded media members with `<index>@`, so compare only the
+/// suffix after that prefix.
+#[tauri::command]
+async fn get_media_by_name(
+    filename: String,
+    state: State<'_, AppState>,
+) -> Result<MediaOut, String> {
+    let index = {
+        let guard = state.reader.lock().unwrap();
+        let reader = guard.as_ref().ok_or("no document loaded")?;
+        reader
+            .metadata()
+            .media_assets
+            .iter()
+            .find(|asset| asset.name.rsplit('@').next() == Some(filename.as_str()))
+            .and_then(|asset| asset.archive_index())
+            .ok_or("custom template media not embedded")? as usize
+    };
+    get_media(index, state).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1052,6 +1084,20 @@ mod tests {
         assert_eq!(t.col_spacing, Some(72.5)); // grid is square
         assert_eq!(t.origin, Some(GRID_ORIGIN));
         assert_eq!(t.color, Some(GRID_COLOR));
+    }
+
+    #[test]
+    fn custom_image_template_reaches_scene() {
+        let Some(mut reader) = sample("PagLiscia&templatescustoms_260711_122117.sdocx") else {
+            return;
+        };
+        let scene = scene(&mut reader, 1);
+        let template = scene.template.expect("custom image template");
+        assert_eq!((template.id, template.kind.as_str()), (12, "image"));
+        assert_eq!(
+            template.image_filename.as_deref(),
+            Some("files_231229_092644_140.jpg")
+        );
     }
 
     /// The Basic-templates sample cycles every built-in id — spot-check one per category resolves
@@ -1292,7 +1338,8 @@ pub fn run() {
             open_document,
             get_page_sizes,
             get_page_scene,
-            get_media
+            get_media,
+            get_media_by_name
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

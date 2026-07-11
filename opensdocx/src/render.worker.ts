@@ -96,8 +96,8 @@ interface Job {
   scene: PageScene;
   scale: number; // device px per page unit
   images: { index: number; bitmap: ImageBitmap }[];
-  /** Pre-rasterized PDF-template background (kind==="pdf"), from PDF.js on the
-   * main thread. A structured clone of the cached bitmap — the worker owns it. */
+  /** Pre-rasterized PDF/custom-image template background from the main thread.
+   * A structured clone of the cached bitmap — the worker owns it. */
   template_bitmap?: ImageBitmap;
 }
 
@@ -358,10 +358,8 @@ function renderJob(job: Job): void {
   c.fillStyle = css(paper);
   c.fillRect(0, 0, scene.width, scene.height);
 
-  // PDF-backed template (Academic multi-page / imported PDF): pre-rasterized by
-  // the main thread (PDF.js), composited to fill the page under everything —
-  // mirrors pysdocx rasterize_pdf_page. The PDF page is A4, the same aspect as
-  // the sdocx page, so stretching to (width, height) does not distort.
+  // PDF/custom-image template, pre-rasterized/decoded by the main thread and
+  // composited to fill the page under everything.
   if (job.template_bitmap) {
     c.drawImage(job.template_bitmap, 0, 0, scene.width, scene.height);
     job.template_bitmap.close(); // the worker's clone — free it eagerly

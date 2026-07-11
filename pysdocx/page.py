@@ -1219,6 +1219,55 @@ def page_pdf_template(data: bytes) -> dict | None:
     }
 
 
+def page_custom_template_uri(data: bytes) -> str | None:
+    """Decode the custom-image template path in the page preamble.
+
+    The URI is a NUL-terminated UTF-16LE string immediately before `[u32 kind]`
+    and the paper record. Depending on whether the optional content bbox is
+    present it starts at 0x80 or 0xA0. Only accept a path-like string ending in
+    a known raster extension; this is a bounded two-candidate decode, not an
+    unbounded scan.
+    """
+    M = _locate_paper_record(data)
+    if M is None or M < 0x84:
+        return None
+    end = M - 4  # optional u32 kind lives immediately before the paper
+    # Prefer 0x80: without a bbox it is the real URI start, while 0xA0 can be a
+    # valid-looking truncated suffix. With a bbox, 0x80 cannot pass the path checks.
+    for start in (0x80, 0xA0):
+        if start >= end or (end - start) % 2:
+            continue
+        try:
+            value = data[start:end].decode("utf-16-le").rstrip("\x00")
+        except UnicodeDecodeError:
+            continue
+        lower = value.lower()
+        if (
+            value.isascii()
+            and value.isprintable()
+            and "/" in value
+            and lower.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))
+        ):
+            return value
+    return None
+
+
+def page_thumbnail_media_index(data: bytes) -> int | None:
+    """Return the `.spi` page-thumbnail media index for the normal plain-page layout.
+
+    After the paper record, plain content pages carry `[u32 1][u16 49]`, then
+    two unknown u16s and this u16 media index. The link resolves to an actual
+    `media/<index>@page_….spi` on every applicable corpus page (12/12).
+    Template families use different tails, so they are deliberately excluded.
+    """
+    M = _locate_paper_record(data)
+    if M is None or M + 0x14 > len(data):
+        return None
+    if _read_u32(data, M + 8) != 1 or struct.unpack_from("<H", data, M + 0xC)[0] != 49:
+        return None
+    return struct.unpack_from("<H", data, M + 0x12)[0]
+
+
 def page_template(data: bytes) -> dict | None:
     """Read the page background template, or None if absent.
 
@@ -1254,6 +1303,17 @@ def page_template(data: bytes) -> dict | None:
             "name": None,
             "pdf_media_index": pdf["pdf_media_index"],
             "pdf_page_index": pdf["pdf_page_index"],
+        }
+
+    custom_uri = page_custom_template_uri(data)
+    if custom_uri is not None:
+        return {
+            "id": _read_u32(data, _locate_paper_record(data) + 8),
+            "kind": "image",
+            "source": "custom_image",
+            "category": "image",
+            "name": custom_uri.rsplit("/", 1)[-1],
+            "template_uri": custom_uri,
         }
 
     if base == 0x90:
@@ -1379,6 +1439,7 @@ def parse_page(data: bytes) -> dict:
         "width": width,
         "height": height,
         "template": page_template(data),
+        "thumbnail_media_index": page_thumbnail_media_index(data),
         "content_bbox": content_bbox,
         "footer": parse_page_footer(data),
         "layers": tree["layers"],

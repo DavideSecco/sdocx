@@ -581,6 +581,39 @@ fn page_pdf_template(data: &[u8], base: usize, page_width: u32) -> Option<(u32, 
     Some((media_index, page_index))
 }
 
+/// Decode the NUL-terminated UTF-16LE custom-image template path immediately
+/// before `[u32 kind][BGRA paper][u32 width]`. Its start is 0x80 without the
+/// optional bbox and 0xA0 with it, so only those two bounded candidates are
+/// accepted.
+fn page_custom_template_uri(data: &[u8], base: usize, page_width: u32) -> Option<String> {
+    let m = locate_paper_record(data, base, page_width)?;
+    let end = m.checked_sub(4)?;
+    for start in [0xA0usize, 0x80] {
+        if start >= end || (end - start) % 2 != 0 {
+            continue;
+        }
+        let units: Vec<u16> = data[start..end]
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        let Ok(decoded) = String::from_utf16(&units) else {
+            continue;
+        };
+        let value = decoded.trim_end_matches('\0').to_string();
+        let lower = value.to_ascii_lowercase();
+        if value.is_ascii()
+            && !value.chars().any(char::is_control)
+            && value.contains('/')
+            && [".jpg", ".jpeg", ".png", ".webp", ".gif"]
+                .iter()
+                .any(|ext| lower.ends_with(ext))
+        {
+            return Some(value);
+        }
+    }
+    None
+}
+
 fn page_template(data: &[u8], base: usize, page_width: u32) -> Option<PageTemplate> {
     // PDF-backed pages are detected by the marker (any `base`), so this also correctly classifies
     // imported-PDF pages that the built-in offsets below would misread as a template id.
@@ -591,6 +624,15 @@ fn page_template(data: &[u8], base: usize, page_width: u32) -> Option<PageTempla
                 media_index,
                 page_index,
             },
+        });
+    }
+
+    if let Some(uri) = page_custom_template_uri(data, base, page_width) {
+        let filename = uri.rsplit('/').next()?.to_string();
+        let m = locate_paper_record(data, base, page_width)?;
+        return Some(PageTemplate {
+            id: read_u32(data, m + 8).unwrap_or(0),
+            source: PageTemplateSource::CustomImage { filename },
         });
     }
 
@@ -1563,6 +1605,27 @@ mod tests {
                 source: PageTemplateSource::CustomPdf {
                     media_index: 2,
                     page_index: 3,
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn parses_custom_image_page_template() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../samples/PagLiscia&templatescustoms_260711_122117.sdocx");
+        if !path.exists() {
+            eprintln!("skipping: custom-image sample not present");
+            return;
+        }
+        let mut reader = crate::open(path).expect("open custom-image sample");
+        let page = reader.page(1).expect("custom-image page");
+        assert_eq!(
+            page.template,
+            Some(PageTemplate {
+                id: 12,
+                source: PageTemplateSource::CustomImage {
+                    filename: "files_231229_092644_140.jpg".into(),
                 },
             })
         );
