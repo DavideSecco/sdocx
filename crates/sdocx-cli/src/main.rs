@@ -115,8 +115,11 @@ fn print_info(doc: &Document) {
 fn format_template(template: PageTemplate) -> String {
     match template.source {
         PageTemplateSource::BuiltIn => format!("built-in {}", template.id),
-        PageTemplateSource::CustomPdf { page_index } => {
-            format!("custom PDF page {}", page_index + 1)
+        PageTemplateSource::CustomPdf {
+            media_index,
+            page_index,
+        } => {
+            format!("PDF template (media {media_index}, page {})", page_index + 1)
         }
     }
 }

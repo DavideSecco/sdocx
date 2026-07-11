@@ -3,7 +3,7 @@ use std::io::{Read, Seek};
 use crate::error::{Error, Result};
 use crate::page::parse_page;
 use crate::types::{
-    BoundingBox, Color, Document, DocumentMetadata, MediaAsset, Page, PageElement, RichTextBox,
+    BoundingBox, Color, Document, DocumentMetadata, MediaAsset, Page, RichTextBox,
     Table, TableCell,
 };
 
@@ -56,22 +56,13 @@ pub fn parse_from_reader<R: Read + Seek>(reader: R) -> Result<Document> {
     }
 
     metadata.media_assets = parse_media_assets(&mut archive)?;
-    let media_map = media_index_positions(
-        &metadata
-            .media_assets
-            .iter()
-            .map(|a| a.name.clone())
-            .collect::<Vec<_>>(),
-    );
 
     let mut pages: Vec<Page> = Vec::with_capacity(page_names.len());
     for name in &page_names {
         let mut entry = archive.by_name(name)?;
         let mut buf = Vec::with_capacity(entry.size() as usize);
         entry.read_to_end(&mut buf)?;
-        let mut page = parse_page(&buf)?;
-        remap_media_indices(&mut page, &media_map);
-        pages.push(page);
+        pages.push(parse_page(&buf)?);
     }
 
     if let (Some(page), Some(text)) = (pages.first_mut(), note_text.clone()) {
@@ -196,26 +187,18 @@ fn media_archive_index(name: &str) -> Option<u32> {
 }
 
 /// Position of each `<index>@` archive index within the ordered media list.
-/// Consumers index `media_assets` positionally, so parsed pages are remapped
-/// through this (see [`remap_media_indices`]).
+///
+/// The decoded archive index is the ONLY media currency parsers expose (same as
+/// pysdocx): `PageElement::Image.media_index`, sticky notes, and the PDF-backed
+/// template all carry it verbatim. This map exists so the fetch APIs
+/// ([`Reader::media_bytes`], [`Reader::media_asset`]) can resolve it to a slot in
+/// the ordered `media_assets` list internally — consumers never remap.
 fn media_index_positions(names: &[String]) -> std::collections::HashMap<usize, usize> {
     names
         .iter()
         .enumerate()
         .filter_map(|(pos, n)| Some((media_archive_index(n)? as usize, pos)))
         .collect()
-}
-
-/// Rewrite each image element's decoded archive index into a position within the
-/// ordered media list. Unknown indices are left untouched (callers treat an
-/// out-of-range index as "asset unavailable").
-pub fn remap_media_indices(page: &mut Page, map: &std::collections::HashMap<usize, usize>) {
-    for el in &mut page.elements {
-        if let PageElement::Image { media_index, .. } = el
-            && let Some(&pos) = map.get(media_index) {
-                *media_index = pos;
-            }
-    }
 }
 
 /// A media manifest (names + mime, no bytes) for lazy loading.
@@ -616,11 +599,18 @@ impl<R: Read + Seek> Reader<R> {
         })
     }
 
-    /// Decoded media archive index → position in `media_assets`. Needed by callers
-    /// that parse page bytes outside the Reader (see [`Reader::page_bytes`]) and
-    /// must then apply [`remap_media_indices`] themselves.
+    /// Decoded media archive index → position in `media_assets`. Fetch by raw
+    /// index via [`Reader::media_bytes`]/[`Reader::media_asset`] instead; this is
+    /// exposed only for callers that need to enumerate/correlate the asset list.
     pub fn media_index_map(&self) -> &std::collections::HashMap<usize, usize> {
         &self.media_index_map
+    }
+
+    /// Look up a media asset (name/mime, no bytes) by its decoded `<index>@`
+    /// archive index — the index page elements and PDF templates carry.
+    pub fn media_asset(&self, archive_index: usize) -> Option<&MediaAsset> {
+        let pos = *self.media_index_map.get(&archive_index)?;
+        self.metadata.media_assets.get(pos)
     }
 
     /// Document-level metadata (media assets carry names/mime but no bytes here).
@@ -653,7 +643,6 @@ impl<R: Read + Seek> Reader<R> {
     pub fn page(&mut self, index: usize) -> Result<Page> {
         let buf = self.page_bytes(index)?;
         let mut page = parse_page(&buf)?;
-        remap_media_indices(&mut page, &self.media_index_map);
         // The typed note body is rendered as the first page's text layer, matching
         // `parse_from_reader`.
         if index == 0
@@ -690,11 +679,17 @@ impl<R: Read + Seek> Reader<R> {
         Ok((w, h))
     }
 
-    /// Read one media blob's raw bytes by index (parallel to `metadata().media_assets`).
-    pub fn media_bytes(&mut self, index: usize) -> Result<Vec<u8>> {
+    /// Read one media blob's raw bytes by its decoded `<index>@` archive index —
+    /// the same index `PageElement::Image`/sticky notes/PDF templates carry (and
+    /// the same currency pysdocx uses), NOT a position in `media_assets`.
+    pub fn media_bytes(&mut self, archive_index: usize) -> Result<Vec<u8>> {
+        let pos = *self
+            .media_index_map
+            .get(&archive_index)
+            .ok_or_else(|| Error::Format("unknown media archive index".into()))?;
         let name = self
             .media_names
-            .get(index)
+            .get(pos)
             .ok_or_else(|| Error::Format("media index out of range".into()))?
             .clone();
         let mut entry = self.archive.by_name(&name)?;
@@ -723,5 +718,40 @@ mod tests {
         parse_note_note(&data, &mut metadata);
 
         assert_eq!(metadata.dark_mode_compatibility, Some(false));
+    }
+
+    /// The decoded `<index>@` archive index is the ONE media currency, end to end:
+    /// a PDF template's `media_index` is the raw index pysdocx reports (0 = Study,
+    /// 2 = Planner here) and `media_bytes(raw)` must fetch actual PDF bytes.
+    /// Regression guard: the media list excludes `.spi` previews, so raw 2 is NOT
+    /// position 2 — a positional fetch rendered Study (raw 0 == pos 0, luck) but
+    /// left Planner blank (raw 2 was out of range of the 2-entry list).
+    #[test]
+    fn pdf_template_media_index_is_the_decoded_archive_index() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../samples/Notebook&Planner1_260709_213306.sdocx");
+        if !path.exists() {
+            eprintln!("skipping: Notebook&Planner sample not present");
+            return;
+        }
+        let mut reader = crate::open(&path).expect("open sample");
+        let mut pdf_indices = std::collections::HashSet::new();
+        for i in 0..reader.page_count() {
+            let page = reader.page(i).expect("parse page");
+            let Some(crate::types::PageTemplate {
+                source: crate::types::PageTemplateSource::CustomPdf { media_index, .. },
+                ..
+            }) = page.template
+            else {
+                panic!("page {i}: expected a PDF-backed template");
+            };
+            pdf_indices.insert(media_index);
+            let bytes = reader.media_bytes(media_index as usize).expect("media bytes");
+            assert!(bytes.starts_with(b"%PDF"), "page {i}: media {media_index} is not a PDF");
+            let asset = reader.media_asset(media_index as usize).expect("media asset");
+            assert!(asset.name.ends_with(".pdf"), "page {i}: {}", asset.name);
+        }
+        // The raw indices themselves — byte-identical to what pysdocx decodes.
+        assert_eq!(pdf_indices, [0u32, 2u32].into_iter().collect());
     }
 }

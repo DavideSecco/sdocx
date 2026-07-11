@@ -130,7 +130,13 @@ fn render_element(
 ) {
     match element {
         PageElement::Image { bbox, media_index } => {
-            let Some(asset) = media_assets.get(*media_index) else {
+            // media_index is the decoded `<index>@` archive index (the parser's one
+            // media currency, same as pysdocx) — resolve it against each asset's
+            // own archive index, not its position in the list.
+            let Some(asset) = media_assets
+                .iter()
+                .find(|a| a.archive_index() == Some(*media_index as u32))
+            else {
                 return;
             };
             let encoded = base64::engine::general_purpose::STANDARD.encode(&asset.data);

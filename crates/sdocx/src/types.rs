@@ -113,6 +113,15 @@ pub struct MediaAsset {
     pub data: Vec<u8>,
 }
 
+impl MediaAsset {
+    /// Decoded `<index>@` archive index from the member name — the index media
+    /// references inside `.page`/`note.note` use (same currency as pysdocx).
+    pub fn archive_index(&self) -> Option<u32> {
+        let base = self.name.rsplit('/').next().unwrap_or(&self.name);
+        base.split_once('@')?.0.parse().ok()
+    }
+}
+
 /// A non-stroke page element.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -302,11 +311,15 @@ pub struct PageTemplate {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PageTemplateSource {
-    /// Built-in Samsung Notes page template.
+    /// Built-in Samsung Notes page template (procedural background — lined / grid / dot / …).
     BuiltIn,
-    /// Custom PDF-backed page template.
+    /// PDF-backed page template: multi-page "Academic" templates (Notebook, Planner, …) and
+    /// imported PDFs. The artwork is a real PDF embedded under `media/`; render by rasterising
+    /// the referenced page. See `page_pdf_template` in `page.rs`.
     CustomPdf {
-        /// Zero-based PDF page index used as the template.
+        /// Archive media index of the embedded `media/<index>@<name>.pdf`.
+        media_index: u32,
+        /// Zero-based page index within that PDF.
         page_index: u32,
     },
 }

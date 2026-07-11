@@ -322,8 +322,8 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
         y_max: f64::from_le_bytes(data[0x98..0xA0].try_into().unwrap()),
     };
 
-    let background_color = page_background_color(data, base);
-    let template = background_color.and_then(|_| page_template(data, base));
+    let background_color = page_background_color(data, base, width);
+    let template = background_color.and_then(|_| page_template(data, base, width));
 
     // Walk the layer/object tree (deterministic `type, child_count, size, blob`
     // boundaries) and decode only raw type-1 objects as strokes. The old flat
@@ -517,11 +517,18 @@ fn read_f64(data: &[u8], offset: usize) -> Option<f64> {
 /// `(245,221,221)` — pins the field; every corpus note is a single light paper across
 /// all its pages, e.g. `(252,252,252)` / `(230,230,230)`).
 ///
-/// `base` (= start of the layer/object tree) upper-bounds the header search.
-fn page_background_color(data: &[u8], base: usize) -> Option<crate::types::Color> {
-    // Search the header preamble [0x7c, base) for the signature. 0x7c skips the
-    // fixed leading fields (uuid + the two u32 canvas dims at 0x78/0x7c) so a
-    // spurious `..FF` inside them can't match.
+/// Offset `M` of the page's paper record `[BGRA (alpha 0xFF)][u32 display_width]`, or `None`.
+///
+/// Searches the header preamble `[0x7c, base)`. `0x7c` skips the fixed leading fields (uuid + the
+/// two u32 canvas dims at 0x78/0x7c) so a spurious `..FF` inside them can't match. Primary gate:
+/// `kind` (u32 at M-4) in 1..=8 with a plausible width — matches every corpus + background page.
+/// Fallback: a record whose `display_width` equals the page width — for PDF-template / PDF-import
+/// notes, whose header preamble puts a value outside 1..=8 where `kind` normally sits (e.g. 4000),
+/// so the primary gate misses them although they carry the same `[BGRA][width]` record. Shared by
+/// `page_background_color` and `page_pdf_template` (mirrors pysdocx `_locate_paper_record`).
+fn locate_paper_record(data: &[u8], base: usize, page_width: u32) -> Option<usize> {
+    // Bound by room for the paper record itself (`[BGRA][u32 width]`, i.e. M+8); the PDF fields
+    // (M+16) are read separately by page_pdf_template, which returns None if the page is shorter.
     let hi = base.min(data.len().saturating_sub(8));
     for off in 0x7c..hi {
         if data[off + 3] != 0xFF {
@@ -530,47 +537,72 @@ fn page_background_color(data: &[u8], base: usize) -> Option<crate::types::Color
         let kind = read_u32(data, off - 4)?;
         let display_width = read_u32(data, off + 4)?;
         if (1..=8).contains(&kind) && (256..=40_000).contains(&display_width) {
-            return Some(crate::types::Color {
-                r: data[off + 2],
-                g: data[off + 1],
-                b: data[off],
-            });
+            return Some(off);
         }
     }
-    None
+    (0x7c..hi).find(|&off| data[off + 3] == 0xFF && read_u32(data, off + 4) == Some(page_width))
 }
 
-fn page_template(data: &[u8], base: usize) -> Option<PageTemplate> {
-    match base {
-        // Short built-in template page records store the template id in the compact header.
-        0x90 => {
-            let id = read_u32(data, 0x8C)?;
-            is_builtin_template_id(id).then_some(PageTemplate {
-                id,
-                source: PageTemplateSource::BuiltIn,
-            })
-        }
-        // Custom downloaded templates are backed by media PDFs. The compact header stores the
-        // zero-based PDF page index in the high 16 bits of this field.
-        0xA6 => {
-            let page_index = read_u32(data, 0x8C)? >> 16;
-            Some(PageTemplate {
-                id: page_index,
-                source: PageTemplateSource::CustomPdf { page_index },
-            })
-        }
-        _ => {
-            let id = if base >= 0xE7 {
-                read_u32(data, 0xAC)?
-            } else {
-                read_u32(data, 0xB4)?
-            };
-            is_builtin_template_id(id).then_some(PageTemplate {
-                id,
-                source: PageTemplateSource::BuiltIn,
-            })
-        }
+fn page_background_color(data: &[u8], base: usize, page_width: u32) -> Option<crate::types::Color> {
+    let m = locate_paper_record(data, base, page_width)?;
+    Some(crate::types::Color {
+        r: data[m + 2],
+        g: data[m + 1],
+        b: data[m],
+    })
+}
+
+/// Decode a page's PDF-template / PDF-import reference `(media_index, page_index)`, or `None`.
+///
+/// Multi-page "Academic" templates (Notebook, Planner, …) and imported PDFs are not procedural
+/// like the built-in backgrounds: the artwork is a real PDF embedded under `media/`, and each
+/// `.page` references one of its pages in the 8 bytes right after the paper record `M`:
+///
+/// ```text
+/// M+8  u16 flag            == 1 on every observed PDF page (a count? — assumed)
+/// M+A  u16 media_index     -> media/<index>@<name>.pdf
+/// M+C  u16 reserved        == 0 on PDF pages; == 1 on built-in pages (M+8 holds the id there)
+/// M+E  u16 page_index      -> 0-based page within that PDF
+/// ```
+///
+/// `flag == 1 && reserved == 0` separates PDF pages from built-in ones with zero counterexamples
+/// across the 150-page corpus (mirrors pysdocx `page_pdf_template`). RE 2026-07-09 on the
+/// Notebook&Planner Academic sample, cross-checked against the imported-PDF page in `quiz.sdocx`.
+fn page_pdf_template(data: &[u8], base: usize, page_width: u32) -> Option<(u32, u32)> {
+    let m = locate_paper_record(data, base, page_width)?;
+    let flag = read_u16(data, m + 8)?;
+    let reserved = read_u16(data, m + 0xC)?;
+    if flag != 1 || reserved != 0 {
+        return None;
     }
+    let media_index = read_u16(data, m + 0xA)? as u32;
+    let page_index = read_u16(data, m + 0xE)? as u32;
+    Some((media_index, page_index))
+}
+
+fn page_template(data: &[u8], base: usize, page_width: u32) -> Option<PageTemplate> {
+    // PDF-backed pages are detected by the marker (any `base`), so this also correctly classifies
+    // imported-PDF pages that the built-in offsets below would misread as a template id.
+    if let Some((media_index, page_index)) = page_pdf_template(data, base, page_width) {
+        return Some(PageTemplate {
+            id: page_index,
+            source: PageTemplateSource::CustomPdf {
+                media_index,
+                page_index,
+            },
+        });
+    }
+
+    let id = match base {
+        // Short built-in template page records store the template id in the compact header.
+        0x90 => read_u32(data, 0x8C)?,
+        _ if base >= 0xE7 => read_u32(data, 0xAC)?,
+        _ => read_u32(data, 0xB4)?,
+    };
+    is_builtin_template_id(id).then_some(PageTemplate {
+        id,
+        source: PageTemplateSource::BuiltIn,
+    })
 }
 
 fn is_builtin_template_id(id: u32) -> bool {
@@ -1468,7 +1500,8 @@ mod tests {
         data[0xA0..0xA4].copy_from_slice(&2_u32.to_le_bytes()); // paper-color kind
         data[0xA4..0xA8].copy_from_slice(&[0xDD, 0xDA, 0xCB, 0xFF]);
         data[0xA8..0xAC].copy_from_slice(&1080_u32.to_le_bytes()); // display_width
-        data[0xAC..0xB0].copy_from_slice(&1_u32.to_le_bytes());
+        data[0xAC..0xB0].copy_from_slice(&1_u32.to_le_bytes()); // built-in template id
+        data[0xB0..0xB4].copy_from_slice(&1_u32.to_le_bytes()); // reserved u32 (== 1 on built-in)
 
         let page = parse_page(&data).unwrap();
 
@@ -1505,6 +1538,9 @@ mod tests {
 
     #[test]
     fn parses_custom_pdf_page_template() {
+        // PDF-backed page (Academic template / imported PDF): the paper record is followed by
+        // [u16 flag=1][u16 media_index][u16 reserved=0][u16 page_index]. Detected by the marker
+        // regardless of `base`, so it also fixes imported-PDF pages the built-in offsets misread.
         let mut data = vec![0; 0x200];
         data[0x00..0x04].copy_from_slice(&0xA6_u32.to_le_bytes());
         data[0x16..0x1A].copy_from_slice(&1080_u32.to_le_bytes());
@@ -1512,7 +1548,10 @@ mod tests {
         data[0x7C..0x80].copy_from_slice(&2_u32.to_le_bytes()); // paper-color kind
         data[0x80..0x84].copy_from_slice(&[0xDD, 0xDA, 0xCB, 0xFF]);
         data[0x84..0x88].copy_from_slice(&1080_u32.to_le_bytes()); // display_width
-        data[0x8C..0x90].copy_from_slice(&(3_u32 << 16).to_le_bytes());
+        data[0x88..0x8A].copy_from_slice(&1_u16.to_le_bytes()); // flag
+        data[0x8A..0x8C].copy_from_slice(&2_u16.to_le_bytes()); // pdf_media_index
+        data[0x8C..0x8E].copy_from_slice(&0_u16.to_le_bytes()); // reserved
+        data[0x8E..0x90].copy_from_slice(&3_u16.to_le_bytes()); // pdf_page_index (0-based)
 
         let page = parse_page(&data).unwrap();
 
@@ -1520,7 +1559,10 @@ mod tests {
             page.template,
             Some(PageTemplate {
                 id: 3,
-                source: PageTemplateSource::CustomPdf { page_index: 3 },
+                source: PageTemplateSource::CustomPdf {
+                    media_index: 2,
+                    page_index: 3,
+                },
             })
         );
     }
@@ -1534,8 +1576,9 @@ mod tests {
         data[0xA0..0xA4].copy_from_slice(&2_u32.to_le_bytes()); // paper-color kind
         data[0xA4..0xA8].copy_from_slice(&[0xFC, 0xFC, 0xFC, 0xFF]);
         data[0xA8..0xAC].copy_from_slice(&1080_u32.to_le_bytes()); // display_width
-        data[0xAC..0xB0].copy_from_slice(&1_u32.to_le_bytes());
-        data[0xB4..0xB8].copy_from_slice(&0_u32.to_le_bytes());
+        data[0xAC..0xB0].copy_from_slice(&1_u32.to_le_bytes()); // newer-offset id (ignored here)
+        data[0xB0..0xB4].copy_from_slice(&1_u32.to_le_bytes()); // reserved u32 (== 1, not a PDF page)
+        data[0xB4..0xB8].copy_from_slice(&0_u32.to_le_bytes()); // older-offset id == 0 -> absent
 
         let page = parse_page(&data).unwrap();
 

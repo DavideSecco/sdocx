@@ -5,7 +5,7 @@ mod page;
 mod shape;
 mod types;
 
-pub use container::{remap_media_indices, Reader};
+pub use container::Reader;
 pub use error::{Error, Result};
 pub use page::parse_page;
 pub use types::*;
