@@ -31,7 +31,13 @@ from pysdocx.container import (
     raster_media_indices,
 )
 from pysdocx.ink import color_hex
-from pysdocx.note import parse_tables, parse_typed_text
+from pysdocx.note import parse_tables, parse_typed_text  # noqa: F401 (legacy corroborator)
+from pysdocx.note_doc import (
+    note_doc_tables,
+    note_table_grid,
+    parse_note_doc,
+    table_cell_style,
+)
 from pysdocx.page import GRID_ORIGIN, GRID_SPACING, OXFORD_MARGIN_COLOR, page_background_color, parse_page
 
 MAX_PRESSURE = 1400.0
@@ -1037,42 +1043,149 @@ def draw_typed_page(ax, page_lines, fontpt=TYPED_TEXT_FONTPT, default_ink=DEFAUL
             _draw_text_segment(ax, renderer, inv, x, ln["y"], seg, fontpt, style, default_ink)
 
 
-def render_table(ax, table, line_color=TABLE_LINE_COLOR, text_color=DEFAULT_INK, fontpt=15, pad=18):
-    """Draw a table (from pysdocx.parse_tables) as a grid of cells with their text.
+# The header/"evidenzia" cell ink (foreground_color ff3a3a3d) — Samsung's
+# highlighted rows/columns carry it AND get the theme fill behind them (there is
+# no per-cell fill in that case). Plain bold cells keep the default ink ff252525.
+_HEADER_INK = (0x3A, 0x3A, 0x3D)
 
-    The table's cell texts + geometry live in note.note (like the typed text); parse_tables
-    reconstructs the row/column grid from the cell anchor points. Each cell also carries its own
-    rich-text style (`bold`/`italic`/`underline`/`color`/`font_size`, from note.py's `_cell_style`
-    — the same per-run TLV markers as the document's typed text, just scoped to the cell's own
-    text instead of the document-wide field). `font_size` becomes the shrink-to-fit baseline
-    (still capped by `fontpt`/the cell width) instead of a flat size for every cell, so a cell
-    explicitly set smaller (e.g. Samsung Notes' own auto-shrink) renders smaller than its
-    neighbors, not just when its width forces it to.
+
+def _argb_to_rgb(argb):
+    return ((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF)
+
+
+def _table_border(block):
+    """Reduce a 4-entry border block to `(has_v, has_h, color, radius)`.
+
+    Entries 0/2 are the vertical edges/lines, 1/3 the horizontal (paired members
+    never differ). A border is on when its ARGB is opaque and width > 0.
+    """
+    def on(entry):
+        return entry["argb"] >> 24 != 0 and entry["width"] > 0
+
+    has_v, has_h = on(block[0]), on(block[1])
+    color = next((_argb_to_rgb(e["argb"]) for e in block if on(e)), None)
+    radius = block[0]["radius_x"] if has_v else (block[1]["radius_x"] if has_h else 0.0)
+    return {"has_v": has_v, "has_h": has_h, "color": color, "radius": radius}
+
+
+def structural_table_render_model(table):
+    """Project a byte-exact structural table (`note_doc_tables`) to render-ready form.
+
+    Geometry comes from the page-local grid (`note_table_grid`). Per-cell character
+    style comes from the frame spans (`table_cell_style`); the background fill is the
+    explicit `fill_argb`, or the theme fill for header/"evidenzia" cells (fg ==
+    ff3a3a3d). The outer frame + inner grid come from the decoded border blocks
+    (`outer_borders` / `grid_borders`): colour, width, corner radius, and which
+    edges are enabled. Host page is the wrap `table_index` (0-based page index).
+    """
+    x_edges, y_edges = note_table_grid(table)
+    theme_fill = _argb_to_rgb(table["theme_fill_argb"])
+    cells = []
+    for r, row in enumerate(table["rows"]):
+        for c in row["cells"]:
+            style = table_cell_style(c)
+            if c["fill_argb"] >> 24:
+                fill = _argb_to_rgb(c["fill_argb"])
+            elif style["color"] == _HEADER_INK:
+                fill = theme_fill
+            else:
+                fill = None
+            cells.append({
+                "row": r, "col": c["col"],
+                "text": c["frame"]["text"].rstrip("\n"),
+                "fill": fill,
+                **style,
+            })
+    return {
+        "x_edges": x_edges, "y_edges": y_edges, "cells": cells,
+        "outer": _table_border(table["outer_borders"]),
+        "inner": _table_border(table["grid_borders"]),
+        "page_index": table["table_index"], "bbox": table["bbox"],
+    }
+
+
+# ⚠ HEURISTIC: matplotlib point → page-unit factor for the 9×12in figure (the app
+# uses the same 3.40); used to estimate a cell's text extent so under/strike lines
+# span only the text, not the whole cell.
+_TABLE_PT_TO_PAGE = 3.40
+
+
+def render_table(ax, table, text_color=DEFAULT_INK, fontpt=15, pad=18):
+    """Draw a structural table (`structural_table_render_model`) with its decoded style.
+
+    Cell texts/geometry/fills/character style and the border blocks all come
+    byte-exactly from the note.note type-22 object. `font_size` is the shrink-to-fit
+    baseline (only shrunk if the text would overflow the cell), so a cell set larger
+    (e.g. size 20) actually renders larger. Under/strike lines span the text only.
     """
     x_edges, y_edges = table["x_edges"], table["y_edges"]
-    for x in x_edges:
-        ax.plot([x, x], [y_edges[0], y_edges[-1]], "-", color=line_color, lw=1.2, zorder=2)
-    for y in y_edges:
-        ax.plot([x_edges[0], x_edges[-1]], [y, y], "-", color=line_color, lw=1.2, zorder=2)
+    x0, x1, y0, y1 = x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]
+    outer, inner = table["outer"], table["inner"]
+
+    # Explicit / header background fills sit beneath the borders.
     for cell in table["cells"]:
-        x0 = x_edges[cell["col"]]
-        x1 = x_edges[cell["col"] + 1]
-        cx = x0 + pad
+        if not cell["fill"]:
+            continue
+        fx0, fx1 = x_edges[cell["col"]], x_edges[cell["col"] + 1]
+        fy0, fy1 = y_edges[cell["row"]], y_edges[cell["row"] + 1]
+        ax.add_patch(plt.Rectangle(
+            (fx0, min(fy0, fy1)), fx1 - fx0, abs(fy1 - fy0),
+            facecolor=color_hex(cell["fill"]), edgecolor="none", zorder=1))
+
+    lw = 1.2
+    fallback_rgb = (0x8A, 0x8F, 0x9A)
+    outer_hex = color_hex(outer["color"] or fallback_rgb)
+    inner_hex = color_hex(inner["color"] or outer["color"] or fallback_rgb)
+    # A boundary edge (frame top/bottom/left/right) is drawn if EITHER the outer
+    # frame OR the grid enables it — so "only horizontal grid, no frame" still
+    # closes top+bottom. Interior lines are grid-only. A full, rounded frame draws
+    # its own boundary (skip the straight boundary lines then).
+    rounded = outer["has_v"] and outer["has_h"] and outer["radius"] > 0
+    if rounded:
+        r = outer["radius"]
+        ax.add_patch(FancyBboxPatch(
+            (x0, min(y0, y1)), x1 - x0, abs(y1 - y0),
+            boxstyle=f"round,pad=0,rounding_size={r}",
+            fill=False, edgecolor=outer_hex, lw=lw, zorder=2, mutation_aspect=1))
+    boundary_h_hex = outer_hex if outer["has_h"] else inner_hex
+    boundary_v_hex = outer_hex if outer["has_v"] else inner_hex
+    if inner["has_h"]:  # interior horizontals
+        for y in y_edges[1:-1]:
+            ax.plot([x0, x1], [y, y], "-", color=inner_hex, lw=lw, zorder=2)
+    if (outer["has_h"] or inner["has_h"]) and not rounded:  # top + bottom
+        for y in (y0, y1):
+            ax.plot([x0, x1], [y, y], "-", color=boundary_h_hex, lw=lw, zorder=2)
+    if inner["has_v"]:  # interior verticals
+        for x in x_edges[1:-1]:
+            ax.plot([x, x], [y0, y1], "-", color=inner_hex, lw=lw, zorder=2)
+    if (outer["has_v"] or inner["has_v"]) and not rounded:  # left + right
+        for x in (x0, x1):
+            ax.plot([x, x], [y0, y1], "-", color=boundary_v_hex, lw=lw, zorder=2)
+
+    for cell in table["cells"]:
+        cx0 = x_edges[cell["col"]]
+        cx1 = x_edges[cell["col"] + 1]
+        cx = cx0 + pad
         cy = (y_edges[cell["row"]] + y_edges[cell["row"] + 1]) / 2
         text = cell["text"]
-        base_pt = min(cell.get("font_size") or fontpt, fontpt)
-        usable = max(x1 - x0 - 2 * pad, 1.0)
+        base_pt = cell.get("font_size") or fontpt
+        usable = max(cx1 - cx0 - 2 * pad, 1.0)
         approx_width = max(len(text), 1) * base_pt * 7.0
         cell_fontpt = max(5.5, min(base_pt, base_pt * usable / approx_width))
         color = cell.get("color")
-        hexc = f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}" if color and color != TEXT_DEFAULT_COLOR else text_color
+        hexc = color_hex(color) if color and color != TEXT_DEFAULT_COLOR else text_color
         ax.text(
             cx, cy, text, color=hexc, fontsize=cell_fontpt, va="center", ha="left", zorder=3,
             fontweight="bold" if cell.get("bold") else "normal",
             fontstyle="italic" if cell.get("italic") else "normal",
         )
+        # Under/strike over the text extent only (estimated), not the whole cell.
+        text_w = min(len(text) * cell_fontpt * 0.5 * _TABLE_PT_TO_PAGE, usable)
         if cell.get("underline"):
-            ax.plot([cx, x1 - pad], [cy - cell_fontpt * 0.55, cy - cell_fontpt * 0.55], "-", color=hexc, lw=1.0, zorder=3)
+            uy = cy - cell_fontpt * 0.55
+            ax.plot([cx, cx + text_w], [uy, uy], "-", color=hexc, lw=1.0, zorder=3)
+        if cell.get("strikethrough"):
+            ax.plot([cx, cx + text_w], [cy, cy], "-", color=hexc, lw=1.0, zorder=3)
 
 
 def _resolve_bg(bg, stored_bg):
@@ -1143,11 +1256,11 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
     typed_text_placed = False
     typed_pages = None  # paginated typed-text slots, computed lazily on the anchor page
     typed_anchor_idx = None
-    tables = parse_tables(note)
+    # Tables are decoded byte-exactly (the type-22 object) and each carries its own
+    # host-page index (`page_index`), so — unlike typed text — no placement guess is
+    # needed. `table_page` (1-based) still forces all tables onto one page if given.
+    tables = [structural_table_render_model(t) for t in note_doc_tables(note, parse_note_doc(note))] if note else []
     typed_text_target = _typed_text_target_page(typed_text)
-    table_target_page = table_page
-    if table_target_page is None and tables:
-        table_target_page = typed_text_target - 1 if typed_text_target and typed_text_target > 1 else 4
     raster_indices = raster_media_indices(path)
 
     figures = []
@@ -1194,7 +1307,11 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
                 if match is not None:
                     template_image = np.asarray(Image.open(io.BytesIO(z.read(match))).convert("RGBA"))
 
-        page_tables = [t for t in tables if t["bbox"] is not None] if idx == table_target_page else []
+        # Each table declares its own 0-based host page; `table_page` (1-based) forces all.
+        page_tables = [
+            t for t in tables
+            if (idx == table_page if table_page is not None else t["page_index"] == idx - 1)
+        ]
         is_empty = (
             kept == 0 and not shapes and not images and not text_boxes
             and not sticky_notes and not page_tables

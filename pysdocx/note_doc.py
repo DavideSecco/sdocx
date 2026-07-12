@@ -443,9 +443,14 @@ def _parse_table_wrap(cur: _Cur, table_level: bool) -> dict:
     _expect(cur, cur.u32() == 0, "wrap trailing zero")
     if table_level:
         _expect(cur, cur.u8() == 3, "wrap b3 != 3")
-        # 0-based index of this table among the note's tables (document order).
-        # (Named rows_minus_1 before the 4x3 styled-table family; that only held
-        # by coincidence on the old 2-table corpus.)
+        # The 0-based index of the PAGE this table is anchored to — note.note's
+        # otherwise-missing table->page reference. (Named rows_minus_1, then
+        # table_index; both were coincidences of the old corpus. Proof: the
+        # single-table Allsamsungnotes note carries 3 and its table is on page 4;
+        # geometry-edited tables sharing a page share the value; it equals the
+        # stacked-Y multiplier `page_index * page_height`.) See
+        # `table_index_is_page_index`. The field keeps the `table_index` name in
+        # the decode layer; the render/placement layer treats it as page index.
         out["table_index"] = cur.u32()
     _expect(cur, cur.pos == start + size, "wrap size mismatch")
     return out
@@ -656,6 +661,7 @@ def parse_table_object(blob: bytes, off: int, size: int,
 
     return {
         "uuid": wrap["uuid"], "version": wrap["version"],
+        "table_index": wrap["table_index"],
         "ts1_us": wrap["ts1_us"], "ts2_us": wrap["ts2_us"],
         "bbox": wrap["bbox"], "page_width": wrap["page_width"],
         "text_midpoints": midpoints["points"],
@@ -684,6 +690,69 @@ def note_doc_tables(note: bytes, doc: dict) -> list[dict]:
         tables.append(parse_table_object(
             blob, obj["body_off"], obj["obj_size"], doc["format_version"]))
     return tables
+
+
+def table_index_is_page_index(table: dict) -> int:
+    """The 0-based host-page index of a structural table (its `table_index`).
+
+    note.note stores tables document-level with no explicit page reference; the
+    wrap `table_index` field IS that reference (see docs tables.md). Thin named
+    accessor so render/placement code reads the intent, not the legacy name.
+    """
+    return table["table_index"]
+
+
+def note_table_grid(table: dict) -> tuple[list[float], list[float]]:
+    """Page-local column/row grid-line coords `(x_edges, y_edges)`.
+
+    Derived from the wrap bbox top-left plus the `col_widths` / per-row heights
+    (both sum to the bbox W/H). Page-local for every table — unlike the cell
+    bboxes, whose Y is document-stacked on geometry-edited tables.
+    """
+    x0, y0 = table["bbox"][0], table["bbox"][1]
+    x_edges = [x0]
+    for w in table["col_widths"]:
+        x_edges.append(x_edges[-1] + w)
+    y_edges = [y0]
+    for row in table["rows"]:
+        y_edges.append(y_edges[-1] + row["height"])
+    return x_edges, y_edges
+
+
+def table_cell_style(cell: dict) -> dict:
+    """Whole-cell character style resolved from the cell's Common-frame spans.
+
+    A whole-cell run spans `start == 0, end == len(text)`. Maps the `text_core`
+    span types: 5 bold / 6 italic / 7 underline / 20 strikethrough (bool value),
+    1 foreground_color (ARGB), 3 font_size (f32). Returns render-ready fields;
+    `color` is `(r, g, b)` when opaque else None, `font_size` a float or None.
+    Every corpus cell carries a default font_size (15.0) and color (ff252525).
+    """
+    text_len = len(cell["frame"]["text"])
+    out = {"bold": False, "italic": False, "underline": False,
+           "strikethrough": False, "color": None, "font_size": None}
+    for span in cell["frame"]["spans"]:
+        if span["start"] != 0 or span["end"] != text_len:
+            continue
+        raw = bytes.fromhex(span["extra"])
+        if len(raw) < 4:
+            continue
+        value = int.from_bytes(raw[:4], "little")
+        st = span["span_type"]
+        if st == 5:
+            out["bold"] = value != 0
+        elif st == 6:
+            out["italic"] = value != 0
+        elif st == 7:
+            out["underline"] = value != 0
+        elif st == 20:
+            out["strikethrough"] = value != 0
+        elif st == 1:
+            if value >> 24 == 0xFF:
+                out["color"] = ((value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF)
+        elif st == 3:
+            out["font_size"] = struct.unpack("<f", raw[:4])[0]
+    return out
 
 
 def parse_note_doc(note: bytes) -> dict:

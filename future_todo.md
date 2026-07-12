@@ -14,14 +14,19 @@ end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
   `Mathsolver&Hyperlink` closes the Web-object request: link previews are
   `text_core::Common` inline objects of type 13 (not page-layer objects),
   anchored by U+FFFC and backed by an `@web_*.jpg` thumbnail. Its hyperlink is
-  therefore not span type 9. Math Solver does not emit formula span 23; it
+  therefore not span type 9. The full 766-byte Web body is now decoded as an
+  ObjectBase frame plus a type-13 flex frame (thumbnail id, preview body,
+  title, URI, image type, version, view type), with a new bit-7 29-byte value
+  bounded but honestly opaque. Python + dedicated Kaitai spec/validator agree
+  byte-for-byte on the sole Web object. Math Solver does not emit formula span 23; it
   instead adds variable-sized `0x20` named properties associated with the
   recognised strokes (exact relationship Marker).
   `04 01 00 + RecogUIFeature_MathStrokeUuidStringArray` carries a counted array
   of UTF-16 stroke UUIDs. Python + Kaitai now decode these alongside the legacy
-  32-byte scalar `extra_key_stroke_shape` form; `06/07` multi-property bags
-  (expression/fail-code keys) are bounded but still raw. HDR_EXT remains
-  dimension-clean.
+  32-byte scalar `extra_key_stroke_shape` form. The `06/07` multi-property
+  chains are now decoded byte-exactly: optional UTF-16 recognised expression,
+  fail-code property (`7` in every observed chain), then the stroke UUID array.
+  The meaning of fail code 7 remains Unknown. HDR_EXT remains dimension-clean.
 
 The **outer/container format is essentially fully decoded**, and — new —
 **`note.note` is now sequentially decoded end-to-end**, backed by an
@@ -84,6 +89,48 @@ executable spec:
   **New executable spec:** `spec/ksy/sdocx_table_object.ksy` +
   `spec/tools/validate_table_object.py`, gated in `test_kaitai_spec`
   (**20/20 tables, 260 cells, zero counterexamples**).
+
+- **Byte-exact table parser ported to Rust core (NEW, 2026-07-11):** the whole
+  structural decode now lives in `crates/sdocx/src/note_doc.rs` — a bounded LE
+  cursor, `parse_common_frame`/`find_common_frames`, the `note.note` header
+  (body blob + `format_version`), and `parse_table_object` with its
+  wrap/midpoints/path/outline/borders helpers, all byte-for-byte from
+  `pysdocx/note_doc.py`. Exposes new public types `NoteTable` / `NoteTableCell`
+  / `TableBorder` / `TableCellSpan` on `metadata.note_tables` (authoritative;
+  the legacy clustered-anchor `parse_tables`/`Table` stays as a corroborator).
+  Parity-gated by `crates/sdocx/tests/note_tables.rs` against a pysdocx-generated
+  fixture (`tests/fixtures/note_tables_pysdocx.json`, regen with
+  `gen_note_tables.py`): **20/20 tables, 260 cells** match pysdocx
+  `note_doc_tables` field-for-field (geometry, fills, borders, per-cell frame
+  text). **`table_index` is really the 0-based HOST PAGE index** (RE finding
+  this round): note.note's long-missing table→page reference. Proof — the
+  single-table `Allsamsungnotes` note carries `3` and its table's ground-truth
+  page is page 4 (index 3; an ordinal would be 0); the styled family increments
+  one-per-page; the two `v2` tables that share a page both carry `10`; it equals
+  the stacked-Y multiplier `page_index × page_height`. Zero
+  `table_index ≥ page_count` in the corpus. Documented in
+  `docs/format/container/note-note/tables.md` (the decode-layer field keeps the
+  `table_index` name; the render/placement layer treats it as page index via
+  `NoteTable::page_index()` / pysdocx `table_index_is_page_index`).
+- **Structural tables now RENDER in OpenSdocx + pysdocx (render migration DONE,
+  2026-07-11):** both render paths migrated off the legacy clustered-anchor
+  `parse_tables` onto `note_doc_tables`. New pysdocx helpers (`note_doc.py`):
+  `note_table_grid` (page-local grid from wrap bbox + col_widths/row heights —
+  page-local even on geometry-edited tables, unlike cell bboxes) and
+  `table_cell_style` (whole-cell char style from the frame spans: 5 bold /
+  6 italic / 7 underline / 20 strikethrough / 1 fg color / 3 font_size).
+  `render.py` `render_table` now draws per-cell background fills + strikethrough
+  and each table lands on its own `page_index` (no more "pagina N"/page-4 guess).
+  Mirrored in Rust: `NoteTableCell::whole_cell_style()` + `NoteTable::grid()` in
+  the `sdocx` crate; OpenSdocx `build_scene_table(&NoteTable)` + worker draw
+  fills/strike; placement in `get_page_scene` filters `note_tables` by
+  `page_index()`. **This fixes "no tables visible in OpenSdocx":** the legacy
+  scan returned nothing on the styled samples (overfit allowlist), so they never
+  showed. Verified: pysdocx renders Allsamsungnotes table on page 4, and the v2
+  styled family byte-for-byte against the user's handwritten annotations (blue
+  fill column / size-20 column / bold column / struck last row / blue third row).
+  Suites green: sdocx + opensdocx cargo (8/8, `page_index()==3`), TS typecheck,
+  clippy, pysdocx unittest 22/22.
 
 - **Kaitai spec + test gate** ([`spec/`](./spec/), `tests/test_kaitai_spec.py`):
   each `spec/ksy/*.ksy` is compiled to a Python parser (vendored in
