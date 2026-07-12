@@ -384,6 +384,16 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                 checked += 1
         self.assertGreater(checked, 0)
 
+    def test_web_object(self) -> None:
+        """Every type-13 inline Web payload agrees with its dedicated spec."""
+        from spec.tools.validate_web_object import diffs_for, iter_web_objects
+
+        checked = 0
+        for sample, raw in iter_web_objects():
+            self.assertEqual(diffs_for(raw), [], f"{sample.name} Web object")
+            checked += 1
+        self.assertGreater(checked, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

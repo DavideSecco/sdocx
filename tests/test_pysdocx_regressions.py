@@ -131,6 +131,17 @@ class MathSolverWebRegressionTest(unittest.TestCase):
             web = [o for o in body["inline"]["objects"] if o["object_type"] == 13]
             self.assertEqual(len(web), 1)
             self.assertEqual(web[0]["position"], body["text"].index("\ufffc"))
+            body_blob = note[doc["body_off"]:doc["body_off"] + doc["body_size"]]
+            from pysdocx.note_doc import parse_web_inline_object
+            parsed_web = parse_web_inline_object(
+                body_blob, web[0]["body_off"], web[0]["obj_size"])
+            self.assertEqual(parsed_web["thumbnail_file_id"], 1)
+            self.assertEqual(parsed_web["title"], "Google")
+            self.assertTrue(parsed_web["uri"].startswith("https://www.google.com/"))
+            self.assertEqual(parsed_web["image_type_id"], 1)
+            self.assertEqual(parsed_web["version"], 3)
+            self.assertEqual(parsed_web["view_type"], 1)
+            self.assertEqual(len(bytes.fromhex(parsed_web["field_7_opaque"])), 29)
 
             page_name = next(n for n in z.namelist() if n.endswith(".page") and len(z.read(n)) > 1000)
             page_data = z.read(page_name)
@@ -145,6 +156,11 @@ class MathSolverWebRegressionTest(unittest.TestCase):
         self.assertTrue(arrays)
         self.assertTrue(all(p["value_kind"] == "utf16_string_array" for p in arrays))
         self.assertTrue(all(p["strings"] for p in arrays))
+        chains = [p for p in props if p["value_kind"] == "math_property_chain"]
+        self.assertEqual(len(chains), 9)
+        self.assertTrue(all(p["fail_code"] == 7 for p in chains))
+        self.assertTrue(all(p["strings"] for p in chains))
+        self.assertTrue(any(p["expression"] == "A^{T}1k\\mid SOCUr=R" for p in chains))
 
 
 class TextBoxLayoutRegressionTest(unittest.TestCase):

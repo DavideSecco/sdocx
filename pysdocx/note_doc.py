@@ -353,6 +353,84 @@ def parse_common_frame(blob: bytes, off: int, format_version: int) -> dict:
     }
 
 
+def parse_web_inline_object(blob: bytes, off: int, size: int) -> dict:
+    """Parse a type-13 Web inline-object body.
+
+    The object is an ObjectBase inclusive frame followed by a type-13
+    inclusive frame.  The latter uses the standard variable-length property
+    and field bitfields; field bits 0..6 are the Web fields known from
+    sdocx2pdf.  The current Samsung 5400 sample additionally sets bit 7 and
+    stores one exclusive length-prefixed opaque value, retained without a
+    speculative name.
+    """
+    cur = _Cur(blob, off, off + size)
+    base_size = cur.u32()
+    if base_size < 4 or off + base_size > cur.end:
+        raise NoteDocParseError(f"web ObjectBase size {base_size} out of range")
+    base_raw = cur.bytes_(base_size - 4)
+
+    frame_off = cur.pos
+    frame_size = cur.u32()
+    if frame_size < 15 or frame_off + frame_size != cur.end:
+        raise NoteDocParseError(f"web frame size {frame_size} does not consume object")
+    win = _Cur(blob, cur.pos, frame_off + frame_size)
+    object_type = win.u16()
+    if object_type != 13:
+        raise NoteDocParseError(f"web object type {object_type} != 13")
+    flex_offset = win.u32()
+
+    def bitfield() -> tuple[int, int]:
+        n = win.u8()
+        if n > 4:
+            raise NoteDocParseError(f"web bitfield length {n} > 4")
+        raw = win.bytes_(n)
+        return int.from_bytes(raw, "little"), n
+
+    property_flags, property_flags_size = bitfield()
+    field_flags, field_flags_size = bitfield()
+    expected_flex = win.pos - frame_off
+    if flex_offset != expected_flex:
+        raise NoteDocParseError(
+            f"web flex offset {flex_offset} != parsed header {expected_flex}")
+    if property_flags:
+        raise NoteDocParseError(f"unhandled web property flags 0x{property_flags:x}")
+
+    out = {
+        "object_base_size": base_size,
+        "object_base_raw": base_raw.hex(),
+        "frame_size": frame_size,
+        "object_type": object_type,
+        "flex_offset": flex_offset,
+        "property_flags": property_flags,
+        "property_flags_size": property_flags_size,
+        "field_flags": field_flags,
+        "field_flags_size": field_flags_size,
+    }
+    if field_flags & 1:
+        out["attached_html_file_id"] = win.u32()
+    if field_flags & 2:
+        out["thumbnail_file_id"] = win.u32()
+    if field_flags & 4:
+        out["body"] = win.short_utf16()
+    if field_flags & 8:
+        out["title"] = win.short_utf16()
+    if field_flags & 16:
+        out["uri"] = win.short_utf16()
+    out["image_type_id"] = win.u32()
+    if field_flags & 32:
+        out["version"] = win.u32()
+    if field_flags & 64:
+        out["view_type"] = win.u32()
+    if field_flags & 128:
+        opaque_size = win.u32()
+        out["field_7_opaque"] = win.bytes_(opaque_size).hex()
+    unhandled = field_flags & ~0xff
+    if unhandled:
+        raise NoteDocParseError(f"unhandled web field flags 0x{unhandled:x}")
+    _ensure_eof(win, "web inline object")
+    return out
+
+
 def find_common_frames(blob: bytes, format_version: int) -> list[dict]:
     """All offsets in `blob` where a complete Common frame parses cleanly.
 

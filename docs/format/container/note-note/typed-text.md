@@ -123,11 +123,22 @@ the anchor index on 3/3 inline objects in the corpus.
 
 `Mathsolver&Hyperlink` adds the first **Web/link-preview inline object**, type
 13. It is not a page-layer object and it is not a type-9 hypertext span: the
-body carries one U+FFFC anchor, whose index exactly matches the type-13
-object's `position`. The object body is 766 bytes and retains the preview
-text, title and URL; `mediaInfo.dat` links the associated `@web_*.jpg`
-thumbnail. The outer framing/type/anchor are Decoded; the inner Web payload
-fields are still Marker/Unknown because only one instance exists.
+body has no type-9 span and carries one U+FFFC anchor, whose index 12 exactly
+matches the type-13 object's `position`.
+
+The 766-byte Web body is now structurally decoded by
+`parse_web_inline_object` and `spec/ksy/sdocx_web_object.ksy`. It is a generic
+ObjectBase inclusive frame followed by a type-13 inclusive flex frame. The
+standard field bitfield gates optional attached-HTML id, thumbnail id, preview
+body, title, URI, version, and view type; `image_type_id` is unconditional.
+This instance has no attached-HTML id, thumbnail id 1, title `Google`, its full
+Google URL, image type 1, version 3, and view type 1. `mediaInfo.dat` id 1 is
+the associated `@web_*.jpg` thumbnail. A newly observed field bit 7 carries an
+exactly bounded 29-byte exclusive frame; its bytes are retained as
+`field_7_opaque` and its semantics remain **Unknown**. Since this is the only
+Web instance, the field names are cross-referenced from sdocx2pdf and the
+values are Marker evidence; framing, gates, boundaries, and exact EOF
+consumption are Decoded.
 
 ## Finding the body text (legacy scan) — Marker
 
@@ -143,7 +154,7 @@ gracefully on hostile input.
   margins and gravity; inline-object anchoring; table cells as nested frames.
 - **Unknown:** `section_data` pair semantics; paragraph type 6 semantics; the
   non-boolean strikethrough payloads; the trailing `(3,2)`/`(0,0)` u32 pair of
-  inline objects; the inner schema of the embedded image/Web objects.
+  inline objects; embedded image internals; Web field 7 semantics.
 - **Heuristic (renderer, not format):** how the decoded text is laid out and
   paginated onto pages — `PARA_SPACE_UNIT`, `TYPED_TEXT_BLANK_H`, line height,
   page placement ([`../../heuristics.md`](../../heuristics.md)).
