@@ -506,6 +506,53 @@ def _text_box_style_runs(blob: bytes, tag: int, text_len: int, start: int) -> li
 
 
 def _text_box_rich_text(blob: bytes) -> dict | None:
+    # Authoritative path: the type-2 Text wrapper contains Shape(type 7), whose
+    # decoded flex offset points directly at text_core::Common.  Keep the old
+    # marker path below as a defensive fallback for future unsupported flags.
+    try:
+        from .note_doc import NoteDocParseError, parse_text_wrapper
+        frame = parse_text_wrapper(blob)["common"]
+    except (NoteDocParseError, ValueError, IndexError, struct.error):
+        frame = None
+    if frame is not None:
+        raw_text = frame["text"]
+        text = raw_text.rstrip("\x00\n")
+        if not text.strip():
+            return None
+        runs = []
+        colors = []
+        highlights = []
+        font_sizes = []
+        for span in frame["spans"]:
+            start, end = span["start"], min(span["end"], len(text))
+            if start >= end:
+                continue
+            raw = bytes.fromhex(span["extra"])
+            value = struct.unpack_from("<I", raw)[0] if len(raw) >= 4 else 0
+            st = span["span_type"]
+            if st in (5, 6, 7, 20) and value:
+                runs.append({
+                    "start": start, "end": end,
+                    "style": {5: "bold", 6: "italic", 7: "underline", 20: "strikethrough"}[st],
+                })
+            elif st in (1, 17) and value >> 24 == 0xFF:
+                row = {"start": start, "end": end,
+                       "color": ((value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF)}
+                (colors if st == 1 else highlights).append(row)
+            elif st == 3 and len(raw) >= 4:
+                size = struct.unpack_from("<f", raw)[0]
+                if 4.0 <= size <= 200.0:
+                    font_sizes.append({"start": start, "end": end, "font_size": size})
+        return {
+            "text": text,
+            "text_off": frame["off"] + 8,
+            "runs": runs,
+            "colors": colors,
+            "highlights": highlights,
+            "font_size": font_sizes[0]["font_size"] if font_sizes else None,
+            "font_sizes": font_sizes,
+        }
+
     parsed = _text_box_text(blob)
     if parsed is None:
         return None

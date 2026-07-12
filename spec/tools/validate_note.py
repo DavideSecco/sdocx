@@ -97,9 +97,9 @@ def diffs_for(data: bytes) -> list[str]:
         diffs.append("unhandled_field_bits")
 
     # Blob boundaries and the gap.
-    if data[doc["title_off"] : doc["title_off"] + doc["title_size"]] != k.title_blob:
+    if data[doc["title_off"] : doc["title_off"] + doc["title_size"]] != k._raw_title_blob:
         diffs.append("title_blob")
-    if data[doc["body_off"] : doc["body_off"] + doc["body_size"]] != k.body_blob:
+    if data[doc["body_off"] : doc["body_off"] + doc["body_size"]] != k._raw_body_blob:
         diffs.append("body_blob")
     gap_pair = (
         list(k.pre_flex_gap.maybe_default_page_size)

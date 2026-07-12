@@ -5,6 +5,8 @@ meta:
   file-extension: note
   endian: le
   license: CC0-1.0
+  imports:
+    - sdocx_text_wrapper
 doc: |
   The whole `note.note` member of a `.sdocx` archive, parsed as one sequential
   structure (validated with zero counterexamples across the corpus by
@@ -19,9 +21,9 @@ doc: |
   exactly is the structural gate: every intermediate boundary must be correct
   for `trailing_hash` to land on the real hash.
 
-  The title/body blobs are Text objects (Shape-wrapped); their inner
-  `text_core::Common` rich-text frames are NOT at fixed offsets inside the
-  blob, so they stay procedural in `pysdocx.note_doc` (see
+  The title/body blobs are Text objects parsed through the imported
+  `sdocx_text_wrapper` inheritance chain; Shape's flex offset lands on their
+  `text_core::Common` rich-text frame without scanning (see
   docs/format/container/note-note/typed-text.md). Everything else that was
   previously marker-scanned in the tail (pen preload paths, pen style tails,
   voice clips, the string registry pairing each pen with its parameter
@@ -86,15 +88,16 @@ seq:
     type: u4
     doc: Byte length of the title Text blob that follows.
   - id: title_blob
+    type: sdocx_text_wrapper
     size: title_size
     doc: |
-      Title Text object blob. Contains one `text_core::Common` frame carrying
-      the title text (frame located procedurally; the Text/Shape wrapper is
-      not modeled).
+      Title Text object. Its Shape flex region contains one
+      `text_core::Common` frame carrying the title text.
   - id: body_size
     type: u4
     doc: Byte length of the body Text blob that follows.
   - id: body_blob
+    type: sdocx_text_wrapper
     size: body_size
     doc: |
       Body Text object blob. Contains the main `text_core::Common` rich-text

@@ -55,20 +55,21 @@ type-specific.
   rotation angle, and `frame_midpoints` for rotated boxes (from the
   [payload-geometry wrapper](./payload-geometry.md), text marker at
   `total + L1 + 172`).
-- **Decoded — the box's `text_core::Common` frame (8/8):** every text-box blob
+- **Decoded — full Text wrapper + `text_core::Common` (16/16):** every text-box blob
   carries the same rich-text frame as the note body
   ([typed-text](../note-note/typed-text.md#the-text_corecommon-frame--decoded)),
-  parsed structurally by `pysdocx.note_doc.find_common_frames` and
-  cross-checked by `spec/tools/analyze_sdocx2pdf_leads.py`: the frame text is
+  reached structurally by `pysdocx.note_doc.parse_text_wrapper` through
+  `ObjectBase(0) → ShapeBase(6) → Shape(7).flex_offset`, and Kaitai-gated by
+  `sdocx_text_wrapper.ksy`: the frame text is
   the scanned text plus its trailing empty-paragraph newlines, and the
-  enabled bold/italic/underline spans equal the scanned runs on 8/8 boxes.
+  enabled bold/italic/underline spans equal the scanned runs on 16/16 boxes.
   The frame sits at blob offset **386** on every non-rotated box and **406**
-  on every rotated one (the 20 extra bytes appear earlier in the wrapper —
-  rotation-related fields, shifting the payload-geometry block by the same
-  amount). Frame margins are `[8, 4, 8, 4]` (left/top/right/bottom) on 8/8 —
+  on every rotated one. The 20-byte delta is ObjectBase `angle` (f32) plus
+  `pivot` (2×f64), shifting the payload-geometry block by the same amount.
+  Frame margins are `[8, 4, 8, 4]` (left/top/right/bottom) on 16/16 —
   the box's stored inner text padding; gravity is 0 (top). After the frame,
-  a fixed 48-byte tail: 16 structured bytes + what looks like a 32-byte
-  object hash (Unknown).
+  a fixed 48-byte tail: `text_auto_fit_type` (1 byte), the 15-byte Text frame,
+  then a 32-byte hash-like value (Unknown; not plain SHA-256 of the prefix).
 - **All-octant rotation sample (2026-07-11):**
   `TextboxAllAngles_260709_231912.sdocx` contains boxes at
   `0/45/90/135/180/225/270/315°`; 315° is stored as `-45.0f`. Every nonzero
@@ -81,8 +82,9 @@ type-specific.
   boxes are laid out with a calibrated inner-wrap inset, not the decoded
   `[8, 4, 8, 4]` margins above (the renderer has not been reconciled with them
   yet). See [`../../heuristics.md`](../../heuristics.md) and `future_todo.md`.
-- Unknown: the Text/Shape wrapper fields before the frame (incl. the 20-byte
-  rotated-box extra), and the 48-byte post-frame tail.
+- Unknown: only the construction/semantics of the final 32-byte hash-like
+  trailer and some constant ShapeBase fields; wrapper boundaries and fields
+  used by current text boxes are decoded.
 
 ## Attachments on a page — Marker / Inferred
 

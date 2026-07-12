@@ -3,6 +3,7 @@
 
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
+import sdocx_text_wrapper
 
 
 if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
@@ -22,9 +23,9 @@ class SdocxNote(KaitaiStruct):
     exactly is the structural gate: every intermediate boundary must be correct
     for `trailing_hash` to land on the real hash.
 
-    The title/body blobs are Text objects (Shape-wrapped); their inner
-    `text_core::Common` rich-text frames are NOT at fixed offsets inside the
-    blob, so they stay procedural in `pysdocx.note_doc` (see
+    The title/body blobs are Text objects parsed through the imported
+    `sdocx_text_wrapper` inheritance chain; Shape's flex offset lands on their
+    `text_core::Common` rich-text frame without scanning (see
     docs/format/container/note-note/typed-text.md). Everything else that was
     previously marker-scanned in the tail (pen preload paths, pen style tails,
     voice clips, the string registry pairing each pen with its parameter
@@ -56,9 +57,13 @@ class SdocxNote(KaitaiStruct):
         self.page_v_padding = self._io.read_u4le()
         self.min_format_version = self._io.read_u4le()
         self.title_size = self._io.read_u4le()
-        self.title_blob = self._io.read_bytes(self.title_size)
+        self._raw_title_blob = self._io.read_bytes(self.title_size)
+        _io__raw_title_blob = KaitaiStream(BytesIO(self._raw_title_blob))
+        self.title_blob = sdocx_text_wrapper.SdocxTextWrapper(_io__raw_title_blob)
         self.body_size = self._io.read_u4le()
-        self.body_blob = self._io.read_bytes(self.body_size)
+        self._raw_body_blob = self._io.read_bytes(self.body_size)
+        _io__raw_body_blob = KaitaiStream(BytesIO(self._raw_body_blob))
+        self.body_blob = sdocx_text_wrapper.SdocxTextWrapper(_io__raw_body_blob)
         self._raw_pre_flex_gap = self._io.read_bytes(self.flex_offset - self._io.pos())
         _io__raw_pre_flex_gap = KaitaiStream(BytesIO(self._raw_pre_flex_gap))
         self.pre_flex_gap = SdocxNote.PreFlexGap(_io__raw_pre_flex_gap, self, self._root)
@@ -154,6 +159,8 @@ class SdocxNote(KaitaiStruct):
         self.property_flags._fetch_instances()
         self.field_flags._fetch_instances()
         self.note_id._fetch_instances()
+        self.title_blob._fetch_instances()
+        self.body_blob._fetch_instances()
         self.pre_flex_gap._fetch_instances()
         if self.has_app_name:
             pass

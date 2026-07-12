@@ -38,16 +38,16 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   type 6 (`parsing_state`, ≈ one record per character); the two non-boolean
   strikethrough span payloads on the benchmark; the trailing `(3,2)`/`(0,0)`
   u32 pair of inline objects; `interval_type` values beyond their enum names.
-- **Title/body Text wrapper**: the Shape/Text object bytes around the Common
-  frame (the frame is found by scan, not fixed offset).
-- **Tables:** the type-22 object's *framing and geometry are decoded
-  end-to-end* (byte-exact, 2/2 notes, 18/18 cells; the old "cell marker" was
-  the cell outline's last path point + the closepath opcode). Still Unknown:
-  the style-tail *semantics* (border-block entries and their 3 floats, the two
-  per-column f32 arrays, the trailing scalar and final ARGB), a handful of
-  constant head/flag bytes, and everything never varied on the corpus (merged
-  cells, custom borders/widths/shading) — see
-  `container/note-note/tables.md`. Needs a table-only sample family.
+- **Shape/Text wrapper residue:** the full ObjectBase → ShapeBase → Shape →
+  Text chain and its frame boundaries are decoded and Kaitai-gated. Common is
+  reached by Shape's `flex_offset`, not scanning. Remaining micro-unknowns are
+  the semantics of constant ShapeBase bytes and the 32-byte hash-like trailer
+  on page text boxes (0/16 match `sha256(wrapper_without_trailer)`).
+- **Tables:** framing, geometry, cell character/fill styling, column widths,
+  outer/inner borders and theme fill are decoded and Kaitai-gated on 20 tables
+  / 260 cells. Residue is limited to constant head/flag bytes, left-vs-right or
+  top-vs-bottom identity within equivalent border pairs, and a few default
+  width-constraint semantics; merged cells are not exposed by the current UI.
 - **Rotated text-box** inner text padding / logical frame (currently
   [heuristic](./heuristics.md#rotated-text-box-wrapping)).
 
@@ -129,12 +129,10 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   crop rect, and original rect; our diagnostic confirms the known media ref as a
   `u32` on the only corpus drawing object, but a larger corpus is needed before
   promoting the rest.
-- **Text-box wrapper residue:** the box's `text_core::Common` frame is now
-  decoded on 8/8 blobs (offset 386 non-rotated / 406 rotated, margins
-  `[8,4,8,4]`, spans equal to the scans); what remains Unknown is the
-  Text/Shape wrapper bytes before the frame (incl. the rotated boxes'
-  20-byte extra) and the fixed 48-byte post-frame tail (16 structured bytes +
-  a 32-byte hash-like value).
+- **Text-box trailer:** the wrapper and former 16-byte structured residue are
+  decoded (`text_auto_fit_type` + the Text frame). Only the final 32-byte
+  hash-like value remains Unknown; it is not plain SHA-256 of the preceding
+  wrapper bytes on any of the 16 text boxes.
 - **Attachment placement:** structural page-object model when the object tree is
   empty (sticky/audio pages); recursive decode of nested sticky-note `.sdocx`.
 - **Layer/content flags:** full semantics of all layer `content_flags` and

@@ -8,6 +8,23 @@ profiles were refreshed after the July 11 targeted-sample campaign (incl. the
 `Tabella4x3Regolare` v1+v2 styled-table samples that cracked table styling
 end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
 
+- **Shape/Text wrapper decoded + Kaitai-gated (NEW, 2026-07-12):** title/body
+  Text blobs and raw type-2 page text boxes share the exact inheritance chain
+  `ObjectBase(type 0) → ShapeBase(type 6) → Shape(type 7) → Text(type 2)`.
+  Every component is an inclusive-length `ObjectHeader` frame; Shape's decoded
+  `flex_offset` lands directly on `text_core::Common`, eliminating the scan for
+  the main title/body and page text-box frames. The fixed Shape prefix is now
+  decoded as `shape_type`, `original_rect`, `original_angle`, optional path and
+  control points; its flex bits gate Common, `ellipsis_type` and
+  `text_auto_fit_type`. Text's flex bits gate border colour/width/type. The
+  rotated text-box 20-byte prefix delta is ObjectBase `angle` (4) + `pivot`
+  (2×f64); the former 48-byte post-Common residue is one auto-fit byte + a
+  15-byte Text frame + a trailing 32-byte hash-like value (not sha256 of the
+  preceding object). `parse_text_wrapper`, `sdocx_text_wrapper.ksy` and
+  `validate_text_wrapper.py` agree on **72/72 wrappers** (56 note title/body +
+  16 page text boxes), zero mismatches. `sdocx_note.ksy` now embeds the wrapper
+  type directly instead of retaining opaque title/body blobs.
+
 ## Where we are
 
 - **Math Solver + Web inline sample (NEW, 2026-07-11):**
@@ -240,10 +257,10 @@ Done in `spec/ksy/sdocx_note.ksy`, `pysdocx/note_doc.py`,
 models the whole member sequentially (flex fields gated by `field_flags`);
 the old tail anchors (`tail_sentinel`, EOF-relative `tail_hash_block`
 windows, `tail_post_hash_u32`) are decoded/superseded — see
-`docs/format/container/note-note/tail-records.md`. Only the Text/Shape
-wrapper around the `text_core::Common` frames remains procedural; the type-22
-table object's inner schema is now decoded too (see Next tasks), likewise
-procedural pending the wrapper decode.
+`docs/format/container/note-note/tail-records.md`. The Text/Shape wrapper around
+the `text_core::Common` frames is now decoded and embedded in Kaitai; type-22
+tables remain dedicated nested specs because they live inside Common inline
+object bodies.
 
 ## Next tasks
 
@@ -324,13 +341,13 @@ procedural pending the wrapper decode.
   (its category and pitch are both unknown). `GRID_ORIGIN` (top margin) was
   reused as-is for the new categories, not independently re-measured — worth
   a sanity check if a rendered line/dot/oxford page looks vertically off.
-- **Page text-box `text_core::Common`: DONE (2026-07-08).** The frame parses
-  structurally on 8/8 text-box blobs at offset 386 (406 on rotated boxes —
-  the 20 extra bytes are rotation-related wrapper fields), spans equal the
-  scanned runs, stored inner margins are `[8,4,8,4]`. The old 2/8 figure was
-  an exact-text-match artifact (the frame keeps trailing newlines).
-  Follow-up: reconcile the renderer's rotated-wrap inset heuristic with the
-  decoded margins; decode the wrapper prefix + 48-byte post-frame tail.
+- **Page text-box `text_core::Common` + wrapper: DONE (2026-07-12).** All 16
+  page text boxes parse through the complete ObjectBase/ShapeBase/Shape/Text
+  chain; Common is reached from Shape's flex offset (386 non-rotated / 406
+  rotated), not scanned. The 20-byte rotated delta is angle+pivot and the
+  48-byte tail is auto-fit + Text frame + 32 hash-like bytes. Stored margins
+  remain `[8,4,8,4]`. Follow-up is render-only: reconcile the rotated-wrap
+  inset heuristic with those decoded margins.
 - **Type-22 table inline object schema: DONE (2026-07-08).** The whole object
   body parses **byte-exactly**: wrapper (uuid, 2 µs timestamps, page bbox,
   n_rows−1) + edge-midpoints + outline-path records, then a content region

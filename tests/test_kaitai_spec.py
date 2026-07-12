@@ -394,6 +394,16 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
             checked += 1
         self.assertGreater(checked, 0)
 
+    def test_text_wrapper(self) -> None:
+        """All note title/body and page text-box wrappers parse structurally."""
+        from spec.tools.validate_text_wrapper import diffs_for, iter_wrappers
+
+        checked = 0
+        for where, raw in iter_wrappers():
+            self.assertEqual(diffs_for(raw), [], where)
+            checked += 1
+        self.assertGreaterEqual(checked, len(_samples()) * 2)
+
 
 if __name__ == "__main__":
     unittest.main()

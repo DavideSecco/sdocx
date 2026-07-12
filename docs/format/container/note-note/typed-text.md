@@ -2,7 +2,7 @@
 
 The keyboard-typed text of a note (title + body) and its styling.
 
-- **Structural parser:** `parse_common_frame` / `find_common_frames` /
+- **Structural parser:** `parse_text_wrapper` / `parse_common_frame` /
   `note_doc_common_frames` in
   [`pysdocx/note_doc.py`](../../../../pysdocx/note_doc.py).
 - **Render-oriented scans (still the renderer's input):** `parse_typed_text` /
@@ -10,9 +10,9 @@ The keyboard-typed text of a note (title + body) and its styling.
   [`pysdocx/note.py`](../../../../pysdocx/note.py), cross-checked against the
   structural parse by
   [`spec/tools/analyze_note_doc.py`](../../../../spec/tools/analyze_note_doc.py).
-- **Status:** the `text_core::Common` frame layout is **Decoded** (title 14/14,
-  body 8/8 text surfaces, span records equal to the TLV scans with zero
-  counterexamples); page placement in the renderer is **Heuristic**
+- **Status:** the Shape/Text wrapper and `text_core::Common` layout are
+  **Decoded** (56/56 note wrappers plus 16/16 page text boxes, span records
+  equal to the TLV scans with zero counterexamples); page placement in the renderer is **Heuristic**
   ([`../../heuristics.md`](../../heuristics.md)).
 
 ## The `text_core::Common` frame — Decoded
@@ -55,9 +55,12 @@ u32   zero                always 0 on the corpus
         u32×2             Unknown; observed (3,2) on tables, (0,0) on images
 ```
 
-The frame is not at a fixed offset inside the blob (the Text/Shape wrapper is
-not modeled), so it is located by exhaustive scan; the exact-size constraint
-plus the trailing structure make false positives effectively impossible.
+The frame is reached structurally through the inclusive-length inheritance
+chain `ObjectBase(0) → ShapeBase(6) → Shape(7) → Text(2)`: Shape's
+`flex_offset` points exactly at Common. `sdocx_text_wrapper.ksy` models this
+chain and is embedded directly by `sdocx_note.ksy`; exhaustive scanning is now
+used only as an independent corroborator and to enumerate nested table-cell
+frames inside table inline-object bodies.
 
 ## Span records vs the TLV scans
 

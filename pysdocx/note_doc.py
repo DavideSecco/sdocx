@@ -31,8 +31,9 @@ The positional gate is strong: the parse must consume bytes
 the parse to land on the hash by construction. Validated with zero
 counterexamples on the full corpus (`spec/tools/analyze_note_doc.py`).
 
-The title/body blobs are Text objects (a Shape-wrapped object; the wrapper is
-not modeled). Inside them, `text_core::Common` frames hold the actual rich
+The title/body blobs are Text objects parsed through the inclusive-length
+ObjectBase -> ShapeBase -> Shape -> Text wrapper. Shape's flex offset lands on
+the `text_core::Common` frame holding the actual rich
 text: `[u32 frame_size(excl)][u32 char_count][utf16 text][u32 span_count ×
 span][u32 paragraph_count × paragraph][4×f32 margins][u8 gravity][u16
 section_count × (u32,u32)][inline objects if format_version >= 2035]`.
@@ -351,6 +352,137 @@ def parse_common_frame(blob: bytes, off: int, format_version: int) -> dict:
         "sections": sections,
         "inline": inline,
     }
+
+
+def _parse_object_frame_header(blob: bytes, off: int, expected_type: int) -> dict:
+    """Parse the shared inclusive ObjectHeader envelope at ``off``.
+
+    Unlike the page-level ``_parse_object_header`` compatibility helper, this
+    models the header used by every class in the inheritance chain (ObjectBase,
+    ShapeBase, Shape and Text).  ``flex_offset`` is relative to the start of
+    the inclusive frame.
+    """
+    cur = _Cur(blob, off)
+    size = cur.u32()
+    if size < 12 or off + size > len(blob):
+        raise NoteDocParseError(f"object frame size {size} out of range at {off}")
+    data_type = cur.u16()
+    if data_type != expected_type:
+        raise NoteDocParseError(
+            f"object frame type {data_type} != {expected_type} at {off}")
+    flex_offset = cur.u32()
+    property_flags, property_flag_bytes = cur.bitfield()
+    field_flags, field_flag_bytes = cur.bitfield()
+    header_end = cur.pos
+    if flex_offset and not (header_end - off <= flex_offset <= size):
+        raise NoteDocParseError(
+            f"object flex offset {flex_offset} outside frame header/size at {off}")
+    return {
+        "off": off, "size": size, "end": off + size, "data_type": data_type,
+        "flex_offset": flex_offset, "flex_off": off + flex_offset if flex_offset else None,
+        "property_flags": property_flags, "property_flag_bytes": property_flag_bytes,
+        "field_flags": field_flags, "field_flag_bytes": field_flag_bytes,
+        "header_end": header_end,
+    }
+
+
+def parse_text_wrapper(blob: bytes, off: int = 0) -> dict:
+    """Parse a complete ``Text -> Shape -> ShapeBase -> ObjectBase`` object.
+
+    This is the wrapper used both by ``note.note`` title/body blobs and by
+    raw type-2 page text boxes.  The Common frame is reached through the Shape
+    frame's decoded flex offset; no marker or exhaustive byte scan is used.
+    Every inheritance frame is inclusive-length bounded and the final Text
+    frame must consume the input window exactly.
+    """
+    base = _parse_object_frame_header(blob, off, 0)
+    # The fixed ObjectBase record ends at its flex offset.  Its individual
+    # fields are already decoded by pysdocx.page; retain the wrapper facts here
+    # and expose the two fields that explain text-wrapper size variants.
+    base_angle = None
+    base_pivot = None
+    if base["flex_off"] is not None:
+        p = base["flex_off"]
+        flags = base["field_flags"]
+        # Fields are serialized in bit order.  These are all bits observed on
+        # title/body Text objects and page text boxes.
+        supported = (1 << 0) | (1 << 13) | (1 << 14) | (1 << 18)
+        if flags & ~supported:
+            raise NoteDocParseError(f"text ObjectBase unhandled fields 0x{flags & ~supported:x}")
+        if flags & (1 << 0):
+            base_angle = struct.unpack_from("<f", blob, p)[0]
+            p += 4
+        if flags & (1 << 13):
+            p += 8  # append_time_us
+        if flags & (1 << 14):
+            p += 8  # owner page width/height
+        if flags & (1 << 18):
+            base_pivot = struct.unpack_from("<dd", blob, p)
+            p += 16
+        if p != base["end"]:
+            raise NoteDocParseError(f"ObjectBase fields end {p} != frame end {base['end']}")
+
+    shape_base = _parse_object_frame_header(blob, base["end"], 6)
+    # ShapeBase's fixed region (connection points) and line colour/style flex
+    # values remain separately documented; its inclusive frame proves their
+    # boundary and lets the next subclass start without scanning.
+
+    shape = _parse_object_frame_header(blob, shape_base["end"], 7)
+    cur = _Cur(blob, shape["header_end"], shape["end"])
+    shape_type = cur.u32()
+    original_rect = (cur.f64(), cur.f64(), cur.f64(), cur.f64())
+    original_angle = cur.f32()
+    path_size = cur.u32()
+    path_raw = cur.bytes_(path_size)
+    control_count = cur.u8()
+    control_points = [(cur.f64(), cur.f64()) for _ in range(control_count)]
+    if shape["flex_off"] is None or cur.pos != shape["flex_off"]:
+        raise NoteDocParseError(
+            f"Shape fixed fields end {cur.pos} != flex offset {shape['flex_off']}")
+
+    flags = shape["field_flags"]
+    supported = (1 << 0) | (1 << 12) | (1 << 13)
+    if flags & ~supported:
+        raise NoteDocParseError(f"Text Shape unhandled fields 0x{flags & ~supported:x}")
+    common = None
+    if flags & 1:
+        common = parse_common_frame(blob, cur.pos, base_format_version(blob, base))
+        cur.pos = common["off"] + 4 + common["frame_size"]
+    ellipsis_type = cur.u8() if flags & (1 << 12) else None
+    text_auto_fit_type = cur.u8() if flags & (1 << 13) else None
+    _ensure_eof(cur, "Shape Text wrapper")
+
+    text = _parse_object_frame_header(blob, shape["end"], 2)
+    if text["flex_off"] is not None and text["header_end"] != text["flex_off"]:
+        raise NoteDocParseError("Text frame has unexpected fixed fields")
+    cur = _Cur(blob, text["flex_off"] or text["header_end"], text["end"])
+    text_flags = text["field_flags"]
+    if text_flags & ~0x0e:
+        raise NoteDocParseError(f"Text unhandled fields 0x{text_flags & ~0x0e:x}")
+    border_colour = cur.bytes_(4).hex() if text_flags & 2 else None
+    border_width = cur.f32() if text_flags & 4 else None
+    border_type = cur.u16() if text_flags & 8 else None
+    _ensure_eof(cur, "Text frame")
+    trailing = blob[text["end"] :]
+    if len(trailing) not in (0, 32):
+        raise NoteDocParseError(
+            f"Text wrapper leaves {len(trailing)} bytes (expected 0 or page hash-like 32)")
+    return {
+        "object_base": base, "base_angle": base_angle, "base_pivot": base_pivot,
+        "shape_base": shape_base, "shape": shape, "shape_type": shape_type,
+        "original_rect": original_rect, "original_angle": original_angle,
+        "path_raw": path_raw.hex(), "control_points": control_points,
+        "common": common, "ellipsis_type": ellipsis_type,
+        "text_auto_fit_type": text_auto_fit_type,
+        "text": text, "border_colour": border_colour,
+        "border_width": border_width, "border_type": border_type,
+        "trailing_hash_like": trailing.hex() if trailing else None,
+    }
+
+
+def base_format_version(blob: bytes, base: dict) -> int:
+    """Format version is the first fixed ObjectBase field after its header."""
+    return struct.unpack_from("<I", blob, base["header_end"])[0]
 
 
 def parse_web_inline_object(blob: bytes, off: int, size: int) -> dict:
@@ -957,9 +1089,11 @@ def note_doc_common_frames(note: bytes, doc: dict) -> dict:
     fmt = doc["format_version"]
     title_blob = note[doc["title_off"] : doc["title_off"] + doc["title_size"]]
     body_blob = note[doc["body_off"] : doc["body_off"] + doc["body_size"]]
-    title_frames = find_common_frames(title_blob, fmt)
+    # Main frames are reached structurally through ObjectBase -> ShapeBase ->
+    # Shape.flex_offset.  The exhaustive finder remains only for nested table
+    # cells, whose wrappers are part of the already-decoded table object.
+    title = parse_text_wrapper(title_blob)["common"]
+    body = parse_text_wrapper(body_blob)["common"]
     body_frames = find_common_frames(body_blob, fmt)
-    title = max(title_frames, key=lambda f: f["frame_size"]) if title_frames else None
-    body = max(body_frames, key=lambda f: f["frame_size"]) if body_frames else None
     cells = [f for f in body_frames if body is not None and f["off"] != body["off"]]
     return {"title": title, "body": body, "cells": cells}

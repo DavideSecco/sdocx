@@ -42,11 +42,11 @@ offset  size  field                 status    note
 ..      4     page_v_padding        Decoded
 ..      4     min_format_version    Decoded
 ..      4     title_size            Decoded
-..      var   title_blob            Partial   Text object; inner Common frame carries the
-                                              title text (typed-text.md)
+..      var   title_blob            Decoded   ObjectBase→ShapeBase→Shape→Text; Shape flex
+                                              contains the title Common frame
 ..      4     body_size             Decoded
-..      var   body_blob             Partial   Text object; inner Common frame carries the
-                                              body rich text + table cells (typed-text.md)
+..      var   body_blob             Decoded   same wrapper; Common carries body rich text
+                                              + inline tables (typed-text.md)
 ..      0/8   pre_flex_gap          Unknown   when 8 bytes: u32 pair
                                               (width, round(width*sqrt(2))) — default
                                               page-size candidate; 12/14 have it
