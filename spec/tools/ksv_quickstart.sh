@@ -12,6 +12,7 @@ Usage:
   spec/tools/ksv_quickstart.sh end-tag
   spec/tools/ksv_quickstart.sh media-info
   spec/tools/ksv_quickstart.sh page
+  spec/tools/ksv_quickstart.sh note
 
 Opens small, known-good sample members in Kaitai Struct Visualizer without
 changing your current shell directory.
@@ -56,6 +57,13 @@ case "${1:-}" in
       "4302b93e-746a-11f1-9552-b7833a8a74d9.page" \
       "OnlyPens.page" \
       "sdocx_page.ksy"
+    ;;
+  note)
+    run_ksv \
+      "samples/OnlyPensBlacksize10_260630_120309.sdocx" \
+      "note.note" \
+      "note.note" \
+      "sdocx_note.ksy"
     ;;
   -h|--help|help|"")
     usage
