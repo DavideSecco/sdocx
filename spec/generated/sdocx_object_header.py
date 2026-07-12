@@ -125,6 +125,22 @@ class SdocxObjectHeader(KaitaiStruct):
                     self.strings.append(SdocxObjectHeader.Utf16String(self._io, self, self._root))
 
 
+            if self.head == b"\x07\x01\x00":
+                pass
+                self.math_expression = SdocxObjectHeader.Utf16String(self._io, self, self._root)
+
+            if self.head == b"\x06\x01\x00":
+                pass
+                self.math_fail_code = self._io.read_u4le()
+
+            if self.head == b"\x07\x01\x00":
+                pass
+                self.fail_property = SdocxObjectHeader.NamedU32Property(self._io, self, self._root)
+
+            if  ((self.head == b"\x06\x01\x00") or (self.head == b"\x07\x01\x00")) :
+                pass
+                self.uuid_property = SdocxObjectHeader.NamedStringArrayProperty(self._io, self, self._root)
+
 
 
         def _fetch_instances(self):
@@ -142,6 +158,21 @@ class SdocxObjectHeader(KaitaiStruct):
                     self.strings[i]._fetch_instances()
 
 
+            if self.head == b"\x07\x01\x00":
+                pass
+                self.math_expression._fetch_instances()
+
+            if self.head == b"\x06\x01\x00":
+                pass
+
+            if self.head == b"\x07\x01\x00":
+                pass
+                self.fail_property._fetch_instances()
+
+            if  ((self.head == b"\x06\x01\x00") or (self.head == b"\x07\x01\x00")) :
+                pass
+                self.uuid_property._fetch_instances()
+
 
 
     class HeaderExt(KaitaiStruct):
@@ -157,6 +188,50 @@ class SdocxObjectHeader(KaitaiStruct):
             self.seq = self._io.read_u4le()
             self.page_width = self._io.read_u4le()
             self.page_height = self._io.read_u4le()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class NamedStringArrayProperty(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxObjectHeader.NamedStringArrayProperty, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.separator = self._io.read_u2le()
+            self.key_len = self._io.read_u2le()
+            self.key = (self._io.read_bytes(self.key_len)).decode(u"ASCII")
+            self.string_count = self._io.read_u2le()
+            self.strings = []
+            for i in range(self.string_count):
+                self.strings.append(SdocxObjectHeader.Utf16String(self._io, self, self._root))
+
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.strings)):
+                pass
+                self.strings[i]._fetch_instances()
+
+
+
+    class NamedU32Property(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxObjectHeader.NamedU32Property, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.separator = self._io.read_u2le()
+            self.key_len = self._io.read_u2le()
+            self.key = (self._io.read_bytes(self.key_len)).decode(u"ASCII")
+            self.value = self._io.read_u4le()
 
 
         def _fetch_instances(self):
@@ -192,4 +267,3 @@ class SdocxObjectHeader(KaitaiStruct):
             self._io.seek(_pos)
 
         return getattr(self, '_m_extra_key_head', None)
-

@@ -647,7 +647,8 @@ def _decode_extra_key_block(blob: bytes, field_flags: int) -> dict | None:
 
     `02 01 00` carries the legacy scalar shape-ink property. Math Solver uses
     `04 01 00` and a counted array of short UTF-16 strings (stroke UUIDs).
-    Unknown value encodings remain exposed as raw bytes.
+    Math Solver's `06`/`07` forms are property chains: an optional recognised
+    expression, a fail code, and the associated stroke UUID array.
     """
     if not (field_flags & FIELD_FLAG_EXTRA_KEY):
         return None
@@ -703,6 +704,60 @@ def _decode_extra_key_block(blob: bytes, field_flags: int) -> dict | None:
             if pos == len(value):
                 out["value_kind"] = "utf16_string_array"
                 out["strings"] = strings
+    elif head in (b"\x06\x01\x00", b"\x07\x01\x00"):
+        pos = 0
+
+        def read_utf16_string() -> str:
+            nonlocal pos
+            n_chars = struct.unpack_from("<H", value, pos)[0]
+            pos += 2
+            stop = pos + 2 * n_chars
+            if stop > len(value):
+                raise ValueError
+            text = value[pos:stop].decode("utf-16-le")
+            pos = stop
+            return text
+
+        try:
+            expression = read_utf16_string() if head[0] == 7 else None
+            fail_code = struct.unpack_from("<I", value, pos)[0] if head[0] == 6 else None
+            if head[0] == 6:
+                pos += 4
+
+            if head[0] == 7:
+                separator = struct.unpack_from("<H", value, pos)[0]
+                pos += 2
+                fail_key_len = struct.unpack_from("<H", value, pos)[0]
+                pos += 2
+                fail_key = value[pos:pos + fail_key_len].rstrip(b"\x00").decode("ascii")
+                pos += fail_key_len
+                fail_code = struct.unpack_from("<I", value, pos)[0]
+                pos += 4
+            else:
+                separator = None
+                fail_key = key
+
+            array_separator = struct.unpack_from("<H", value, pos)[0]
+            pos += 2
+            array_key_len = struct.unpack_from("<H", value, pos)[0]
+            pos += 2
+            array_key = value[pos:pos + array_key_len].rstrip(b"\x00").decode("ascii")
+            pos += array_key_len
+            count = struct.unpack_from("<H", value, pos)[0]
+            pos += 2
+            strings = [read_utf16_string() for _ in range(count)]
+        except (struct.error, UnicodeDecodeError, ValueError):
+            pass
+        else:
+            if pos == len(value) and separator in (None, 1) and array_separator == 1:
+                out.update({
+                    "value_kind": "math_property_chain",
+                    "expression": expression,
+                    "fail_key": fail_key,
+                    "fail_code": fail_code,
+                    "array_key": array_key,
+                    "strings": strings,
+                })
     return out
 
 

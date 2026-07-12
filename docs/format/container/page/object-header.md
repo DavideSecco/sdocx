@@ -90,11 +90,15 @@ but the exact relationship remains Marker. A 16-byte zero tail
 follows HDR_EXT on this family. Both Python and Kaitai decode the two property
 forms and cross-check every string.
 
-The same sample also contains `06/07 01 00` multi-property bags whose visible
-keys include `RecogUIFeature_MathExpressionString` and
-`RecogUIFeature_MathFailCodeKey`. Their complete extent and following HDR_EXT
-are structurally decoded, but their inner value sequence remains raw/Unknown
-pending a second isolating sample.
+The same sample contains `06/07 01 00` multi-property chains, now decoded
+byte-exactly in all 9 instances. `07` starts with
+`RecogUIFeature_MathExpressionString = [u16 chars][UTF-16LE]`, followed by a
+separator `u16 = 1`, `RecogUIFeature_MathFailCodeKey = u32`, then another
+separator and `RecogUIFeature_MathStrokeUuidStringArray`. `06` is the same
+chain without the expression: its outer property is the fail code, followed by
+the UUID-array property. The four distinct observed payloads all close exactly;
+the recognised expression strings include `A^{T}1k\\mid SOCUr=R`, and every
+observed fail code is 7. The semantic meaning of code 7 remains Unknown.
 
 ### `0x40000` HDR_EXT — 16-byte extension
 Layout `[u32 counter][u32 seq][u32 page_width][u32 page_height]`. The trailing

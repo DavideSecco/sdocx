@@ -116,6 +116,18 @@ types:
         repeat: expr
         repeat-expr: string_count
         if: head == [4, 1, 0]
+      - id: math_expression
+        type: utf16_string
+        if: head == [7, 1, 0]
+      - id: math_fail_code
+        type: u4
+        if: head == [6, 1, 0]
+      - id: fail_property
+        type: named_u32_property
+        if: head == [7, 1, 0]
+      - id: uuid_property
+        type: named_string_array_property
+        if: head == [6, 1, 0] or head == [7, 1, 0]
   utf16_string:
     seq:
       - id: char_count
@@ -124,6 +136,36 @@ types:
         type: str
         size: char_count * 2
         encoding: UTF-16LE
+  named_u32_property:
+    seq:
+      - id: separator
+        type: u2
+        doc: Constant 1 between chained Math Solver properties.
+      - id: key_len
+        type: u2
+      - id: key
+        type: str
+        size: key_len
+        encoding: ASCII
+      - id: value
+        type: u4
+  named_string_array_property:
+    seq:
+      - id: separator
+        type: u2
+        doc: Constant 1 between chained Math Solver properties.
+      - id: key_len
+        type: u2
+      - id: key
+        type: str
+        size: key_len
+        encoding: ASCII
+      - id: string_count
+        type: u2
+      - id: strings
+        type: utf16_string
+        repeat: expr
+        repeat-expr: string_count
   header_ext:
     doc: 16-byte extension; page_width/height match every corpus page header.
     seq:
