@@ -1,18 +1,29 @@
 //! Byte-exact `note.note` structural decode: the `text_core::Common` rich-text
-//! frame and the type-22 table inline object.
+//! frame, the `ObjectBase -> ShapeBase -> Shape -> Text` wrapper around it, and
+//! the type-22 table inline object.
 //!
 //! Straight port of pysdocx's `pysdocx/note_doc.py` (`parse_common_frame`,
-//! `find_common_frames`, the note-doc header, and `parse_table_object` with its
-//! `_parse_table_*` helpers) — keep the two in lockstep when either side changes.
-//! Unlike the legacy marker-scan table reader (`container::parse_tables`), this
-//! parses the whole table object sequentially and byte-exactly: sized
+//! `find_common_frames`, `parse_text_wrapper`, the note-doc header, and
+//! `parse_table_object` with its `_parse_table_*` helpers) — keep the two in
+//! lockstep when either side changes.
+//!
+//! The Text/Shape wrapper (`parse_text_wrapper`) walks the four inclusive
+//! `ObjectHeader` frames and reaches Common through Shape's decoded flex offset,
+//! so the note body typed text (`note_body_rich_text`) and raw page text boxes
+//! (`text_wrapper_rich_text`) are decoded structurally instead of by the legacy
+//! marker/TLV scan in `container::parse_note_text` / `page::text_box_text`.
+//! Validated against pysdocx `parse_text_wrapper` by the `wrapper_parity` gate.
+//!
+//! Unlike the legacy marker-scan table reader (`container::parse_tables`), the
+//! table decode parses the whole object sequentially and byte-exactly: sized
 //! wrapper/midpoint/outline records, column widths, length-chained rows and
 //! cells with page-coordinate bboxes, per-cell fill + nested Common frame, and
 //! the style tail (outer/grid border blocks, per-column width constraints, theme
 //! fill). Validated against pysdocx `note_doc_tables` by `tests/note_tables.rs`.
 
 use crate::types::{
-    BoundingBox, NoteTable, NoteTableCell, TableBorder, TableCellSpan,
+    BoundingBox, Color, ColorRun, FontSizeRun, NoteTable, NoteTableCell, Point, RichTextBox,
+    RichTextRun, TableBorder, TableCellSpan,
 };
 
 /// Inline objects appear in Common frames only from this format version on
@@ -262,6 +273,311 @@ fn find_common_frames(blob: &[u8], format_version: u32) -> Vec<(usize, CommonFra
         }
     }
     frames
+}
+
+// --- Text/Shape wrapper ---------------------------------------------------
+//
+// The title/body Text blobs and raw type-2 page text boxes share one inclusive
+// inheritance chain `ObjectBase(0) -> ShapeBase(6) -> Shape(7) -> Text(2)`.
+// Every class is an inclusive-length `ObjectHeader` frame; Shape's decoded flex
+// offset lands directly on `text_core::Common`, so the rich-text frame is
+// reached structurally instead of by marker/byte scan (pysdocx
+// `parse_text_wrapper`). Straight port of `pysdocx/note_doc.py`.
+
+/// The shared inclusive `ObjectHeader` frame used by every class in the
+/// inheritance chain (pysdocx `_parse_object_frame_header`). Distinct from
+/// `page.rs`'s `parse_object_header`, which decodes only the fields stroke/image
+/// consumers need. `flex_off` is absolute (frame start + `flex_offset`).
+// `off`/`size` are part of the decoded RE record and asserted by the parity
+// gate, but the byte-exact parse itself doesn't re-read them.
+#[allow(dead_code)]
+struct ObjectFrameHeader {
+    off: usize,
+    size: usize,
+    end: usize,
+    field_flags: u32,
+    flex_off: Option<usize>,
+    header_end: usize,
+}
+
+fn parse_object_frame_header(blob: &[u8], off: usize, expected_type: u16) -> R<ObjectFrameHeader> {
+    let mut cur = Cur::new(blob, off, blob.len());
+    let size = cur.u32()? as usize;
+    if size < 12 || off + size > blob.len() {
+        return Err("object frame size out of range");
+    }
+    if cur.u16()? != expected_type {
+        return Err("object frame type mismatch");
+    }
+    let flex_offset = cur.u32()? as usize;
+    let _property_flags = cur.bitfield()?;
+    let field_flags = cur.bitfield()?;
+    let header_end = cur.pos;
+    if flex_offset != 0 && !((header_end - off) <= flex_offset && flex_offset <= size) {
+        return Err("object flex offset outside frame header/size");
+    }
+    Ok(ObjectFrameHeader {
+        off,
+        size,
+        end: off + size,
+        field_flags,
+        flex_off: (flex_offset != 0).then_some(off + flex_offset),
+        header_end,
+    })
+}
+
+fn read_f32(blob: &[u8], p: usize) -> R<f32> {
+    let b = blob.get(p..p + 4).ok_or("f32 out of range")?;
+    Ok(f32::from_le_bytes(b.try_into().unwrap()))
+}
+
+fn read_f64(blob: &[u8], p: usize) -> R<f64> {
+    let b = blob.get(p..p + 8).ok_or("f64 out of range")?;
+    Ok(f64::from_le_bytes(b.try_into().unwrap()))
+}
+
+/// Format version is the first fixed ObjectBase field after its header
+/// (pysdocx `base_format_version`).
+fn base_format_version(blob: &[u8], base: &ObjectFrameHeader) -> R<u32> {
+    let b = blob.get(base.header_end..base.header_end + 4).ok_or("format version out of range")?;
+    Ok(u32::from_le_bytes(b.try_into().unwrap()))
+}
+
+/// A parsed `Text -> Shape -> ShapeBase -> ObjectBase` wrapper. Mirrors the
+/// pysdocx `parse_text_wrapper` dict: most fields are the decoded RE record,
+/// proven byte-exact by the parse asserts and checked by the parity gate; only
+/// `common` feeds the rich-text consumers, so the rest read as dead outside
+/// tests.
+#[allow(dead_code)]
+struct TextWrapper {
+    base: ObjectFrameHeader,
+    base_angle: Option<f32>,
+    base_pivot: Option<(f64, f64)>,
+    shape_base: ObjectFrameHeader,
+    shape: ObjectFrameHeader,
+    shape_type: u32,
+    original_rect: [f64; 4],
+    original_angle: f32,
+    path_raw: Vec<u8>,
+    control_points: Vec<(f64, f64)>,
+    common: Option<CommonFrame>,
+    ellipsis_type: Option<u8>,
+    text_auto_fit_type: Option<u8>,
+    text: ObjectFrameHeader,
+    border_colour: Option<[u8; 4]>,
+    border_width: Option<f32>,
+    border_type: Option<u16>,
+    trailing_len: usize,
+}
+
+/// Parse a complete Text wrapper at `blob[off..]` (pysdocx `parse_text_wrapper`).
+/// The Common frame is reached through Shape's decoded flex offset; no marker or
+/// exhaustive byte scan is used. Any deviation returns `Err`.
+fn parse_text_wrapper(blob: &[u8], off: usize) -> R<TextWrapper> {
+    let base = parse_object_frame_header(blob, off, 0)?;
+    // ObjectBase's individual fixed fields are decoded by page.rs; here we only
+    // surface the two flex fields that explain the wrapper's size variants
+    // (rotation angle and pivot). Serialized in bit order.
+    let mut base_angle = None;
+    let mut base_pivot = None;
+    if let Some(flex) = base.flex_off {
+        let mut p = flex;
+        let flags = base.field_flags;
+        let supported = (1 << 0) | (1 << 13) | (1 << 14) | (1 << 18);
+        ensure(flags & !supported == 0, "text ObjectBase unhandled fields")?;
+        if flags & (1 << 0) != 0 {
+            base_angle = Some(read_f32(blob, p)?);
+            p += 4;
+        }
+        if flags & (1 << 13) != 0 {
+            p += 8; // append_time_us
+        }
+        if flags & (1 << 14) != 0 {
+            p += 8; // owner page width/height
+        }
+        if flags & (1 << 18) != 0 {
+            base_pivot = Some((read_f64(blob, p)?, read_f64(blob, p + 8)?));
+            p += 16;
+        }
+        ensure(p == base.end, "ObjectBase fields end != frame end")?;
+    }
+
+    let shape_base = parse_object_frame_header(blob, base.end, 6)?;
+    let shape = parse_object_frame_header(blob, shape_base.end, 7)?;
+
+    let mut cur = Cur::new(blob, shape.header_end, shape.end);
+    let shape_type = cur.u32()?;
+    let original_rect = [cur.f64()?, cur.f64()?, cur.f64()?, cur.f64()?];
+    let original_angle = cur.f32()?;
+    let path_size = cur.u32()? as usize;
+    let path_raw = cur.bytes(path_size)?.to_vec();
+    let control_count = cur.u8()? as usize;
+    let mut control_points = Vec::with_capacity(control_count);
+    for _ in 0..control_count {
+        control_points.push((cur.f64()?, cur.f64()?));
+    }
+    let shape_flex = shape.flex_off.ok_or("Shape has no flex offset")?;
+    ensure(cur.pos == shape_flex, "Shape fixed fields end != flex offset")?;
+
+    let flags = shape.field_flags;
+    let supported = (1 << 0) | (1 << 12) | (1 << 13);
+    ensure(flags & !supported == 0, "Text Shape unhandled fields")?;
+    let mut common = None;
+    if flags & 1 != 0 {
+        let fmt = base_format_version(blob, &base)?;
+        let frame = parse_common_frame(blob, cur.pos, fmt)?;
+        cur.pos += 4 + frame.frame_size;
+        common = Some(frame);
+    }
+    let ellipsis_type = if flags & (1 << 12) != 0 { Some(cur.u8()?) } else { None };
+    let text_auto_fit_type = if flags & (1 << 13) != 0 { Some(cur.u8()?) } else { None };
+    ensure_eof(&cur, "Shape Text wrapper")?;
+
+    let text = parse_object_frame_header(blob, shape.end, 2)?;
+    if let Some(flex) = text.flex_off {
+        ensure(text.header_end == flex, "Text frame has unexpected fixed fields")?;
+    }
+    let mut cur = Cur::new(blob, text.flex_off.unwrap_or(text.header_end), text.end);
+    let text_flags = text.field_flags;
+    ensure(text_flags & !0x0e == 0, "Text unhandled fields")?;
+    let border_colour = if text_flags & 2 != 0 {
+        Some(<[u8; 4]>::try_from(cur.bytes(4)?).unwrap())
+    } else {
+        None
+    };
+    let border_width = if text_flags & 4 != 0 { Some(cur.f32()?) } else { None };
+    let border_type = if text_flags & 8 != 0 { Some(cur.u16()?) } else { None };
+    ensure_eof(&cur, "Text frame")?;
+
+    let trailing_len = blob.len() - text.end;
+    if trailing_len != 0 && trailing_len != 32 {
+        return Err("Text wrapper leaves unexpected trailing bytes");
+    }
+
+    Ok(TextWrapper {
+        base,
+        base_angle,
+        base_pivot,
+        shape_base,
+        shape,
+        shape_type,
+        original_rect,
+        original_angle,
+        path_raw,
+        control_points,
+        common,
+        ellipsis_type,
+        text_auto_fit_type,
+        text,
+        border_colour,
+        border_width,
+        border_type,
+        trailing_len,
+    })
+}
+
+/// The rich-text projection of a Text wrapper: the Common frame's spans mapped
+/// to style/colour/font runs (pysdocx `page._text_box_rich_text` structural
+/// branch). Shared by page text boxes and the note body typed text.
+pub(crate) struct WrapperRichText {
+    pub text: String,
+    pub runs: Vec<RichTextRun>,
+    pub colors: Vec<ColorRun>,
+    pub highlights: Vec<ColorRun>,
+    pub font_sizes: Vec<FontSizeRun>,
+}
+
+fn common_frame_rich_text(frame: &CommonFrame) -> Option<WrapperRichText> {
+    let text: String = frame.text.trim_end_matches(['\0', '\n']).to_string();
+    if text.trim().is_empty() {
+        return None;
+    }
+    let text_len = text.chars().count();
+    let mut runs = Vec::new();
+    let mut colors = Vec::new();
+    let mut highlights = Vec::new();
+    let mut font_sizes = Vec::new();
+    for span in &frame.spans {
+        let start = span.start as usize;
+        let end = (span.end as usize).min(text_len);
+        if start >= end {
+            continue;
+        }
+        let value = span.value;
+        match span.span_type {
+            5 | 6 | 7 | 20 if value != 0 => runs.push(RichTextRun {
+                start,
+                end,
+                bold: span.span_type == 5,
+                italic: span.span_type == 6,
+                underline: span.span_type == 7,
+                strikethrough: span.span_type == 20,
+            }),
+            1 | 17 if value >> 24 == 0xFF => {
+                let row = ColorRun {
+                    start,
+                    end,
+                    color: Color { r: (value >> 16) as u8, g: (value >> 8) as u8, b: value as u8 },
+                };
+                if span.span_type == 1 {
+                    colors.push(row);
+                } else {
+                    highlights.push(row);
+                }
+            }
+            3 => {
+                let size = f32::from_bits(value);
+                if size.is_finite() && (4.0..=200.0).contains(&size) {
+                    font_sizes.push(FontSizeRun { start, end, size });
+                }
+            }
+            _ => {}
+        }
+    }
+    Some(WrapperRichText { text, runs, colors, highlights, font_sizes })
+}
+
+/// Decode a raw type-2 page text-box blob through the structural wrapper and
+/// project it to rich text. `None` when the blob isn't a well-formed wrapper
+/// (caller falls back to the legacy marker scan) or carries no visible text.
+pub(crate) fn text_wrapper_rich_text(blob: &[u8]) -> Option<WrapperRichText> {
+    let wrapper = parse_text_wrapper(blob, 0).ok()?;
+    common_frame_rich_text(wrapper.common.as_ref()?)
+}
+
+/// The note body's typed text, reached through the ObjectBase/ShapeBase/Shape
+/// chain of the body Text blob (pysdocx `note_doc_common_frames` body +
+/// `_text_box_rich_text` projection).
+pub(crate) fn note_body_rich_text(note: &[u8]) -> Option<WrapperRichText> {
+    let header = parse_note_doc_header(note).ok()?;
+    let body_end = header.body_off + header.body_size;
+    let body = note.get(header.body_off..body_end)?;
+    text_wrapper_rich_text(body)
+}
+
+/// Build a `RichTextBox` from a wrapper's rich-text projection and the object's
+/// placement (bbox / rotation / frame midpoints). Shared by the page text-box
+/// and note-body paths, which differ only in how they obtain the placement.
+pub(crate) fn wrapper_rich_text_box(
+    rt: WrapperRichText,
+    bbox: BoundingBox,
+    rotation_degrees: Option<f64>,
+    frame_midpoints: Option<[Point; 4]>,
+) -> RichTextBox {
+    RichTextBox {
+        bbox,
+        rotation_degrees,
+        text: rt.text,
+        color: rt.colors.first().map(|c| c.color),
+        highlight_color: rt.highlights.first().map(|c| c.color),
+        underline: rt.runs.iter().any(|r| r.underline),
+        font_size: rt.font_sizes.first().map(|f| f.size),
+        runs: rt.runs,
+        colors: rt.colors,
+        highlights: rt.highlights,
+        font_sizes: rt.font_sizes,
+        frame_midpoints,
+    }
 }
 
 // --- note-doc header ------------------------------------------------------

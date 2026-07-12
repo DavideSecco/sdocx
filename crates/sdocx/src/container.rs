@@ -237,6 +237,26 @@ fn order_pages(page_ids: &[String], present: &mut Vec<String>) -> Vec<String> {
 }
 
 fn parse_note_text(data: &[u8]) -> Option<RichTextBox> {
+    // Authoritative path: the note body is a Text blob whose ObjectBase ->
+    // ShapeBase -> Shape.flex_offset lands on the `text_core::Common` frame, so
+    // the typed text + style runs come from the structured spans, not a marker
+    // scan (pysdocx `note_doc_common_frames` body + `_text_box_rich_text`). The
+    // legacy scan below stays as a defensive fallback for blobs the structural
+    // parser rejects.
+    if let Some(rt) = crate::note_doc::note_body_rich_text(data) {
+        // A body that is only object anchors (U+FFFC, e.g. table placeholders)
+        // and whitespace has no visible typed text; render nothing (avoids a
+        // stray column of blank lines / anchor glyphs on page 0).
+        if !rt.text.chars().all(|c| c == '\u{FFFC}' || c.is_whitespace()) {
+            return Some(crate::note_doc::wrapper_rich_text_box(
+                rt,
+                BoundingBox { x_min: 0.0, y_min: 0.0, x_max: 0.0, y_max: 0.0 },
+                None,
+                None,
+            ));
+        }
+    }
+
     let (text, text_end) = first_utf16_text(data)?;
     // A body that is only object anchors (U+FFFC, e.g. table placeholders) and
     // whitespace has no visible typed text — a note that is just a table. pysdocx

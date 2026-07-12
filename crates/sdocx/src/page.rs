@@ -823,12 +823,26 @@ const ANGLE_OFFSET: usize = OBJECT_BASE_HEADER_LEN;
 /// `_text_box_rich_text` + object-level bbox/angle/frame-midpoints).
 fn parse_text_box_object(blob: &[u8]) -> Option<RichTextBox> {
     let header = parse_object_header(blob)?;
+    let rotation_degrees = object_rotation_degrees(blob, header.field_flags);
+    let frame_midpoints = text_box_frame_midpoints(blob, &header);
+
+    // Authoritative path: the type-2 Text wrapper contains Shape(type 7), whose
+    // decoded flex offset points directly at `text_core::Common`; the box text +
+    // style runs come from its structured spans, not the `06 00` marker + TLV
+    // scan (pysdocx `_text_box_rich_text` structural branch). The legacy marker
+    // scan below stays as a defensive fallback for future unsupported flags.
+    if let Some(rt) = crate::note_doc::text_wrapper_rich_text(blob) {
+        return Some(crate::note_doc::wrapper_rich_text_box(
+            rt,
+            header.bbox,
+            rotation_degrees,
+            frame_midpoints,
+        ));
+    }
+
     let (text_off, text, raw_char_len) = text_box_text(blob)?;
     let scan_start = text_off + raw_char_len * 2;
     let styles = scan_rich_text_styles(blob, scan_start, raw_char_len, text.chars().count());
-
-    let rotation_degrees = object_rotation_degrees(blob, header.field_flags);
-    let frame_midpoints = text_box_frame_midpoints(blob, &header);
 
     Some(RichTextBox {
         bbox: header.bbox,
