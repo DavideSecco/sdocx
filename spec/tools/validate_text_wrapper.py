@@ -77,7 +77,7 @@ def diffs_for(raw: bytes) -> list[str]:
     eq("shape.text_auto_fit_type", getattr(k.shape.body, "text_auto_fit_type", None),
        ref["text_auto_fit_type"])
     common = ref["common"]
-    eq("common.text", k.shape.body.common.text_utf16.decode("utf-16-le"), common["text"])
+    eq("common.text", k.shape.body.common.text_utf16, common["text"])
     eq("common.spans", len(k.shape.body.common.spans), len(common["spans"]))
     eq("common.paragraphs", len(k.shape.body.common.paragraphs), len(common["paragraphs"]))
     eq("common.margins", list(k.shape.body.common.margins), common["margins"])

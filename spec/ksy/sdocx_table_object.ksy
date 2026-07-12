@@ -461,8 +461,9 @@ types:
       - id: char_count
         type: u4
       - id: text_utf16
+        type: str
         size: char_count * 2
-        doc: UTF-16LE text (kept raw; the validator decodes and compares).
+        encoding: UTF-16LE
       - id: span_count
         type: u4
       - id: spans

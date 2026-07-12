@@ -73,6 +73,8 @@ class SdocxTableObject(KaitaiStruct):
         def _fetch_instances(self):
             pass
             self.body._fetch_instances()
+
+
     class BorderBlockBody(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxTableObject.BorderBlockBody, self).__init__(_io)
@@ -100,6 +102,11 @@ class SdocxTableObject(KaitaiStruct):
 
 
     class BorderEntry(KaitaiStruct):
+        """One border edge: colour + stroke width + the two rounded-corner radii.
+        Corpus values: colour `ffb1ac98` (the grey frame/grid line), width `1.0`,
+        radius `26.0` on the default (rounded) outer frame and `0.0` on a sharp
+        "90°" frame and on all grid lines. Disabled edges are fully zeroed.
+        """
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxTableObject.BorderEntry, self).__init__(_io)
             self._parent = _parent
@@ -295,7 +302,7 @@ class SdocxTableObject(KaitaiStruct):
 
         def _read(self):
             self.char_count = self._io.read_u4le()
-            self.text_utf16 = self._io.read_bytes(self.char_count * 2)
+            self.text_utf16 = (self._io.read_bytes(self.char_count * 2)).decode(u"UTF-16LE")
             self.span_count = self._io.read_u4le()
             self.spans = []
             for i in range(self.span_count):
@@ -853,3 +860,6 @@ class SdocxTableObject(KaitaiStruct):
         def _fetch_instances(self):
             pass
             self.body._fetch_instances()
+
+
+

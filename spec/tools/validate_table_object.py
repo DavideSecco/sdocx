@@ -43,7 +43,7 @@ def _borders(block) -> list[dict]:
 def _frame_diffs(kf, ref: dict) -> list[str]:
     """Compare a Kaitai common_frame against a pysdocx parse_common_frame dict."""
     out = []
-    if kf.text_utf16.decode("utf-16-le") != ref["text"]:
+    if kf.text_utf16 != ref["text"]:
         out.append("frame text")
     kspans = [{"record_size": s.record_size, "span_type": s.span_type,
                "start": s.start, "end": s.end,

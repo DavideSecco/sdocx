@@ -213,7 +213,7 @@ class SdocxPage(KaitaiStruct):
             if hasattr(self, '_m_has_objects'):
                 return self._m_has_objects
 
-            self._m_has_objects = (len(self.layers) > 0) and (self.layers[0].object_count > 0)
+            self._m_has_objects =  ((len(self.layers) > 0) and (self.layers[0].object_count > 0))
             return getattr(self, '_m_has_objects', None)
 
 
@@ -338,4 +338,5 @@ class SdocxPage(KaitaiStruct):
         self._m_uuid_char_len = self._io.read_u2le()
         self._io.seek(_pos)
         return getattr(self, '_m_uuid_char_len', None)
+
 

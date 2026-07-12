@@ -4,6 +4,9 @@ meta:
   application: Samsung Notes / S Pen SDK
   endian: le
   license: CC0-1.0
+  imports:
+    - sdocx_table_object
+    - sdocx_web_object
 doc: |
   Complete inheritance chain used by note.note title/body Text blobs and by
   raw type-2 page text boxes:
@@ -188,7 +191,9 @@ types:
       - id: char_count
         type: u4
       - id: text_utf16
+        type: str
         size: char_count * 2
+        encoding: UTF-16LE
       - id: span_count
         type: u4
       - id: spans
@@ -265,6 +270,10 @@ types:
         type: inline_object_body
         size: frame_size
   inline_object_body:
+    doc: |
+      `object_body` is decoded for the two known inline-object types (22 =
+      table, 13 = web link/preview); other types (e.g. 3 = inline image)
+      have no dedicated spec yet and stay opaque bytes.
     seq:
       - id: object_size
         type: u4
@@ -272,7 +281,17 @@ types:
         type: u4
       - id: object_body
         size: object_size
+        type:
+          switch-on: object_type
+          cases:
+            22: sdocx_table_object
+            13: sdocx_web_object
+            _: opaque_inline_body
       - id: position
         type: u4
       - id: tail
         size: _io.size - _io.pos
+  opaque_inline_body:
+    seq:
+      - id: raw
+        size-eos: true

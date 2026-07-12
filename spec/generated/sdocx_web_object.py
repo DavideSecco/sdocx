@@ -195,3 +195,5 @@ class SdocxWebObject(KaitaiStruct):
 
         self._m_consumes_eof = self._io.pos() == self._io.size()
         return getattr(self, '_m_consumes_eof', None)
+
+

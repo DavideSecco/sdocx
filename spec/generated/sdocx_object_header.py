@@ -267,3 +267,5 @@ class SdocxObjectHeader(KaitaiStruct):
             self._io.seek(_pos)
 
         return getattr(self, '_m_extra_key_head', None)
+
+

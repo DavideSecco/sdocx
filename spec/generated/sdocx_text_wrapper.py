@@ -3,6 +3,8 @@
 
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
+import sdocx_table_object
+import sdocx_web_object
 
 
 if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
@@ -73,7 +75,7 @@ class SdocxTextWrapper(KaitaiStruct):
 
         def _read(self):
             self.char_count = self._io.read_u4le()
-            self.text_utf16 = self._io.read_bytes(self.char_count * 2)
+            self.text_utf16 = (self._io.read_bytes(self.char_count * 2)).decode(u"UTF-16LE")
             self.span_count = self._io.read_u4le()
             self.spans = []
             for i in range(self.span_count):
@@ -158,6 +160,10 @@ class SdocxTextWrapper(KaitaiStruct):
 
 
     class InlineObjectBody(KaitaiStruct):
+        """`object_body` is decoded for the two known inline-object types (22 =
+        table, 13 = web link/preview); other types (e.g. 3 = inline image)
+        have no dedicated spec yet and stay opaque bytes.
+        """
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxTextWrapper.InlineObjectBody, self).__init__(_io)
             self._parent = _parent
@@ -167,13 +173,38 @@ class SdocxTextWrapper(KaitaiStruct):
         def _read(self):
             self.object_size = self._io.read_u4le()
             self.object_type = self._io.read_u4le()
-            self.object_body = self._io.read_bytes(self.object_size)
+            _on = self.object_type
+            if _on == 13:
+                pass
+                self._raw_object_body = self._io.read_bytes(self.object_size)
+                _io__raw_object_body = KaitaiStream(BytesIO(self._raw_object_body))
+                self.object_body = sdocx_web_object.SdocxWebObject(_io__raw_object_body)
+            elif _on == 22:
+                pass
+                self._raw_object_body = self._io.read_bytes(self.object_size)
+                _io__raw_object_body = KaitaiStream(BytesIO(self._raw_object_body))
+                self.object_body = sdocx_table_object.SdocxTableObject(_io__raw_object_body)
+            else:
+                pass
+                self._raw_object_body = self._io.read_bytes(self.object_size)
+                _io__raw_object_body = KaitaiStream(BytesIO(self._raw_object_body))
+                self.object_body = SdocxTextWrapper.OpaqueInlineBody(_io__raw_object_body, self, self._root)
             self.position = self._io.read_u4le()
             self.tail = self._io.read_bytes(self._io.size() - self._io.pos())
 
 
         def _fetch_instances(self):
             pass
+            _on = self.object_type
+            if _on == 13:
+                pass
+                self.object_body._fetch_instances()
+            elif _on == 22:
+                pass
+                self.object_body._fetch_instances()
+            else:
+                pass
+                self.object_body._fetch_instances()
 
 
     class ObjectBaseBody(KaitaiStruct):
@@ -320,6 +351,21 @@ class SdocxTextWrapper(KaitaiStruct):
         def _fetch_instances(self):
             pass
             self.body._fetch_instances()
+
+
+    class OpaqueInlineBody(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxTextWrapper.OpaqueInlineBody, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.raw = self._io.read_bytes_full()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class ParagraphRec(KaitaiStruct):
