@@ -364,10 +364,9 @@ object bodies.
   `docs/format/container/note-note/tables.md`. No `.ksy` change: the table
   lives inside the body blob, which stays opaque in Kaitai until the
   Text/Shape wrapper is decoded (same boundary as the Common frames).
-  Follow-ups: style-tail *semantics* (borders/floats/arrays) need a
-  **styled-table sample family** (custom borders, widths, merged cells,
-  shading); the renderer can now take grid geometry from the structural
-  parse instead of anchor clustering.
+  Follow-up (style-tail semantics) is now **DONE** too — see "Table styling
+  FULLY decoded + Kaitai-gated" below; the renderer takes grid geometry from
+  the structural parse instead of anchor clustering.
 - **Targeted samples for unexercised flex fields:** a note with a template,
   a shared/authored note, and an attached (non-image) file would exercise
   `template_uri`, `author_info`/`app_name`, `attached_files`.
@@ -396,13 +395,14 @@ object bodies.
   parses 100% cleanly here, zip framing is unremarkable — external
   validation, not a new decode. The sample wishlist moved from agent memory
   to `docs/format/sample-wishlist.md` (repo-visible, at the user's request)
-  and is now the canonical status list — see it for the next concrete
-  table-style-tail sample spec (4 files: merged cells / custom borders /
-  custom widths-heights / cell shading, each vs. a plain-grid baseline).
-- **Styled-table sample family** (unlocks the table style-tail semantics —
-  the framing is done, only the defaults never varied): vs a plain grid, one
-  change per sample — merged cells; custom border color/thickness; different
-  column widths / row heights; cell background shading. Only-table, no audio.
+  and is now the canonical status list. **Same day, later:** the table-
+  style-tail sample spec this pointed to was itself closed by the
+  `Tabella4x3Regolare` v1+v2 samples — see "Table styling FULLY decoded"
+  above and `sample-wishlist.md`'s "CLOSED — Priority B" section. Merged
+  cells turned out N/A (no UI action); only minor residual gaps remain
+  (left/right vs top/bottom border-pair disambiguation, custom border
+  colour/width if the UI ever exposes them) and aren't worth a dedicated
+  sample.
 - Keep expanding only zero-counterexample structural fields in Kaitai; marker
   scans stay in `pysdocx` + docs until a fixed boundary is proven.
 - When the user wants a targeted sample campaign, isolate `HDR_EXT.counter` with
