@@ -24,6 +24,24 @@ end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
   `validate_text_wrapper.py` agree on **72/72 wrappers** (56 note title/body +
   16 page text boxes), zero mismatches. `sdocx_note.ksy` now embeds the wrapper
   type directly instead of retaining opaque title/body blobs.
+- **Shape/Text wrapper PORTED TO RUST CORE (NEW, 2026-07-12):** the four-frame
+  wrapper now lives in `crates/sdocx/src/note_doc.rs` (`parse_object_frame_header`
+  + `parse_text_wrapper`), a byte-for-byte port of pysdocx. Both Rust entry
+  points were rewritten off the marker/TLV scan onto the structural chain:
+  `container::parse_note_text` (note body typed text via `note_body_rich_text`)
+  and `page::parse_text_box_object` (page text boxes via `text_wrapper_rich_text`),
+  each reaching `text_core::Common` through Shape's flex offset and projecting its
+  spans to `RichTextRun`/`ColorRun`/`FontSizeRun` (shared `common_frame_rich_text`,
+  the port of pysdocx `_text_box_rich_text`); the legacy scan is kept only as a
+  defensive fallback. New parity gate `note_doc::wrapper_parity` + fixture
+  `tests/fixtures/text_wrapper_pysdocx.json` (regen `gen_text_wrapper.py`) asserts
+  the Rust wrapper matches pysdocx field-for-field on **70 wrappers** (54 note
+  title/body + 16 page boxes; the 1 personal `Appunti vari` sample is excluded
+  from the committed fixture → 72 locally with it). Note body typed text verified
+  byte-exact vs pysdocx end-to-end (`OnlyTextTypeWritten`: 682 chars,
+  runs/colors/font-sizes identical). All green (cargo workspace + clippy
+  `--all-targets -D warnings` + pysdocx 23/23 + `text_boxes.rs` still 16/16).
+  Uncommitted.
 
 ## Where we are
 
