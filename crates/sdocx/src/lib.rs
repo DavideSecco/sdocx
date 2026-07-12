@@ -1,6 +1,7 @@
 mod container;
 mod decode;
 mod error;
+mod note_doc;
 mod page;
 mod shape;
 mod types;

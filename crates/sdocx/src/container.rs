@@ -28,6 +28,7 @@ pub fn parse_from_reader<R: Read + Seek>(reader: R) -> Result<Document> {
         entry.read_to_end(&mut buf)?;
         parse_note_note(&buf, &mut metadata);
         metadata.tables = parse_tables(&buf);
+        metadata.note_tables = crate::note_doc::note_tables(&buf);
         note_text = parse_note_text(&buf);
     }
 
@@ -237,6 +238,13 @@ fn order_pages(page_ids: &[String], present: &mut Vec<String>) -> Vec<String> {
 
 fn parse_note_text(data: &[u8]) -> Option<RichTextBox> {
     let (text, text_end) = first_utf16_text(data)?;
+    // A body that is only object anchors (U+FFFC, e.g. table placeholders) and
+    // whitespace has no visible typed text — a note that is just a table. pysdocx
+    // strips these to an empty body and renders nothing; do the same (avoids a
+    // stray column of blank lines / anchor glyphs on page 0).
+    if text.chars().all(|c| c == '\u{FFFC}' || c.is_whitespace()) {
+        return None;
+    }
     // note.note's typed text reuses the same TLV style-run families as in-page
     // text boxes, with global character indexes (see pysdocx note.py).
     let text_len = text.chars().count();
@@ -465,45 +473,62 @@ fn parse_tables(note: &[u8]) -> Vec<Table> {
     }]
 }
 
-fn first_utf16_text(data: &[u8]) -> Option<(String, usize)> {
-    let mut offset = 0;
-    while offset + 6 <= data.len() {
-        let mut end = offset;
-        let mut units = Vec::new();
-        while end + 2 <= data.len() {
-            let unit = u16::from_le_bytes(data[end..end + 2].try_into().ok()?);
-            let printable = unit == 0x0A || (0x20..=0xD7FF).contains(&unit);
-            if !printable {
-                break;
-            }
-            units.push(unit);
-            end += 2;
-        }
-        let text = String::from_utf16(&units).ok()?;
-        let trimmed = text.trim();
-        if trimmed.chars().filter(|c| !c.is_whitespace()).count() >= 3
-            && looks_like_note_text(trimmed)
-        {
-            return Some((text, end));
-        }
-        offset += 2;
-    }
-    None
+/// note.note typed-text field constants (pysdocx `_find_text_field`).
+const MIN_TEXT_FIELD_CHARS: usize = 16;
+const TEXT_FIELD_LEN_TOLERANCE: i64 = 2;
+
+fn is_printable_unit(unit: u16) -> bool {
+    unit == 0x0A || unit == 0xFFFC || (0x20..=0xD7FF).contains(&unit)
 }
 
-fn looks_like_note_text(text: &str) -> bool {
-    let mut total = 0;
-    let mut common = 0;
-    for ch in text.chars() {
-        if ch.is_whitespace() {
-            continue;
-        }
-        total += 1;
-        if ch.is_ascii_alphanumeric() || ch.is_ascii_punctuation() {
-            common += 1;
+/// Locate note.note's typed-text field and return `(text, end_byte)`.
+///
+/// The field is the longest printable UTF-16LE run whose u32 char-count header
+/// (the 4 bytes immediately before it) matches its length within
+/// `TEXT_FIELD_LEN_TOLERANCE`. Requiring that header rejects the false positive
+/// that otherwise wins on drawing-only notes: the pen-preload resource string
+/// (`com.samsung…InkPen2`), which is itself UTF-16LE but has no matching header.
+/// Byte-for-byte port of pysdocx `_find_text_field`.
+fn first_utf16_text(data: &[u8]) -> Option<(String, usize)> {
+    let mut candidates: Vec<(usize, usize)> = Vec::new(); // (start_byte, char_len)
+    let mut i = 0usize;
+    while i + 2 <= data.len() {
+        if is_printable_unit(u16::from_le_bytes([data[i], data[i + 1]])) {
+            let mut j = i;
+            while j + 2 <= data.len()
+                && is_printable_unit(u16::from_le_bytes([data[j], data[j + 1]]))
+            {
+                j += 2;
+            }
+            let length = (j - i) / 2;
+            if length >= MIN_TEXT_FIELD_CHARS {
+                candidates.push((i, length));
+            }
+            i = j + 2;
+        } else {
+            i += 2;
         }
     }
-    total >= 3 && common * 4 >= total * 3
+    // Longest run first (the typed body outscores incidental printable spans).
+    candidates.sort_by_key(|&(_, length)| std::cmp::Reverse(length));
+    for (start, length) in candidates {
+        if start < 4 {
+            continue;
+        }
+        let declared = u32::from_le_bytes(data[start - 4..start].try_into().unwrap()) as i64;
+        if (declared - length as i64).abs() <= TEXT_FIELD_LEN_TOLERANCE {
+            // The header is authoritative: the run can spill one char past it onto
+            // the next field, so decode `declared`, not the raw run length.
+            let text_len = (length as i64).min(declared).max(0) as usize;
+            let end = start + text_len * 2;
+            let units: Vec<u16> = data[start..end]
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            return Some((String::from_utf16_lossy(&units), end));
+        }
+    }
+    None
 }
 
 /// Extract page UUIDs from `pageIdInfo.dat`.
@@ -566,6 +591,7 @@ impl<R: Read + Seek> Reader<R> {
             entry.read_to_end(&mut buf)?;
             parse_note_note(&buf, &mut metadata);
             metadata.tables = parse_tables(&buf);
+            metadata.note_tables = crate::note_doc::note_tables(&buf);
             note_text = parse_note_text(&buf);
         }
         if let Ok(mut entry) = archive.by_name("pageIdInfo.dat") {

@@ -28,9 +28,15 @@ pub struct DocumentMetadata {
     pub media_assets: Vec<MediaAsset>,
     /// Top-level typed note text from `note.note`, if present.
     pub note_text: Option<RichTextBox>,
-    /// Tables decoded from `note.note` (document-level, like the typed text;
-    /// note.note carries no page reference, so placement is a render decision).
+    /// Tables decoded from `note.note` by the legacy marker-scan reader
+    /// (`parse_tables`, clustered cell anchors). Kept as a corroborator; prefer
+    /// [`Self::note_tables`] for byte-exact geometry.
     pub tables: Vec<Table>,
+    /// Tables decoded from `note.note` by the byte-exact structural parser
+    /// (the type-22 inline object; see `note_doc`). Authoritative: exact cell
+    /// bboxes, column widths, per-cell fill, border blocks, and nested-frame
+    /// text. Document-level like [`Self::tables`] (no page reference).
+    pub note_tables: Vec<NoteTable>,
 }
 
 /// A table reconstructed from `note.note`'s cell records (ported from pysdocx
@@ -77,6 +83,183 @@ pub struct TableCell {
     pub color: Option<Color>,
     /// Explicit cell font size in Samsung Notes logical units.
     pub font_size: Option<f32>,
+}
+
+/// A table decoded byte-exactly from `note.note`'s type-22 inline object
+/// (`note_doc::note_tables`). Every field is a decoded format fact — cell
+/// geometry, fills, and border blocks come straight from the serialized
+/// structure, not a clustering heuristic.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NoteTable {
+    /// Table UUID (from the wrapper record).
+    pub uuid: String,
+    /// Table bounds in page coordinates (the wrapper's bbox).
+    pub bbox: BoundingBox,
+    /// Note page width carried in the wrapper (== `note.note` width on corpus).
+    pub page_width: u32,
+    /// 0-based index of this table among the note's tables (document order).
+    pub table_index: u32,
+    /// Number of rows.
+    pub n_rows: usize,
+    /// Number of columns.
+    pub n_cols: usize,
+    /// Per-column widths, page units (`col_widths` array).
+    pub col_widths: Vec<f32>,
+    /// Per-row heights, page units (row-chain order).
+    pub row_heights: Vec<f32>,
+    /// Outer-frame border block (4 entries; see [`TableBorder`]).
+    pub outer_borders: [TableBorder; 4],
+    /// Inner grid-line border block (4 entries).
+    pub grid_borders: [TableBorder; 4],
+    /// Per-column minimum width constraints (Marker; never varied on corpus).
+    pub col_width_min: Vec<f32>,
+    /// Per-column maximum width constraints (Marker).
+    pub col_width_max: Vec<f32>,
+    /// Max table width scalar (== note width − 2×72 margins on corpus).
+    pub table_width_max: f32,
+    /// Theme default header/highlight fill (0xAARRGGBB).
+    pub theme_fill_argb: u32,
+    /// The cells, in row-major order.
+    pub cells: Vec<NoteTableCell>,
+}
+
+/// One border entry: ARGB colour plus stroke width and the two rounded-corner
+/// radii. A disabled border is fully zeroed. In the style tail, entries 0/2 are
+/// vertical edges/lines and 1/3 horizontal (the paired members never differ, so
+/// left-vs-right / top-vs-bottom stay unresolved).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TableBorder {
+    /// Border colour, 0xAARRGGBB (0 == disabled).
+    pub argb: u32,
+    /// Stroke width, page units.
+    pub width: f32,
+    /// Rounded-corner radius X.
+    pub radius_x: f32,
+    /// Rounded-corner radius Y.
+    pub radius_y: f32,
+}
+
+/// One cell of a [`NoteTable`], decoded byte-exactly.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NoteTableCell {
+    /// Row index (0-based).
+    pub row: usize,
+    /// Column index (0-based).
+    pub col: usize,
+    /// Cell bounds in page coordinates.
+    pub bbox: BoundingBox,
+    /// Cell UUID (from the cell wrapper record).
+    pub uuid: String,
+    /// Serialization version carried in the cell wrapper (4000 on corpus).
+    pub version: u32,
+    /// Table-wide "styled" flag from the cell preamble (set when the table
+    /// carries explicit per-cell styling).
+    pub styled: bool,
+    /// Explicit cell background fill, 0xAARRGGBB (0 == theme default).
+    pub fill_argb: u32,
+    /// Cell text (from the nested Common frame; keeps trailing newlines).
+    pub text: String,
+    /// Character spans of the cell's Common frame (empty on a plain cell).
+    pub spans: Vec<TableCellSpan>,
+}
+
+/// One character span of a table cell's Common frame. `span_type` follows the
+/// `text_core` vocabulary (1 = foreground_color, 3 = font_size, 5 = bold,
+/// 6 = italic, 7 = underline, 20 = strikethrough, …); a whole-cell style run
+/// has `start == 0` and `end` == the cell text length.
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TableCellSpan {
+    /// Span type (`text_core` span vocabulary).
+    pub span_type: u32,
+    /// Inclusive start character index.
+    pub start: u32,
+    /// Exclusive end character index.
+    pub end: u32,
+    /// Interval type (Unknown semantics; constant on corpus).
+    pub interval_type: u32,
+    /// First u32 of the span payload: ARGB (colour), f32 bits (size), or bool.
+    pub value: u32,
+}
+
+/// Whole-cell character style resolved from a cell's frame spans.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CellStyle {
+    /// Whole cell is bold.
+    pub bold: bool,
+    /// Whole cell is italic.
+    pub italic: bool,
+    /// Whole cell is underlined.
+    pub underline: bool,
+    /// Whole cell is struck through.
+    pub strikethrough: bool,
+    /// Foreground colour (opaque spans only; includes the body-default gray).
+    pub color: Option<Color>,
+    /// Font size in Samsung Notes logical units (default 15.0 on the corpus).
+    pub font_size: Option<f32>,
+}
+
+impl NoteTableCell {
+    /// Whole-cell character style from the frame spans that cover the entire
+    /// cell text (`start == 0`, `end == text length`). Mirrors pysdocx
+    /// `table_cell_style`: 5 bold / 6 italic / 7 underline / 20 strikethrough
+    /// (bool), 1 foreground_color (ARGB), 3 font_size (f32 bits).
+    pub fn whole_cell_style(&self) -> CellStyle {
+        let text_len = self.text.chars().count() as u32;
+        let mut style = CellStyle::default();
+        for span in &self.spans {
+            if span.start != 0 || span.end != text_len {
+                continue;
+            }
+            match span.span_type {
+                5 => style.bold = span.value != 0,
+                6 => style.italic = span.value != 0,
+                7 => style.underline = span.value != 0,
+                20 => style.strikethrough = span.value != 0,
+                1 if span.value >> 24 == 0xFF => {
+                    style.color = Some(Color {
+                        r: (span.value >> 16) as u8,
+                        g: (span.value >> 8) as u8,
+                        b: span.value as u8,
+                    });
+                }
+                3 => style.font_size = Some(f32::from_bits(span.value)),
+                _ => {}
+            }
+        }
+        style
+    }
+}
+
+impl NoteTable {
+    /// Page-local column/row grid-line coordinates (`x_edges` of length
+    /// `n_cols + 1`, `y_edges` of length `n_rows + 1`) from the wrap bbox plus
+    /// `col_widths` / `row_heights` — page-local even on geometry-edited tables,
+    /// unlike the cell bboxes. Mirrors pysdocx `note_table_grid`.
+    pub fn grid(&self) -> (Vec<f64>, Vec<f64>) {
+        let mut x_edges = Vec::with_capacity(self.n_cols + 1);
+        x_edges.push(self.bbox.x_min);
+        for w in &self.col_widths {
+            x_edges.push(x_edges.last().unwrap() + *w as f64);
+        }
+        let mut y_edges = Vec::with_capacity(self.n_rows + 1);
+        y_edges.push(self.bbox.y_min);
+        for h in &self.row_heights {
+            y_edges.push(y_edges.last().unwrap() + *h as f64);
+        }
+        (x_edges, y_edges)
+    }
+
+    /// The 0-based index of the page this table is anchored to (the wrap
+    /// `table_index` field — note.note's table→page reference; see docs
+    /// tables.md). Named accessor so placement code reads the intent.
+    pub fn page_index(&self) -> usize {
+        self.table_index as usize
+    }
 }
 
 /// A single page within a document.
