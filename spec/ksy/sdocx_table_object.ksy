@@ -91,7 +91,14 @@ types:
         doc: Constant 3.
       - id: table_index
         type: u4
-        doc: 0-based index of this table among the note's tables.
+        doc: |
+          0-based index of the PAGE this table is anchored to — note.note's
+          otherwise-missing table->page reference (not the table's ordinal among
+          the note's tables). Evidence: the single-table `Allsamsungnotes` note
+          carries 3 and its table is on page 4; per-page styled tables increment
+          one-per-page; two tables sharing a page share the value; it equals the
+          document-stacked cell-bbox Y multiplier (page_index * page_height).
+          Kept the `table_index` name for continuity; it is the page index.
   cell_wrap_rec:
     seq:
       - id: size
@@ -561,16 +568,24 @@ types:
         repeat: expr
         repeat-expr: 4
   border_entry:
+    doc: |
+      One border edge: colour + stroke width + the two rounded-corner radii.
+      Corpus values: colour `ffb1ac98` (the grey frame/grid line), width `1.0`,
+      radius `26.0` on the default (rounded) outer frame and `0.0` on a sharp
+      "90°" frame and on all grid lines. Disabled edges are fully zeroed.
     seq:
       - id: argb
         type: u4
-        doc: 0xAARRGGBB; 00000000 = border disabled.
+        doc: 0xAARRGGBB; 00000000 = border disabled. ffb1ac98 on the corpus.
       - id: width
         type: f4
+        doc: Stroke width; 1.0 corpus-wide (never varied).
       - id: radius_x
         type: f4
+        doc: Rounded-corner radius X; 26.0 rounded frame, 0.0 sharp/grid.
       - id: radius_y
         type: f4
+        doc: Rounded-corner radius Y; matches radius_x on the corpus.
   point:
     seq:
       - id: x

@@ -69,3 +69,28 @@ Rendering-only choices, not format: Catmull-Rom smoothing between decoded points
 pen-width clamps (raised to ~30px for highlighters), and pressure-taper shaping.
 The decoded stroke data (points, pressure, width, color) is upstream of all of
 these.
+
+## Table rendering (`note.note` type-22 object)
+
+The table's structure is fully decoded (grid, per-cell fill/spans, border blocks —
+see [container/note-note/tables.md](./container/note-note/tables.md)); the mapping
+of those fields to pixels is render calibration:
+
+- **Grid geometry** uses the wrap bbox + `col_widths`/row heights
+  (`note_table_grid`), which are page-local, rather than the cell bboxes (whose Y
+  is document-stacked on geometry-edited tables).
+- **Border edges from the two 4-entry blocks:** entries 0/2 are vertical, 1/3
+  horizontal, and enabled when `argb` is opaque and `width > 0` (decoded). The
+  *drawing* rule is calibrated: a boundary edge (frame top/bottom, left/right) is
+  drawn when **either** the outer frame **or** the grid enables that direction
+  (so "grid horizontal only, no frame" still closes top+bottom); interior lines
+  are grid-only; a full frame with `radius > 0` draws as one rounded rect and
+  suppresses the straight boundary lines. Line width is a calibrated constant
+  (`1.2pt`) — the decoded `width` is `1.0` corpus-wide, so it carries no scale yet.
+- **Header/"evidenzia" fill:** a highlighted row/column carries no `fill_argb`;
+  it is recognised by its foreground colour `#3a3a3d` (the header ink, vs the body
+  default `#252525`) and painted with the table's `theme_fill_argb` (beige). This
+  fg→fill link is a heuristic; the fill colour itself is the decoded theme value.
+- **Cell font size** is the decoded per-cell `font_size` span, only *shrunk* to
+  fit the column (never capped up), so a cell set to 20 renders larger.
+- **Under/strike lines** span the measured glyph width, not the whole cell.

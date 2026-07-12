@@ -57,7 +57,7 @@ table object body (obj_size bytes)
 │                                  u16 36 + ASCII uuid, i64 ts1_us, f64×4 bbox
 │                                  (page coords), 5B zeros, i64 ts2_us,
 │                                  u32 page_width (1600), u32 0, u8 3,
-│                                  u32 table_index (0-based, document order)
+│                                  u32 table_index (see note below)
 ├─ midpoints   [self-sized, 91]    u16 tag 6 … u32 4 + 4×(f64,f64): the edge
 │                                  midpoints of the table rect (text coords)
 ├─ outline     [self-sized, 135]   u16 tag 7 … + path of the table rect
@@ -194,3 +194,17 @@ PDF; every other cell in the corpus is `0`.
   the wrap bbox stays page-local. Width/height and X match exactly either way,
   so a renderer should treat cell-bbox Y relative to the wrap bbox, never as
   absolute.
+- **`table_index` is really the 0-based host PAGE index (Marker → Decoded, zero
+  counterexamples).** Named "table index / document order" when first decoded,
+  but the value is the index of the page the table is anchored to, not the
+  table's ordinal among the note's tables: `Allsamsungnotes` has a **single**
+  table with `table_index = 3` and its ground-truth page is **page 4** (index
+  3) — an ordinal would be 0. On the styled family it increments one-per-page
+  (0..5 / 0..10), and the two tables of the geometry-edited `v2` note that share
+  a page **both** carry `table_index = 10`. It also equals the stacked-Y
+  multiplier above (dy = `table_index × page_height`). This is note.note's
+  missing table→page reference: a renderer places each table on
+  `pages[table_index]` (the wrap bbox is page-local, so its X/Y are the on-page
+  rect directly). No `table_index ≥ page_count` case exists in the corpus. (The
+  decode-layer field keeps the `table_index` name for now; renamed only in the
+  render/placement layer.)
