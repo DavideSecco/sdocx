@@ -909,3 +909,165 @@ pub fn note_tables(note: &[u8]) -> Vec<NoteTable> {
     }
     tables
 }
+
+#[cfg(test)]
+mod wrapper_parity {
+    //! Byte-exact `parse_text_wrapper` parity gate vs pysdocx.
+    //!
+    //! For every note.note title/body Text blob and raw type-2 page text box in
+    //! the corpus (fixture `tests/fixtures/text_wrapper_pysdocx.json`, regenerate
+    //! with the sibling `gen_text_wrapper.py`), this slices the same
+    //! `(member, off, size)` window and asserts the Rust wrapper decode matches
+    //! pysdocx field-for-field: the four inclusive frame sizes, Shape geometry
+    //! (type / original rect / angle / path / control points), ObjectBase
+    //! angle+pivot, Text border fields, trailing hash length, and the reached
+    //! Common frame's char/span counts. Skips absent samples like the other gates.
+
+    use super::*;
+    use std::collections::HashMap;
+    use std::io::Read;
+    use std::path::{Path, PathBuf};
+
+    fn samples_dir() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples")
+    }
+
+    fn close(a: f64, b: f64, tol: f64) -> bool {
+        (a - b).abs() <= tol
+    }
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    fn opt_u64(v: &serde_json::Value) -> Option<u64> {
+        v.as_u64()
+    }
+
+    fn assert_wrapper(ctx: &str, w: &TextWrapper, e: &serde_json::Value) {
+        let u = |k: &str| e[k].as_u64().unwrap();
+        assert_eq!(w.base.size as u64, u("object_base_size"), "{ctx}: object_base_size");
+        assert_eq!(w.shape_base.size as u64, u("shape_base_size"), "{ctx}: shape_base_size");
+        assert_eq!(w.shape.size as u64, u("shape_size"), "{ctx}: shape_size");
+        assert_eq!(w.text.size as u64, u("text_size"), "{ctx}: text_size");
+        assert_eq!(w.shape_type as u64, u("shape_type"), "{ctx}: shape_type");
+
+        let want_rect = e["original_rect"].as_array().unwrap();
+        for (i, g) in w.original_rect.iter().enumerate() {
+            assert!(close(*g, want_rect[i].as_f64().unwrap(), 1e-6), "{ctx}: original_rect[{i}]");
+        }
+        assert!(
+            close(w.original_angle as f64, e["original_angle"].as_f64().unwrap(), 1e-3),
+            "{ctx}: original_angle"
+        );
+
+        match &e["base_angle"] {
+            serde_json::Value::Null => assert!(w.base_angle.is_none(), "{ctx}: base_angle != None"),
+            v => assert!(
+                close(w.base_angle.unwrap() as f64, v.as_f64().unwrap(), 1e-3),
+                "{ctx}: base_angle"
+            ),
+        }
+        match &e["base_pivot"] {
+            serde_json::Value::Null => assert!(w.base_pivot.is_none(), "{ctx}: base_pivot != None"),
+            v => {
+                let (gx, gy) = w.base_pivot.unwrap();
+                let a = v.as_array().unwrap();
+                assert!(
+                    close(gx, a[0].as_f64().unwrap(), 1e-6) && close(gy, a[1].as_f64().unwrap(), 1e-6),
+                    "{ctx}: base_pivot"
+                );
+            }
+        }
+
+        assert_eq!(hex(&w.path_raw), e["path_hex"].as_str().unwrap(), "{ctx}: path_hex");
+        let want_cp = e["control_points"].as_array().unwrap();
+        assert_eq!(w.control_points.len(), want_cp.len(), "{ctx}: control_points len");
+        for (i, (gx, gy)) in w.control_points.iter().enumerate() {
+            let a = want_cp[i].as_array().unwrap();
+            assert!(
+                close(*gx, a[0].as_f64().unwrap(), 1e-6) && close(*gy, a[1].as_f64().unwrap(), 1e-6),
+                "{ctx}: control_points[{i}]"
+            );
+        }
+
+        assert_eq!(
+            w.ellipsis_type.map(|x| x as u64),
+            opt_u64(&e["ellipsis_type"]),
+            "{ctx}: ellipsis_type"
+        );
+        assert_eq!(
+            w.text_auto_fit_type.map(|x| x as u64),
+            opt_u64(&e["text_auto_fit_type"]),
+            "{ctx}: text_auto_fit_type"
+        );
+
+        match &e["border_colour"] {
+            serde_json::Value::Null => assert!(w.border_colour.is_none(), "{ctx}: border_colour"),
+            v => assert_eq!(
+                w.border_colour.map(|b| hex(&b)).as_deref(),
+                Some(v.as_str().unwrap()),
+                "{ctx}: border_colour"
+            ),
+        }
+        match &e["border_width"] {
+            serde_json::Value::Null => assert!(w.border_width.is_none(), "{ctx}: border_width"),
+            v => assert!(
+                close(w.border_width.unwrap() as f64, v.as_f64().unwrap(), 1e-3),
+                "{ctx}: border_width"
+            ),
+        }
+        assert_eq!(w.border_type.map(|x| x as u64), opt_u64(&e["border_type"]), "{ctx}: border_type");
+        assert_eq!(w.trailing_len as u64, u("trailing_len"), "{ctx}: trailing_len");
+
+        assert_eq!(w.common.is_some(), e["has_common"].as_bool().unwrap(), "{ctx}: has_common");
+        if let Some(c) = &w.common {
+            assert_eq!(
+                c.text.chars().count() as u64,
+                u("common_char_count"),
+                "{ctx}: common_char_count"
+            );
+            assert_eq!(c.spans.len() as u64, u("common_span_count"), "{ctx}: common_span_count");
+        }
+    }
+
+    #[test]
+    fn text_wrappers_match_pysdocx() {
+        let fixture_path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/text_wrapper_pysdocx.json");
+        let fixture: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(fixture_path).unwrap()).unwrap();
+
+        let mut compared = 0usize;
+        for (sample_name, entries) in fixture.as_object().unwrap() {
+            let sample_path = samples_dir().join(sample_name);
+            if !sample_path.exists() {
+                eprintln!("skipping: {sample_name} not present");
+                continue;
+            }
+            let file = std::fs::File::open(&sample_path).unwrap();
+            let mut archive = zip::ZipArchive::new(file).unwrap();
+            let mut members: HashMap<String, Vec<u8>> = HashMap::new();
+
+            for entry in entries.as_array().unwrap() {
+                let src = entry["src"].as_str().unwrap();
+                if !members.contains_key(src) {
+                    let mut buf = Vec::new();
+                    archive.by_name(src).unwrap().read_to_end(&mut buf).unwrap();
+                    members.insert(src.to_string(), buf);
+                }
+                let bytes = &members[src];
+                let off = entry["off"].as_u64().unwrap() as usize;
+                let size = entry["size"].as_u64().unwrap() as usize;
+                let blob = &bytes[off..off + size];
+                let ctx = format!("{sample_name} {src}@{off}");
+                let w = parse_text_wrapper(blob, 0)
+                    .unwrap_or_else(|err| panic!("{ctx}: parse failed: {err}"));
+                assert_wrapper(&ctx, &w, entry);
+                compared += 1;
+            }
+        }
+        assert!(compared > 0, "no fixture samples present");
+        eprintln!("compared {compared} text wrappers");
+    }
+}
