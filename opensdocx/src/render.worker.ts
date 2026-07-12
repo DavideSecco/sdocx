@@ -65,9 +65,11 @@ interface SShape {
 }
 interface SSticky { x: number; y: number; w: number; h: number; media_index: number; bg_color: RGB | null }
 // Table cells arrive fully resolved (position, shrink-to-fit font, style,
-// underline segment) from the Scene builder; the worker only strokes the grid
-// and fills the texts.
+// background fill, under/strike segments) from the Scene builder; the worker
+// only paints cell fills, strokes the grid, and fills the texts.
 interface STableCell {
+  col: number;
+  row: number;
   x: number;
   y: number;
   text: string;
@@ -75,9 +77,19 @@ interface STableCell {
   bold: boolean;
   italic: boolean;
   color: RGB | null;
-  underline?: [number, number, number]; // x0, x1, y
+  fill?: RGB; // cell background (rect from col/row + x_edges/y_edges)
+  underline?: boolean;
+  strikethrough?: boolean;
 }
-interface STable { x_edges: number[]; y_edges: number[]; line_color: RGB; line_width: number; cells: STableCell[] }
+interface STableBorder { color: RGB; has_v: boolean; has_h: boolean; radius: number }
+interface STable {
+  x_edges: number[];
+  y_edges: number[];
+  outer: STableBorder;
+  inner: STableBorder;
+  line_width: number;
+  cells: STableCell[];
+}
 interface PageScene {
   width: number;
   height: number;
@@ -457,31 +469,60 @@ function renderJob(job: Job): void {
   // everything is precomputed in the Scene builder).
   for (const tb of scene.tables ?? []) {
     const xs = tb.x_edges, ys = tb.y_edges;
-    c.strokeStyle = rgb(tb.line_color, "#8a8f9a");
+    const x0 = xs[0], x1 = xs[xs.length - 1], y0 = ys[0], y1 = ys[ys.length - 1];
+    // Cell background fills sit beneath the borders.
+    for (const cell of tb.cells) {
+      if (!cell.fill) continue;
+      const fx0 = xs[cell.col], fx1 = xs[cell.col + 1];
+      const fy0 = ys[cell.row], fy1 = ys[cell.row + 1];
+      c.fillStyle = rgb(cell.fill, "#ffffff");
+      c.fillRect(fx0, Math.min(fy0, fy1), fx1 - fx0, Math.abs(fy1 - fy0));
+    }
     c.lineWidth = tb.line_width;
+    const o = tb.outer, inn = tb.inner;
+    const outerCol = rgb(o.color, "#b1ac98"), innerCol = rgb(inn.color, "#b1ac98");
+    // A full rounded frame draws its own boundary; otherwise a boundary edge is
+    // drawn if EITHER the outer frame OR the grid enables it (so "grid horizontal
+    // only, no frame" still closes top+bottom). Interior lines are grid-only.
+    const rounded = o.has_v && o.has_h && o.radius > 0;
+    if (rounded) {
+      c.strokeStyle = outerCol;
+      c.beginPath();
+      c.roundRect(x0, Math.min(y0, y1), x1 - x0, Math.abs(y1 - y0), o.radius);
+      c.stroke();
+    }
+    // Interior grid lines (grid-only).
+    c.strokeStyle = innerCol;
     const grid = new Path2D();
-    for (const x of xs) {
-      grid.moveTo(x, ys[0]);
-      grid.lineTo(x, ys[ys.length - 1]);
-    }
-    for (const y of ys) {
-      grid.moveTo(xs[0], y);
-      grid.lineTo(xs[xs.length - 1], y);
-    }
+    if (inn.has_v) for (let i = 1; i < xs.length - 1; i++) { grid.moveTo(xs[i], y0); grid.lineTo(xs[i], y1); }
+    if (inn.has_h) for (let i = 1; i < ys.length - 1; i++) { grid.moveTo(x0, ys[i]); grid.lineTo(x1, ys[i]); }
     c.stroke(grid);
+    // Boundary edges (top/bottom, left/right), unless the rounded frame drew them.
+    if (!rounded) {
+      if (o.has_h || inn.has_h) {
+        c.strokeStyle = o.has_h ? outerCol : innerCol;
+        const e = new Path2D(); e.moveTo(x0, y0); e.lineTo(x1, y0); e.moveTo(x0, y1); e.lineTo(x1, y1);
+        c.stroke(e);
+      }
+      if (o.has_v || inn.has_v) {
+        c.strokeStyle = o.has_v ? outerCol : innerCol;
+        const e = new Path2D(); e.moveTo(x0, y0); e.lineTo(x0, y1); e.moveTo(x1, y0); e.lineTo(x1, y1);
+        c.stroke(e);
+      }
+    }
     c.textBaseline = "middle";
     for (const cell of tb.cells) {
       const fg = inkFor(cell.color, paper, di);
       c.fillStyle = fg;
       c.font = `${cell.italic ? "italic " : ""}${cell.bold ? "bold " : ""}${cell.font}px sans-serif`;
       c.fillText(cell.text, cell.x, cell.y);
-      if (cell.underline) {
+      // Under/strike span the measured glyph width, not the whole cell.
+      if (cell.underline || cell.strikethrough) {
+        const w = c.measureText(cell.text).width;
         c.strokeStyle = fg;
         c.lineWidth = 1.0 * 3.4;
-        c.beginPath();
-        c.moveTo(cell.underline[0], cell.underline[2]);
-        c.lineTo(cell.underline[1], cell.underline[2]);
-        c.stroke();
+        if (cell.underline) { c.beginPath(); c.moveTo(cell.x, cell.y + cell.font * 0.42); c.lineTo(cell.x + w, cell.y + cell.font * 0.42); c.stroke(); }
+        if (cell.strikethrough) { c.beginPath(); c.moveTo(cell.x, cell.y); c.lineTo(cell.x + w, cell.y); c.stroke(); }
       }
     }
     c.textBaseline = "top";

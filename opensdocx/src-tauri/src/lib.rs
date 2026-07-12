@@ -248,9 +248,14 @@ struct SceneShape {
 }
 
 /// One table cell, fully resolved: position, final font size (shrink-to-fit
-/// already applied), style, and an optional underline segment.
+/// already applied), style, background fill, and under/strike flags (the worker
+/// measures the glyphs to draw those lines over the text, not the whole cell).
 #[derive(Serialize)]
 struct SceneTableCell {
+    /// Column index (into the parent table's `x_edges`), for the fill rect.
+    col: usize,
+    /// Row index (into the parent table's `y_edges`), for the fill rect.
+    row: usize,
     /// Text start x (cell left edge + padding), page units.
     x: f64,
     /// Vertical center of the cell row, page units (draw middle-aligned).
@@ -262,18 +267,38 @@ struct SceneTableCell {
     italic: bool,
     /// Foreground; `None` = contrast ink.
     color: Option<[u8; 3]>,
-    /// Underline segment `[x0, x1, y]` in page units, when the cell is underlined.
+    /// Cell background fill (explicit `fill_argb`, or the theme fill on a
+    /// header/"evidenzia" cell); `None` = no fill.
     #[serde(skip_serializing_if = "Option::is_none")]
-    underline: Option<[f64; 3]>,
+    fill: Option<[u8; 3]>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    underline: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    strikethrough: bool,
 }
 
-/// A table resolved to grid lines + positioned cells (pysdocx `render_table`).
+/// One border block reduced for rendering: colour + which edges/lines are on +
+/// corner radius (page units). Mirrors pysdocx `_table_border`.
+#[derive(Serialize)]
+struct SceneTableBorder {
+    color: [u8; 3],
+    /// Left+right edges (outer) / inner vertical lines are drawn.
+    has_v: bool,
+    /// Top+bottom edges (outer) / inner horizontal lines are drawn.
+    has_h: bool,
+    /// Rounded-corner radius (outer frame only); 0 = square.
+    radius: f64,
+}
+
+/// A table resolved to its decoded borders + positioned cells (pysdocx
+/// `render_table`). `outer` is the frame, `inner` the grid lines.
 #[derive(Serialize)]
 struct SceneTable {
     x_edges: Vec<f64>,
     y_edges: Vec<f64>,
-    line_color: [u8; 3],
-    /// Grid line width in page units.
+    outer: SceneTableBorder,
+    inner: SceneTableBorder,
+    /// Border line width in page units.
     line_width: f64,
     cells: Vec<SceneTableCell>,
 }
@@ -670,95 +695,99 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
 }
 
 // ⚠ Render heuristics, NOT format facts — table drawing constants mirror
-// pysdocx render.py `render_table`: grid line #8a8f9a at 1.2pt, 18px cell
-// padding, 15pt base font with a shrink-to-fit approximation, and the
-// (unit-mixing but calibrated) underline offset `cy - font_pt * 0.55`.
+// pysdocx render.py `render_table`: 1.2pt border line, 18px cell padding, 15pt
+// default font with a shrink-to-fit approximation. Border colour/width/radius and
+// which edges are on now come from the decoded border blocks, not a constant.
 const TABLE_LINE_COLOR: [u8; 3] = [0x8A, 0x8F, 0x9A];
 const TABLE_FONTPT: f64 = 15.0;
 const TABLE_PAD: f64 = 18.0;
+/// The header/"evidenzia" ink (foreground_color ff3a3a3d): such cells get the
+/// theme fill behind them (Samsung's highlighted rows/columns).
+const TABLE_HEADER_INK: sdocx::Color = sdocx::Color { r: 0x3A, g: 0x3A, b: 0x3D };
 
-fn build_scene_table(t: &sdocx::Table) -> SceneTable {
+fn argb_rgb(argb: u32) -> [u8; 3] {
+    [(argb >> 16) as u8, (argb >> 8) as u8, argb as u8]
+}
+
+/// Reduce a 4-entry border block to `(has_v, has_h, color, radius)` (pysdocx
+/// `_table_border`): entries 0/2 vertical, 1/3 horizontal; on == opaque + width>0.
+fn table_border_model(block: &[sdocx::TableBorder; 4]) -> SceneTableBorder {
+    let on = |e: &sdocx::TableBorder| e.argb >> 24 != 0 && e.width > 0.0;
+    let has_v = on(&block[0]);
+    let has_h = on(&block[1]);
+    let color = block.iter().find(|e| on(e)).map_or(TABLE_LINE_COLOR, |e| argb_rgb(e.argb));
+    let radius = if has_v {
+        block[0].radius_x as f64
+    } else if has_h {
+        block[1].radius_x as f64
+    } else {
+        0.0
+    };
+    SceneTableBorder { color, has_v, has_h, radius }
+}
+
+/// Build a Scene table from the byte-exact structural table (`sdocx::NoteTable`).
+/// Geometry is page-local (`NoteTable::grid`); cell text/style/fill and the outer
+/// frame + inner grid all come from the decoded object. Mirrors pysdocx
+/// `structural_table_render_model` + `render_table`.
+fn build_scene_table(t: &sdocx::NoteTable) -> SceneTable {
+    let (x_edges, y_edges) = t.grid();
+    let theme_fill = argb_rgb(t.theme_fill_argb);
     let cells = t
         .cells
         .iter()
-        .filter(|c| c.col + 1 < t.x_edges.len() && c.row + 1 < t.y_edges.len())
+        .filter(|c| c.col + 1 < x_edges.len() && c.row + 1 < y_edges.len())
         .map(|c| {
-            let x0 = t.x_edges[c.col];
-            let x1 = t.x_edges[c.col + 1];
+            let style = c.whole_cell_style();
+            let x0 = x_edges[c.col];
+            let x1 = x_edges[c.col + 1];
             let cx = x0 + TABLE_PAD;
-            let cy = (t.y_edges[c.row] + t.y_edges[c.row + 1]) / 2.0;
-            let base_pt = f64::min(c.font_size.map(f64::from).unwrap_or(TABLE_FONTPT), TABLE_FONTPT);
+            let cy = (y_edges[c.row] + y_edges[c.row + 1]) / 2.0;
+            let text = c.text.trim_end_matches('\n').to_string();
+            // No cap: an explicitly larger cell (e.g. size 20) renders larger.
+            let base_pt = style.font_size.map(f64::from).unwrap_or(TABLE_FONTPT);
             let usable = f64::max(x1 - x0 - 2.0 * TABLE_PAD, 1.0);
-            let approx_width = c.text.chars().count().max(1) as f64 * base_pt * 7.0;
+            let approx_width = text.chars().count().max(1) as f64 * base_pt * 7.0;
             let cell_fontpt = f64::max(5.5, f64::min(base_pt, base_pt * usable / approx_width));
-            let rgb = c.color.as_ref().map(color_arr).filter(|&v| v != TEXT_DEFAULT_COLOR);
+            let rgb = style.color.as_ref().map(color_arr).filter(|&v| v != TEXT_DEFAULT_COLOR);
+            // Explicit fill, else the theme fill on a header/"evidenzia" cell.
+            let fill = if c.fill_argb >> 24 != 0 {
+                Some(argb_rgb(c.fill_argb))
+            } else if style.color == Some(TABLE_HEADER_INK) {
+                Some(theme_fill)
+            } else {
+                None
+            };
             SceneTableCell {
+                col: c.col,
+                row: c.row,
                 x: cx,
                 y: cy,
-                text: c.text.clone(),
+                text,
                 font: cell_fontpt * MPL_PT_TO_PAGE_UNITS,
-                bold: c.bold,
-                italic: c.italic,
+                bold: style.bold,
+                italic: style.italic,
                 color: rgb,
-                underline: c
-                    .underline
-                    .then_some([cx, x1 - TABLE_PAD, cy - cell_fontpt * 0.55]),
+                fill,
+                underline: style.underline,
+                strikethrough: style.strikethrough,
             }
         })
         .collect();
+    let outer = table_border_model(&t.outer_borders);
+    let mut inner = table_border_model(&t.grid_borders);
+    // Inner lines borrow the outer colour when the grid block is fully off.
+    if t.grid_borders.iter().all(|e| e.argb >> 24 == 0) {
+        inner.color = outer.color;
+    }
     SceneTable {
-        x_edges: t.x_edges.clone(),
-        y_edges: t.y_edges.clone(),
-        line_color: TABLE_LINE_COLOR,
+        x_edges,
+        y_edges,
+        outer,
+        inner,
         line_width: 1.2 * MPL_PT_TO_PAGE_UNITS,
         cells,
     }
-}
-
-/// ⚠ Heuristic (pysdocx `render_document`/`_typed_text_target_page`): note.note
-/// carries no page reference for its document-level tables, so the page is
-/// guessed — if the typed text names a target page ("pagina N"), the table goes
-/// on the previous page; otherwise page 4 (matches the benchmark sample).
-/// Returned 0-based.
-fn table_target_page(typed_text: Option<&str>) -> usize {
-    if let Some(text) = typed_text {
-        let lower = text.to_lowercase();
-        let bytes = lower.as_bytes();
-        let mut search = 0usize;
-        while let Some(rel) = lower[search..].find("pagina") {
-            let at = search + rel;
-            search = at + 1;
-            // \b before
-            if at > 0 && (bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_') {
-                continue;
-            }
-            // \s+ then digits then \b
-            let mut i = at + "pagina".len();
-            let ws_start = i;
-            while i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'\t' || bytes[i] == b'\n') {
-                i += 1;
-            }
-            if i == ws_start {
-                continue;
-            }
-            let digit_start = i;
-            while i < bytes.len() && bytes[i].is_ascii_digit() {
-                i += 1;
-            }
-            if i == digit_start
-                || (i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_'))
-            {
-                continue;
-            }
-            if let Ok(n) = lower[digit_start..i].parse::<usize>() {
-                if n > 1 {
-                    return n - 2; // 1-based "previous page" → 0-based
-                }
-                break;
-            }
-        }
-    }
-    3 // 1-based page 4
 }
 
 fn build_page_scene(page: &sdocx::Page) -> PageScene {
@@ -930,11 +959,16 @@ async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<Page
         let note_text = (index == 0)
             .then(|| reader.metadata().note_text.clone())
             .flatten();
-        // Document-level tables go on their heuristic target page (see
-        // table_target_page).
+        // Byte-exact structural tables carry their own 0-based host page
+        // (`NoteTable::page_index`, note.note's table→page reference), so each
+        // goes on exactly its page — no placement guess.
         let meta = reader.metadata();
-        let typed = meta.note_text.as_ref().map(|t| t.text.clone());
-        let tables = if !meta.tables.is_empty() && index == table_target_page(typed.as_deref()) { meta.tables.clone() } else { Default::default() };
+        let tables: Vec<sdocx::NoteTable> = meta
+            .note_tables
+            .iter()
+            .filter(|t| t.page_index() == index)
+            .cloned()
+            .collect();
         (bytes, note_text, tables)
     };
     // Media indices in the parsed page are the decoded `<index>@` archive indices
@@ -1254,28 +1288,17 @@ mod tests {
         assert!(rotated.anchor[0].is_finite() && rotated.anchor[1].is_finite());
     }
 
-    /// "pagina N" in the typed text places tables on the previous page
-    /// (0-based N-2); no match falls back to page 4 (0-based 3).
-    #[test]
-    fn table_target_page_heuristic() {
-        assert_eq!(table_target_page(Some("vedi tabella a Pagina 5 ok")), 3);
-        assert_eq!(table_target_page(Some("pagina 2")), 0);
-        assert_eq!(table_target_page(Some("nessun riferimento")), 3);
-        assert_eq!(table_target_page(None), 3);
-        // No word boundary / no digits → fallback.
-        assert_eq!(table_target_page(Some("impaginazione 7")), 3);
-        assert_eq!(table_target_page(Some("pagina uno")), 3);
-    }
-
-    /// The 4×3 table sample resolves to grid edges + 12 positioned cells with
-    /// shrink-to-fit fonts.
+    /// The 4×3 structural table resolves to page-local grid edges + 12
+    /// positioned cells with shrink-to-fit fonts; it lands on its own page
+    /// (`page_index` == 3 for this sample).
     #[test]
     fn table_scene_resolves_cells() {
         let Some(reader) = sample("Allsamsungnotes_260630_113259.sdocx") else {
             return;
         };
-        let tables = reader.metadata().tables.clone();
+        let tables = reader.metadata().note_tables.clone();
         assert_eq!(tables.len(), 1);
+        assert_eq!(tables[0].page_index(), 3);
         let st = build_scene_table(&tables[0]);
         assert_eq!((st.x_edges.len(), st.y_edges.len()), (4, 5));
         assert_eq!(st.cells.len(), 12);
