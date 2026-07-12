@@ -26,7 +26,16 @@ interface STextSeg {
   highlight: RGB | null;
 }
 interface STextLine { advance: number; segs: STextSeg[] }
-interface SText { anchor: [number, number]; wrap_width: number; angle_deg: number; lines: STextLine[] }
+interface SText {
+  anchor: [number, number];
+  wrap_width: number;
+  angle_deg: number;
+  lines: STextLine[];
+  // Present only for the document-level typed note body: the flow is laid out in
+  // full, then split into page-height bands; this page draws only band `slot`
+  // (pysdocx paginate_typed_text / _paginate_segments).
+  paginate?: { slot: number; band_height: number };
+}
 // Template style (kind + pitches/origin/color/line_width, and the PDF media/page link) comes
 // fully resolved from the Rust Scene builder — no style constants here (single source,
 // docs/app/README.md risk ②). kind: grid | line | dot | oxford | pdf | plain.
@@ -286,15 +295,29 @@ function drawSegPiece(
   return w;
 }
 
-// Lay out and draw one rich text block: rotate around the anchor, then flow
-// each line's styled segments with measured wrapping (pysdocx
-// _render_rich_text's segment loop, paragraphs excluded — text boxes have none).
-function drawRichText(c: OffscreenCanvasRenderingContext2D, t: SText, paper: RGB, di: RGB): void {
-  c.save();
-  c.translate(t.anchor[0], t.anchor[1]);
-  if (t.angle_deg) c.rotate((t.angle_deg * Math.PI) / 180);
-  c.lineCap = "butt";
+// One laid-out visual row: `y` is the flow offset from the anchor, `advance` the
+// source line's advance, `pieces` the styled runs to draw at their x within the row.
+interface VisLine { y: number; advance: number; pieces: { seg: STextSeg; text: string; x: number }[] }
+
+// pysdocx typed-note pagination constants (render.py TYPED_TEXT_Y0 / _paginate_segments
+// default bottom_pad). The note body flows from the top margin y0 and a line whose
+// bottom would cross `band_height - PAGE_PAD` is bumped whole to the next band.
+const TYPED_TEXT_Y0 = 80;
+const TYPED_TEXT_PAGE_PAD = 40;
+
+// Flow a rich text block into positioned visual rows with measured wrapping
+// (pysdocx _render_rich_text's segment loop, paragraphs excluded). Blank source
+// lines advance `y` but emit no row — matching pysdocx, whose sink only records
+// drawn segments, so pagination keys off real content rows only.
+function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine[] {
+  const out: VisLine[] = [];
   let y = 0;
+  let rowY = 0;
+  let pieces: VisLine["pieces"] = [];
+  const flushRow = (advance: number) => {
+    if (pieces.length) out.push({ y: rowY, advance, pieces });
+    pieces = [];
+  };
   for (const line of t.lines) {
     let x = 0;
     for (const seg of line.segs) {
@@ -303,45 +326,102 @@ function drawRichText(c: OffscreenCanvasRenderingContext2D, t: SText, paper: RGB
         c.font = segFont(seg);
         const w = c.measureText(rest).width;
         if (x + w <= t.wrap_width) {
-          x += drawSegPiece(c, seg, rest, x, y, paper, di);
+          pieces.push({ seg, text: rest, x });
+          x += w;
           rest = "";
           continue;
         }
         const fit = fitPrefix(c, rest, t.wrap_width - x);
         if (fit <= 0) {
           if (x === 0) {
-            // Nothing fits even from the margin: draw one char to guarantee progress.
-            x += drawSegPiece(c, seg, rest.slice(0, 1), x, y, paper, di);
+            // Nothing fits even from the margin: emit one char to guarantee progress.
+            const ch = rest.slice(0, 1);
+            pieces.push({ seg, text: ch, x });
+            x += c.measureText(ch).width;
             rest = rest.slice(1);
           }
-          x = 0;
+          flushRow(line.advance);
           y += line.advance;
+          rowY = y;
+          x = 0;
           continue;
         }
         // A styled segment that would split mid-word only because the line is
         // already partially filled moves to the next line whole (pysdocx rule).
         if (x > 0 && fit < rest.length && !/[ \t]/.test(rest.slice(0, fit))) {
           if (c.measureText(rest).width <= t.wrap_width) {
-            x = 0;
+            flushRow(line.advance);
             y += line.advance;
+            rowY = y;
+            x = 0;
             continue;
           }
         }
         const [head, tail] = wrapCut(rest, fit);
         if (!head) {
-          x = 0;
+          flushRow(line.advance);
           y += line.advance;
+          rowY = y;
+          x = 0;
           continue;
         }
-        x += drawSegPiece(c, seg, head, x, y, paper, di);
+        c.font = segFont(seg);
+        pieces.push({ seg, text: head, x });
+        x += c.measureText(head).width;
         if (tail) {
-          x = 0;
+          flushRow(line.advance);
           y += line.advance;
+          rowY = y;
+          x = 0;
         }
         rest = tail;
       }
     }
+    flushRow(line.advance);
     y += line.advance;
+    rowY = y;
+  }
+  return out;
+}
+
+// Split laid-out rows into page-height bands and keep only band `slot`, rebasing
+// each kept row's `y` to the page anchor. Mirrors pysdocx `_paginate_segments`:
+// the first row of every band sits at the top margin, and a row is bumped whole
+// to the next band when its bottom would cross `band_height - PAGE_PAD`.
+function paginateLines(lines: VisLine[], slot: number, bandHeight: number): VisLine[] {
+  const bands: VisLine[][] = [];
+  let cur: VisLine[] = [];
+  let base = 0;
+  for (const ln of lines) {
+    const absY = TYPED_TEXT_Y0 + ln.y;
+    let yPage = absY - base;
+    if (cur.length && yPage + ln.advance > bandHeight - TYPED_TEXT_PAGE_PAD) {
+      bands.push(cur);
+      cur = [];
+      base = absY - TYPED_TEXT_Y0;
+      yPage = TYPED_TEXT_Y0;
+    }
+    // Draw offset is measured from the anchor (already at TYPED_TEXT_Y0).
+    cur.push({ y: yPage - TYPED_TEXT_Y0, advance: ln.advance, pieces: ln.pieces });
+  }
+  if (cur.length) bands.push(cur);
+  return bands[slot] ?? [];
+}
+
+// Lay out and draw one rich text block: rotate around the anchor, then draw each
+// visual row's pieces. The document-level typed note body (`t.paginate`) is split
+// into page-height bands and only this page's band is drawn.
+function drawRichText(c: OffscreenCanvasRenderingContext2D, t: SText, paper: RGB, di: RGB): void {
+  c.save();
+  c.translate(t.anchor[0], t.anchor[1]);
+  if (t.angle_deg) c.rotate((t.angle_deg * Math.PI) / 180);
+  c.lineCap = "butt";
+  let rows = layoutRichText(c, t);
+  if (t.paginate) rows = paginateLines(rows, t.paginate.slot, t.paginate.band_height);
+  for (const row of rows) {
+    for (const p of row.pieces) {
+      drawSegPiece(c, p.seg, p.text, p.x, row.y, paper, di);
+    }
   }
   c.restore();
 }

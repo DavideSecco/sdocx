@@ -42,6 +42,29 @@ end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
   runs/colors/font-sizes identical). All green (cargo workspace + clippy
   `--all-targets -D warnings` + pysdocx 23/23 + `text_boxes.rs` still 16/16).
   Uncommitted.
+- **Typed-text pagination ported to OpenSdocx (NEW, 2026-07-12):** the document
+  -level typed note body was being dumped entirely on page 0 (running off the
+  bottom, never reaching pages 2+). Ported pysdocx `paginate_typed_text` /
+  `_paginate_segments` to the app: the note body is now attached to every page
+  with a band `slot` (= page index) + uniform `band_height` (page 0 height) in
+  the Scene (`ScenePaginate` on `SceneText`, [`lib.rs`](./opensdocx/src-tauri/src/lib.rs)),
+  and the worker lays out the whole flow, splits it into page-height bands, and
+  draws only its own band ([`render.worker.ts`](./opensdocx/src/render.worker.ts)
+  `layoutRichText` + `paginateLines`). Oracle match on `OnlyTextTypeWritten`:
+  2 bands (21 lines pg0, 11 lines pg1, pg2 empty).
+- **⚠ KNOWN BUG — REOPEN: typed-text placement is still substantially wrong on
+  `OnlyTextTypeWritten`.** The pagination *fix above* only stops overflow being
+  lost off page 0 — it does NOT make the layout correct. The vertical positions
+  / where lines actually land vs the GT (`samples/OnlyTextTypeWritten_260701_180427_gt`)
+  are visibly off, and **pysdocx is likely wrong too** (its render uses the same
+  fixed heuristics). Suspects: `TYPED_TEXT_LINE_H=66` / `BLANK_H=75` / `Y0=80`
+  / `PAGE_PAD=40` are un-calibrated guesses; per-line advance ignores real
+  paragraph spacing and per-run font growth beyond a crude `max`; and the app's
+  canvas font metrics diverge from matplotlib's, so wrap points (and thus band
+  boundaries) can drift between the two renderers. NEXT: calibrate typed-text
+  line metrics + page-break rule against the GT photos (this sample + any other
+  multi-page typed note), in pysdocx first, then re-port. Until then typed-text
+  vertical layout is "flows to the right pages, but not pixel-faithful".
 
 ## Where we are
 

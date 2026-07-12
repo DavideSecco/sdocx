@@ -85,6 +85,23 @@ struct SceneText {
     /// Clockwise rotation applied around `anchor`, degrees.
     angle_deg: f64,
     lines: Vec<SceneTextLine>,
+    /// Present only for the document-level typed note body: the flow spans the
+    /// whole note and is split into page-height bands (pysdocx `paginate_typed_text`).
+    /// This block is attached to EVERY page; the worker draws only the band whose
+    /// index == `slot`, so overflow flows onto the following pages instead of
+    /// running off the bottom of page 0.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    paginate: Option<ScenePaginate>,
+}
+
+/// Pagination band assignment for the typed note body (see `SceneText::paginate`).
+#[derive(Serialize)]
+struct ScenePaginate {
+    /// 0-based page band this scene should draw (equals the page index).
+    slot: usize,
+    /// Uniform page height used to split the flow into bands, page units
+    /// (pysdocx uses the anchor page's height for every band).
+    band_height: f64,
 }
 
 // ⚠ Render heuristics, NOT format facts (docs/format/heuristics.md "Grid template
@@ -691,6 +708,7 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
         wrap_width,
         angle_deg: tb.rotation_degrees.unwrap_or(0.0).rem_euclid(360.0),
         lines,
+        paginate: None,
     }
 }
 
@@ -951,14 +969,21 @@ async fn open_document(path: String, state: State<'_, AppState>) -> Result<DocMe
 /// prefetch) parse in parallel instead of queueing on one page at a time.
 #[tauri::command]
 async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<PageScene, String> {
-    let (bytes, note_text, tables) = {
+    let (bytes, note_text, band_height, tables) = {
         let mut guard = state.reader.lock().unwrap();
         let reader = guard.as_mut().ok_or("no document loaded")?;
         let bytes = reader.page_bytes(index).map_err(|e| e.to_string())?;
-        // The typed note body renders as page 0's text layer (as Reader::page does).
-        let note_text = (index == 0)
-            .then(|| reader.metadata().note_text.clone())
-            .flatten();
+        // The typed note body is a document-level flow anchored on page 0. It is
+        // attached to EVERY page and split into page-height bands by the worker
+        // (pysdocx `paginate_typed_text`), so overflow flows onto later pages
+        // instead of running off the bottom of page 0. Bands use the anchor
+        // page's (page 0) height uniformly.
+        let note_text = reader.metadata().note_text.clone();
+        let band_height = note_text
+            .is_some()
+            .then(|| reader.page_size(0).map(|(_, h)| h as f64))
+            .transpose()
+            .map_err(|e| e.to_string())?;
         // Byte-exact structural tables carry their own 0-based host page
         // (`NoteTable::page_index`, note.note's table→page reference), so each
         // goes on exactly its page — no placement guess.
@@ -969,15 +994,20 @@ async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<Page
             .filter(|t| t.page_index() == index)
             .cloned()
             .collect();
-        (bytes, note_text, tables)
+        (bytes, note_text, band_height, tables)
     };
     // Media indices in the parsed page are the decoded `<index>@` archive indices
     // (the parser's one media currency, same as pysdocx); `get_media` resolves them.
-    let mut page = sdocx::parse_page(&bytes).map_err(|e| e.to_string())?;
-    if let Some(text) = note_text {
-        page.elements.push(sdocx::PageElement::TextBox(text));
-    }
+    let page = sdocx::parse_page(&bytes).map_err(|e| e.to_string())?;
     let mut scene = build_page_scene(&page);
+    if let (Some(text), Some(band_height)) = (note_text, band_height) {
+        let mut st = build_scene_text(&text, page.width as f64);
+        st.paginate = Some(ScenePaginate {
+            slot: index,
+            band_height,
+        });
+        scene.texts.push(st);
+    }
     scene.tables = tables.iter().map(build_scene_table).collect();
     Ok(scene)
 }
