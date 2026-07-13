@@ -52,19 +52,70 @@ end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
   draws only its own band ([`render.worker.ts`](./opensdocx/src/render.worker.ts)
   `layoutRichText` + `paginateLines`). Oracle match on `OnlyTextTypeWritten`:
   2 bands (21 lines pg0, 11 lines pg1, pg2 empty).
-- **⚠ KNOWN BUG — REOPEN: typed-text placement is still substantially wrong on
-  `OnlyTextTypeWritten`.** The pagination *fix above* only stops overflow being
-  lost off page 0 — it does NOT make the layout correct. The vertical positions
-  / where lines actually land vs the GT (`samples/OnlyTextTypeWritten_260701_180427_gt`)
-  are visibly off, and **pysdocx is likely wrong too** (its render uses the same
-  fixed heuristics). Suspects: `TYPED_TEXT_LINE_H=66` / `BLANK_H=75` / `Y0=80`
-  / `PAGE_PAD=40` are un-calibrated guesses; per-line advance ignores real
-  paragraph spacing and per-run font growth beyond a crude `max`; and the app's
-  canvas font metrics diverge from matplotlib's, so wrap points (and thus band
-  boundaries) can drift between the two renderers. NEXT: calibrate typed-text
-  line metrics + page-break rule against the GT photos (this sample + any other
-  multi-page typed note), in pysdocx first, then re-port. Until then typed-text
-  vertical layout is "flows to the right pages, but not pixel-faithful".
+- **Typed-text placement bug RESOLVED (2026-07-13):** re-investigated against
+  the GT photos (`samples/OnlyTextTypeWritten_260701_180427_gt`) with a pixel
+  measurement script (row-darkness bands vs the predicted layout, scaled by the
+  photo/page ratio). Finding: **pysdocx's line positions were already correct**
+  — the "pysdocx is likely wrong too" note above was an unverified guess; the
+  ~1-15px residuals measured are consistent with phone-photo perspective noise,
+  not a layout bug. The REAL bug was structural and Rust-only: `RichTextBox` had
+  **no paragraph-level fields at all** — `common_frame_rich_text` in
+  `note_doc.rs` projected only spans (bold/italic/color/font-size) and silently
+  dropped the Common frame's `paragraphs` records, so OpenSdocx rendered list
+  items with no numbered/bullet/todo marker, ignored center/right alignment and
+  left-indent, and gave headings no extra breathing room — all visible on this
+  exact sample, none of it present in pysdocx's (correct) render.
+  Fix, RE'd bottom-up:
+  1. **pysdocx:** `note_doc.common_frame_paragraphs` decodes the structural
+     `paragraph_type`/`extra` payload fields (indent/align/line_spacing/list/
+     space_before/space_after) into the same dict shape `pysdocx.note`'s legacy
+     TLV marker scan already produces — validated **zero-counterexample**
+     against the legacy scan on **212/212 paragraphs across all 11 typed-text
+     samples** (`tests/test_pysdocx_regressions.py::StructuralParagraphRegressionTest`).
+     Documented in `docs/format/container/note-note/typed-text.md`. `render.py`
+     itself is untouched (still the legacy scan — already GT-correct).
+  2. **Rust core:** `note_doc.rs`'s `parse_common_frame` now retains paragraph
+     records (`FrameParagraph`) instead of discarding their bytes;
+     `structural_paragraphs` is a byte-for-byte port of the pysdocx decoder;
+     new public types `ParagraphInfo`/`Alignment`/`ParagraphStyle`/`ListItem`
+     on `types.rs`; `RichTextBox` gained `paragraphs: Vec<ParagraphInfo>`,
+     threaded through `common_frame_rich_text`/`wrapper_rich_text_box`. Gated
+     by extending the existing `wrapper_parity` fixture/test
+     (`text_wrapper_pysdocx.json` now carries each wrapper's decoded
+     paragraphs; `assert_paragraphs` checks every field against pysdocx).
+  3. **OpenSdocx app:** `build_scene_text` (`lib.rs`) now computes, per
+     paragraph: `lead_gap`/`trail_gap` (space_before/after, folded around the
+     paragraph's rows so the worker's single running `y` stays exact),
+     `x_offset`/`max_width` (indent), `align`, and a `prefix` (list/todo
+     marker, sized at the paragraph's own font, checked-todo forcing
+     strikethrough + gray). `render.worker.ts`'s `layoutRichText` applies them
+     in pysdocx's exact order (indent → prefix measured/reserved → alignment
+     checked only when the paragraph fits unwrapped → wrap loop unchanged) —
+     pagination's fit check still uses each row's own `advance` alone, matching
+     pysdocx `_paginate_segments`. New Rust test
+     `typed_note_body_scene_resolves_paragraphs` asserts numbered/bullet/todo
+     prefixes, center/right alignment, indent offsets, and heading spacing
+     survive into the Scene for this exact sample.
+  **Follow-up worker fix (2026-07-13):** the first cut had a bug in the TS
+  worker (`render.worker.ts` `layoutRichText`) only, NOT in pysdocx or the Rust
+  core: after `y += line.lead_gap` it failed to refresh `rowY`, so a
+  paragraph's first visual row — and the pagination fit check that reads its y
+  — was short by that paragraph's own `space_before`. On `OnlyTextTypeWritten`
+  this dropped `questo è heading 2` (space_before 98px) from y-bottom 2241.4
+  back under the 2222 page-break threshold, keeping it on page 1 instead of
+  page 2 (GT: page 2). The Python "mirror" used to verify the port computed the
+  ideal y-flow and so missed it; the Rust unit test only checks the SceneText
+  data, not the worker's layout. Fix: set `rowY = y` right after the `lead_gap`
+  bump (every later y bump already refreshed it). Reconfirmed heading 2 →
+  page 2. NOTE the break margin is only ~19px, a coincidence of the heuristic
+  line-height constants, so pagination is not robust to content edits — a
+  proper Samsung line-height model is still future work.
+  All green: `cargo test`/`clippy --all-targets -D warnings` workspace-wide +
+  opensdocx (9/9 incl. the new test) + `tsc --noEmit` + pysdocx unittest
+  (24/24 incl. the new regression test). Two **pre-existing** opensdocx clippy
+  failures (`manual_clamp` in `text_box_layout`, `items_after_test_module`)
+  were confirmed via `git stash` to predate this round — not introduced here,
+  left unfixed (out of scope). Uncommitted.
 
 ## Where we are
 
@@ -305,6 +356,28 @@ object bodies.
 
 ## Next tasks
 
+- **Grounded typed-text line-height / pagination model (OPEN, flagged
+  2026-07-13):** typed-note vertical layout + page breaks currently ride on
+  **un-grounded heuristic constants** — `TYPED_TEXT_LINE_H=66`, `BLANK_H=75`,
+  `PARA_SPACE_UNIT=4.9`, `Y0=80`, `X0=64`, `PAGE_PAD=40`, the `*1.36`
+  Samsung→pt font scale and the `*3.40` pt→page-unit bridge (in both
+  `pysdocx/render.py` and `opensdocx/src-tauri/src/lib.rs`). They reproduce the
+  `OnlyTextTypeWritten` GT, but the page-break margin at `questo è heading 2`
+  is only **~19px** — a coincidence, not a model. Any content edit (or a note
+  with different font sizes / paragraph spacing) can flip a line onto the wrong
+  page. We DO now decode the real per-paragraph inputs
+  (`common_frame_paragraphs`: line_spacing, space_before/after, indent, style —
+  all Decoded, corpus-gated) and the `text_core::Common` margins (`[16,10,16,10]`
+  body); what's missing is the **actual Samsung glyph line-height model** that
+  turns a font size + line_spacing into a baseline advance, and the exact
+  page-break rule (top/bottom content insets, whether the break uses ascent or
+  full line height). NEXT: capture a couple of multi-page typed notes whose
+  break lands far from any threshold (long uniform body; a body sized to break
+  mid-paragraph) as ground truth, then derive the advance + inset constants
+  from measured baselines instead of eyeballing — pysdocx first, then re-port
+  the numbers to the app (single source: they must stay identical on both
+  sides). Until then typed-text pagination is "correct on the current corpus,
+  not robust." See the round-13 typed-text notes above for the decode side.
 - **`.page` header preamble — field sequence DECODED, `content_bbox` gate DONE,
   template gates OPEN
   (2026-07-11):** the bytes before the paper
