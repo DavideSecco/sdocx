@@ -452,6 +452,10 @@ class SdocxTextWrapper(KaitaiStruct):
                 _io__raw_common = KaitaiStream(BytesIO(self._raw_common))
                 self.common = SdocxTextWrapper.CommonFrame(_io__raw_common, self, self._root)
 
+            if self.header.field_flags.value & 2048 != 0:
+                pass
+                self.shape_field_11_f32 = self._io.read_f4le()
+
             if self.header.field_flags.value & 4096 != 0:
                 pass
                 self.ellipsis_type = self._io.read_u1()
@@ -478,6 +482,9 @@ class SdocxTextWrapper(KaitaiStruct):
             if self.header.field_flags.value & 1 != 0:
                 pass
                 self.common._fetch_instances()
+
+            if self.header.field_flags.value & 2048 != 0:
+                pass
 
             if self.header.field_flags.value & 4096 != 0:
                 pass
@@ -581,6 +588,5 @@ class SdocxTextWrapper(KaitaiStruct):
         def _fetch_instances(self):
             pass
             self.body._fetch_instances()
-
 
 

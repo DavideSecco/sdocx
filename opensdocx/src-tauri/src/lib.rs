@@ -587,18 +587,24 @@ fn build_scene_shape(s: &sdocx::Shape) -> SceneShape {
 // TYPED_TEXT_*): font scale 1.36 Samsung-units→matplotlib-pt, 12pt floor,
 // line height 3.2·font (36 floor), blank-line height 2·font (24 floor),
 // 8px inner padding, 18px wrap inset on rotated frames, and the typed-note
-// margins (64, 80) with 66/75 line/blank heights at 17pt. Glyph sizes reuse
-// the same pt→page-units bridge as line widths (MPL_PT_TO_PAGE_UNITS).
+// anchor (64, 80). Document-body line boxes use the controlled-PDF model below;
+// glyph sizes still reuse the calibrated pt→page-units bridge.
 const TEXT_DEFAULT_COLOR: [u8; 3] = [37, 37, 37];
 const TEXT_BOX_FRAME_WRAP_INSET: f64 = 18.0;
 const TYPED_TEXT_X0: f64 = 64.0;
 const TYPED_TEXT_Y0: f64 = 80.0;
 const TYPED_TEXT_FONTPT: f64 = 17.0;
 const TYPED_TEXT_LINE_H: f64 = 66.0;
-const TYPED_TEXT_BLANK_H: f64 = 75.0;
+const TYPED_TEXT_BLANK_H: f64 = 66.0;
+/// Exact Samsung typed-note transform grounded by the controlled vector PDFs:
+/// stored font -> PDF font is 5/3 and PDF -> page units is 8/3.
+const TYPED_TEXT_FONT_TO_PAGE: f64 = 40.0 / 9.0;
+const TYPED_TEXT_DEFAULT_LINE_SPACING: f64 = 1.35;
+/// Checkbox controls impose a taller minimum than an ordinary 11pt text row.
+const TYPED_TEXT_TODO_MIN_H: f64 = (77.76 + 75.99) / 2.0;
 /// pysdocx `PARA_SPACE_UNIT`: converts a paragraph's decoded `space_before`/
 /// `space_after` into page units.
-const PARA_SPACE_UNIT: f64 = 4.9;
+const PARA_SPACE_UNIT: f64 = 5.0;
 /// pysdocx `TODO_DONE_COLOR`: a checked todo's text (and its checkbox glyph)
 /// forces this gray unless the run already carries an explicit color.
 const TODO_DONE_COLOR: [u8; 3] = [150, 150, 150];
@@ -622,6 +628,22 @@ fn line_advance(line_h: f64, p: &sdocx::ParagraphInfo, line_fontpt: f64, fontpt:
 /// pysdocx `_blank_advance`.
 fn blank_advance(blank_h: f64, p: &sdocx::ParagraphInfo) -> f64 {
     blank_h * paragraph_spacing(p)
+}
+
+/// Exact document-body line-box advance. Text boxes retain the separate
+/// bbox-calibrated model above because they are not document-flow rows.
+fn typed_note_advance(raw_font_size: f64, p: &sdocx::ParagraphInfo) -> f64 {
+    let spacing = p
+        .line_spacing
+        .map(f64::from)
+        .filter(|s| s.is_finite() && *s > 0.0)
+        .unwrap_or(TYPED_TEXT_DEFAULT_LINE_SPACING);
+    let advance = raw_font_size * TYPED_TEXT_FONT_TO_PAGE * spacing;
+    if matches!(p.list, Some(sdocx::ListItem::Todo { .. })) {
+        f64::max(advance, TYPED_TEXT_TODO_MIN_H)
+    } else {
+        advance
+    }
 }
 
 /// pysdocx `_paragraph_prefix`: the list/todo marker text, when this
@@ -722,7 +744,7 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
     let mut strike = vec![false; n];
     let mut color: Vec<Option<[u8; 3]>> = vec![None; n];
     let mut highlight: Vec<Option<[u8; 3]>> = vec![None; n];
-    let mut font_pt: Vec<Option<f64>> = vec![None; n];
+    let mut font_raw: Vec<Option<f64>> = vec![None; n];
     for r in &tb.runs {
         for i in r.start..r.end.min(n) {
             bold[i] |= r.bold;
@@ -746,8 +768,8 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
         }
     }
     for f in &tb.font_sizes {
-        for slot in font_pt.iter_mut().take(f.end.min(n)).skip(f.start) {
-            *slot = Some(f.size as f64 * 1.36);
+        for slot in font_raw.iter_mut().take(f.end.min(n)).skip(f.start) {
+            *slot = Some(f.size as f64);
         }
     }
 
@@ -768,10 +790,16 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
         };
         let lead_gap = paragraph.space_before as f64 * PARA_SPACE_UNIT;
         let trail_gap = paragraph.space_after as f64 * PARA_SPACE_UNIT;
+        let default_raw = tb.font_size.unwrap_or(11.0) as f64;
 
         if len == 0 {
+            let raw = font_raw.get(gi).copied().flatten().unwrap_or(default_raw);
             lines.push(SceneTextLine {
-                advance: blank_advance(blank_h, paragraph),
+                advance: if is_note_body {
+                    typed_note_advance(raw, paragraph)
+                } else {
+                    blank_advance(blank_h, paragraph)
+                },
                 lead_gap,
                 trail_gap,
                 x_offset,
@@ -785,18 +813,24 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
         }
         // Line advance scales with the largest per-run font on the line
         // (pysdocx `_line_advance`).
-        let line_fontpt = (gi..gi + len)
-            .filter_map(|i| font_pt.get(i).copied().flatten())
-            .fold(fontpt, f64::max);
-        let advance = line_advance(line_h, paragraph, line_fontpt, fontpt);
+        let line_raw = (gi..gi + len)
+            .filter_map(|i| font_raw.get(i).copied().flatten())
+            .fold(default_raw, f64::max);
+        let line_fontpt = f64::max(line_raw * 1.36, fontpt);
+        let advance = if is_note_body {
+            typed_note_advance(line_raw, paragraph)
+        } else {
+            line_advance(line_h, paragraph, line_fontpt, fontpt)
+        };
 
         // List/todo marker: sized at the paragraph's own font (pysdocx draws it
         // at `para_font_raw * 1.36`, i.e. the same already-bridged value stored
         // in `font_pt`), so it matches its list text instead of the block's base size.
         let prefix = paragraph_prefix_text(paragraph).map(|text| {
             let prefix_pt = (gi..gi + len)
-                .filter_map(|i| font_pt.get(i).copied().flatten())
+                .filter_map(|i| font_raw.get(i).copied().flatten())
                 .next()
+                .map(|raw| raw * 1.36)
                 .unwrap_or(fontpt);
             ScenePrefix {
                 text,
@@ -820,7 +854,7 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
                     strike[gi + k] || checked_todo,
                     if checked_todo { Some(color[gi + k].unwrap_or(TODO_DONE_COLOR)) } else { color[gi + k] },
                     highlight[gi + k],
-                    font_pt[gi + k].map(|v| v.to_bits()),
+                    font_raw[gi + k].map(|v| v.to_bits()),
                 )
             };
             let here = style_at(i);
@@ -828,7 +862,7 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
             while j < len && style_at(j) == here {
                 j += 1;
             }
-            let seg_fontpt = font_pt[gi + i].unwrap_or(fontpt);
+            let seg_fontpt = font_raw[gi + i].map(|raw| raw * 1.36).unwrap_or(fontpt);
             segs.push(SceneTextSeg {
                 text: chars[gi + i..gi + j].iter().collect(),
                 font: seg_fontpt * MPL_PT_TO_PAGE_UNITS,
@@ -1510,6 +1544,8 @@ mod tests {
         assert!(heading.lead_gap > 0.0 && heading.trail_gap > 0.0, "heading spacing");
         let plain = find("Testo normale scritto carattere 11");
         assert_eq!((plain.lead_gap, plain.trail_gap), (0.0, 0.0));
+        assert!((plain.advance - 66.0).abs() < 1e-9);
+        assert!((todo_done.advance - TYPED_TEXT_TODO_MIN_H).abs() < 1e-9);
     }
 
     /// The 4×3 structural table resolves to page-local grid edges + 12

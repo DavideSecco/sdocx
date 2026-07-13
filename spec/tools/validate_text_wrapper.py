@@ -73,6 +73,8 @@ def diffs_for(raw: bytes) -> list[str]:
     eq("shape.path", k.shape.body.path.hex(), ref["path_raw"])
     eq("shape.control_points",
        [(p.x, p.y) for p in k.shape.body.control_points], ref["control_points"])
+    eq("shape.shape_field_11_f32", getattr(k.shape.body, "shape_field_11_f32", None),
+       ref["shape_field_11_f32"])
     eq("shape.ellipsis_type", getattr(k.shape.body, "ellipsis_type", None), ref["ellipsis_type"])
     eq("shape.text_auto_fit_type", getattr(k.shape.body, "text_auto_fit_type", None),
        ref["text_auto_fit_type"])

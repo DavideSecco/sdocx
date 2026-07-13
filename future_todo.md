@@ -70,7 +70,7 @@ end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
      `paragraph_type`/`extra` payload fields (indent/align/line_spacing/list/
      space_before/space_after) into the same dict shape `pysdocx.note`'s legacy
      TLV marker scan already produces — validated **zero-counterexample**
-     against the legacy scan on **212/212 paragraphs across all 11 typed-text
+     against the legacy scan on **300/300 paragraphs across all 13 typed-text
      samples** (`tests/test_pysdocx_regressions.py::StructuralParagraphRegressionTest`).
      Documented in `docs/format/container/note-note/typed-text.md`. `render.py`
      itself is untouched (still the legacy scan — already GT-correct).
@@ -356,28 +356,21 @@ object bodies.
 
 ## Next tasks
 
-- **Grounded typed-text line-height / pagination model (OPEN, flagged
-  2026-07-13):** typed-note vertical layout + page breaks currently ride on
-  **un-grounded heuristic constants** — `TYPED_TEXT_LINE_H=66`, `BLANK_H=75`,
-  `PARA_SPACE_UNIT=4.9`, `Y0=80`, `X0=64`, `PAGE_PAD=40`, the `*1.36`
-  Samsung→pt font scale and the `*3.40` pt→page-unit bridge (in both
-  `pysdocx/render.py` and `opensdocx/src-tauri/src/lib.rs`). They reproduce the
-  `OnlyTextTypeWritten` GT, but the page-break margin at `questo è heading 2`
-  is only **~19px** — a coincidence, not a model. Any content edit (or a note
-  with different font sizes / paragraph spacing) can flip a line onto the wrong
-  page. We DO now decode the real per-paragraph inputs
-  (`common_frame_paragraphs`: line_spacing, space_before/after, indent, style —
-  all Decoded, corpus-gated) and the `text_core::Common` margins (`[16,10,16,10]`
-  body); what's missing is the **actual Samsung glyph line-height model** that
-  turns a font size + line_spacing into a baseline advance, and the exact
-  page-break rule (top/bottom content insets, whether the break uses ascent or
-  full line height). NEXT: capture a couple of multi-page typed notes whose
-  break lands far from any threshold (long uniform body; a body sized to break
-  mid-paragraph) as ground truth, then derive the advance + inset constants
-  from measured baselines instead of eyeballing — pysdocx first, then re-port
-  the numbers to the app (single source: they must stay identical on both
-  sides). Until then typed-text pagination is "correct on the current corpus,
-  not robust." See the round-13 typed-text notes above for the decode side.
+- **Grounded typed-text line-height / pagination model (CORE DONE, residual
+  calibration OPEN, 2026-07-13):** the two controlled `.sdocx` + vector-PDF
+  exports ground the document-body advance as
+  `raw_font_size * (40/9) * line_spacing`, with default spacing 1.35 (therefore
+  raw size ×6), and show that an empty paragraph keeps the font carried by its
+  newline. Whole line boxes paginate inside the decoded Common top/bottom
+  margins (`10 * 40/9` each) and retain a preceding heading gap across a break.
+  Python and OpenSdocx now share this model. Page assignments match the exports
+  **32/32** for the 11/14/19/64 sample (`[23,6,3]`) and **50/50** for uniform
+  size 15 (`[24,24,2]`). The older screenshot GT now has page-1 RMSE 7.91 and
+  retains its page-break gap. Remaining: font-size-dependent glyph anchor /
+  baseline metrics, independent validation of each explicit `line_spacing`
+  choice, paragraph-style/indent calibration, and the calibrated todo minimum
+  row height. Commands and evidence are in `docs/format/heuristics.md`; desired
+  follow-ups remain in `docs/format/sample-wishlist.md`.
 - **`.page` header preamble — field sequence DECODED, `content_bbox` gate DONE,
   template gates OPEN
   (2026-07-11):** the bytes before the paper

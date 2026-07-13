@@ -17,16 +17,86 @@ page* is calibrated:
 
 | Constant | Role |
 |---|---|
-| `PARA_SPACE_UNIT` (~4.9) | space-before/after value → pixels |
-| `TYPED_TEXT_BLANK_H` (~75) | empty-paragraph height (least certain; one GT) |
-| `TYPED_TEXT_PAGE_PAD` | page padding used in pagination |
-| `TYPED_TEXT_LINE_H` (~66) | base line height |
-| `*1.36` / `/1.35` / `indent*70` | assorted layout scale factors |
+| `PARA_SPACE_UNIT` (5.0) | space-before/after value → page units (mixed-style fit) |
+| `raw_font_size * 40/9 * line_spacing` | document-body line-box advance |
+| `10 * 40/9` | decoded top/bottom Common margin → page units |
+| `TYPED_TEXT_TODO_MIN_H` (~76.875) | checkbox-control minimum row height |
+| `*1.36` / `indent*70` | still-calibrated glyph size and indent placement |
 
-Typed-text **pagination** (bumping a whole line that would cross the page bottom
-to the next page) mirrors observed Samsung behaviour but the trigger geometry is
-calibrated, not read from a field. Calibrated against
-`OnlyTextTypeWritten_squared_260703_013624.sdocx` (grid GT).
+Typed-text **pagination** fits whole line boxes inside the decoded Common body's
+vertical margins. A bumped line retains the gap immediately before it (for
+example a heading's `space_before`); uniform rows begin the next page without
+an added gap. The unit conversion and line advances below are exact for the two
+controlled Samsung PDF exports, while glyph anchoring and the todo minimum
+remain render calibration.
+
+### Measured GT audit and controlled PDFs (2026-07-13)
+
+The existing plain and squared GT captures are full-page 905×1280 screenshots,
+not perspective-distorted photos. Their matching `.page` geometry is
+1600×2262. `pysdocx.measure_typed_text_gt` detects horizontal raster-ink bands,
+maps their centres into page coordinates and aligns them with the current
+paginated layout. The centre of an ink band is **not claimed to be the true font
+baseline**; it is a stable visual anchor for deltas and residual trends.
+
+Run both independent captures with:
+
+```bash
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pysdocx.measure_typed_text_gt \
+  samples/OnlyTextTypeWritten_260701_180427.sdocx \
+  samples/OnlyTextTypeWritten_260701_180427_gt/photo_2026-07-01_18-06-27.jpg \
+  samples/OnlyTextTypeWritten_260701_180427_gt/photo_2026-07-01_18-06-58.jpg
+
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pysdocx.measure_typed_text_gt \
+  samples/OnlyTextTypeWritten_squared_260703_013624.sdocx \
+  samples/OnlyTextTypeWritten_squared_260703_013624/photo_2026-07-03_01-38-42.jpg \
+  samples/OnlyTextTypeWritten_squared_260703_013624/photo_2026-07-03_01-38-51.jpg
+```
+
+The two controlled samples also include vector PDF exports. The tool reads
+their positioned text directly with `pdftotext -bbox-layout`:
+
+```bash
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pysdocx.measure_typed_text_gt \
+  samples/OnlyTypeWrittenTextDifferentFont_260713_212408.sdocx \
+  samples/OnlyTypeWrittenTextDifferentFont_260713_212408.pdf
+
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pysdocx.measure_typed_text_gt \
+  samples/OnlytextTypewritten-Sistematic-carattere15_260713_212435.sdocx \
+  samples/OnlytextTypewritten-Sistematic-carattere15_260713_212435.pdf
+```
+
+Controlled-PDF findings:
+
+- PDF coordinates scale to `.page` coordinates by exactly `8/3` (600 pt wide
+  to 1600 page units), while a stored font size scales to PDF points by `5/3`.
+- Default baseline advance is PDF font size × `1.35`, hence stored font size ×
+  **6 page units**. The measured pitches are exactly 66, 84, 114 and 384 for
+  stored sizes 11, 14, 19 and 64; the uniform size-15 sample is exactly 90.
+- An empty paragraph advances by the same line box as the font carried by its
+  newline. This explains the requested blank row after every size block.
+- The mixed-font sample matches **32/32 page assignments**, distributed
+  `[23, 6, 3]`; the uniform sample matches **50/50**, distributed `[24, 24, 2]`.
+- PDF ink-centre residuals are constant within each font size (−3.41, +5.36,
+  +19.97 and +151.47 page units respectively). Their size dependence identifies
+  a remaining glyph-anchor/font-metric problem, not cumulative spacing drift.
+
+Existing screenshot findings (32 typed visual lines), remeasured after adopting
+the flow model:
+
+- The plain and squared captures agree to **≤0.5 screenshot px** (≤0.884 page
+  units) on every aligned ink centre. The grid-removal thresholds are therefore
+  not driving the result.
+- Page 1 has RMSE **7.91** page units. The renderer now retains the continuous
+  pre-heading break gap; page 2 begins the heading at predicted y=185 versus an
+  observed ink centre of 201.46.
+- The three todo rows advance by **77.76** and **75.99** units while numbered and
+  bullet rows remain near 66. Their mean, 76.875, is retained as a calibrated
+  checkbox-control minimum.
+
+This closes the core line advance, blank-row and page-break model. Remaining
+work is narrower: glyph baseline/anchor metrics, independent samples for every
+explicit `line_spacing` choice, and paragraph-style/indent calibration.
 
 ## Grid/line/dot/oxford template pitches
 

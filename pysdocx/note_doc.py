@@ -443,13 +443,17 @@ def parse_text_wrapper(blob: bytes, off: int = 0) -> dict:
             f"Shape fixed fields end {cur.pos} != flex offset {shape['flex_off']}")
 
     flags = shape["field_flags"]
-    supported = (1 << 0) | (1 << 12) | (1 << 13)
+    supported = (1 << 0) | (1 << 11) | (1 << 12) | (1 << 13)
     if flags & ~supported:
         raise NoteDocParseError(f"Text Shape unhandled fields 0x{flags & ~supported:x}")
     common = None
     if flags & 1:
         common = parse_common_frame(blob, cur.pos, base_format_version(blob, base))
         cur.pos = common["off"] + 4 + common["frame_size"]
+    # Shape flex bit 11 is observed on the controlled mixed-font typed body.
+    # Its f32 value is 11.0 there (the first/default run size), but one sample
+    # is insufficient to promote the semantic name; retain a neutral field.
+    shape_field_11_f32 = cur.f32() if flags & (1 << 11) else None
     ellipsis_type = cur.u8() if flags & (1 << 12) else None
     text_auto_fit_type = cur.u8() if flags & (1 << 13) else None
     _ensure_eof(cur, "Shape Text wrapper")
@@ -474,7 +478,8 @@ def parse_text_wrapper(blob: bytes, off: int = 0) -> dict:
         "shape_base": shape_base, "shape": shape, "shape_type": shape_type,
         "original_rect": original_rect, "original_angle": original_angle,
         "path_raw": path_raw.hex(), "control_points": control_points,
-        "common": common, "ellipsis_type": ellipsis_type,
+        "common": common, "shape_field_11_f32": shape_field_11_f32,
+        "ellipsis_type": ellipsis_type,
         "text_auto_fit_type": text_auto_fit_type,
         "text": text, "border_colour": border_colour,
         "border_width": border_width, "border_type": border_type,

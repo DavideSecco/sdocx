@@ -46,6 +46,7 @@ def fields(raw: bytes) -> dict:
         "base_pivot": list(ref["base_pivot"]) if ref["base_pivot"] is not None else None,
         "path_hex": ref["path_raw"],
         "control_points": [list(p) for p in ref["control_points"]],
+        "shape_field_11_f32": ref["shape_field_11_f32"],
         "ellipsis_type": ref["ellipsis_type"],
         "text_auto_fit_type": ref["text_auto_fit_type"],
         "border_colour": ref["border_colour"],

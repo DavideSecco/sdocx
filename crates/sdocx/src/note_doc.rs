@@ -379,6 +379,7 @@ struct TextWrapper {
     path_raw: Vec<u8>,
     control_points: Vec<(f64, f64)>,
     common: Option<CommonFrame>,
+    shape_field_11_f32: Option<f32>,
     ellipsis_type: Option<u8>,
     text_auto_fit_type: Option<u8>,
     text: ObjectFrameHeader,
@@ -438,7 +439,7 @@ fn parse_text_wrapper(blob: &[u8], off: usize) -> R<TextWrapper> {
     ensure(cur.pos == shape_flex, "Shape fixed fields end != flex offset")?;
 
     let flags = shape.field_flags;
-    let supported = (1 << 0) | (1 << 12) | (1 << 13);
+    let supported = (1 << 0) | (1 << 11) | (1 << 12) | (1 << 13);
     ensure(flags & !supported == 0, "Text Shape unhandled fields")?;
     let mut common = None;
     if flags & 1 != 0 {
@@ -447,6 +448,7 @@ fn parse_text_wrapper(blob: &[u8], off: usize) -> R<TextWrapper> {
         cur.pos += 4 + frame.frame_size;
         common = Some(frame);
     }
+    let shape_field_11_f32 = if flags & (1 << 11) != 0 { Some(cur.f32()?) } else { None };
     let ellipsis_type = if flags & (1 << 12) != 0 { Some(cur.u8()?) } else { None };
     let text_auto_fit_type = if flags & (1 << 13) != 0 { Some(cur.u8()?) } else { None };
     ensure_eof(&cur, "Shape Text wrapper")?;
@@ -484,6 +486,7 @@ fn parse_text_wrapper(blob: &[u8], off: usize) -> R<TextWrapper> {
         path_raw,
         control_points,
         common,
+        shape_field_11_f32,
         ellipsis_type,
         text_auto_fit_type,
         text,
@@ -1109,6 +1112,11 @@ mod wrapper_parity {
             );
         }
 
+        assert_eq!(
+            w.shape_field_11_f32.map(f64::from),
+            e.get("shape_field_11_f32").and_then(serde_json::Value::as_f64),
+            "{ctx}: shape_field_11_f32"
+        );
         assert_eq!(
             w.ellipsis_type.map(|x| x as u64),
             opt_u64(&e["ellipsis_type"]),

@@ -81,34 +81,125 @@ left-vs-right / top-vs-bottom within a border pair, custom border
 colour/width (the UI may not expose them), and a recoloured "evidenzia"
 header to confirm the beige is `theme_fill_argb`.
 
+## Partial — Priority B: controlled typed-text layout
+
+**Core flow campaign delivered 2026-07-13.**
+`OnlytextTypewritten-Sistematic-carattere15_260713_212435` supplies 50 uniform
+15-unit rows across three PDF pages, and
+`OnlyTypeWrittenTextDifferentFont_260713_212408` supplies repeated 11/14/19/64
+blocks with a font-matched empty row after each block. Together they ground the
+line-box transform, empty-row height and page-break rule; page assignments now
+match the vector exports 50/50 and 32/32. See
+[`heuristics.md`](./heuristics.md#measured-gt-audit-and-controlled-pdfs-2026-07-13).
+
+The remaining Priority-B requests are independent `line_spacing` choices and
+controlled body/heading space-before/after presets. The font-size follow-up is
+closed for the observed sizes; intermediate sizes are no longer necessary to
+derive the linear advance, though they would remain useful counterexamples.
+
+4. **Samsung line-height and pagination model — exact remaining campaign.**
+   Font-size advance, font-matched empty rows and whole-line pagination are now
+   grounded. To close Priority B completely, provide the following controls.
+   Separate `.sdocx` files are strongly preferred: they prevent a style change
+   from leaving hidden state on the following block.
+
+   **A. One note for each remaining line-spacing choice (required).** The
+   existing systematic size-15 note is already the control for its current
+   spacing, so do not recreate that setting.
+
+   - Portrait document/body text only: no handwriting, lists, headings, blank
+     lines, tables, images, text boxes or manual page objects.
+   - Keep the same default font family and stored size **15** throughout.
+   - Select exactly one of Samsung Notes' other line-spacing choices and enter
+     **50 short explicit lines**, enough to cross at least one automatic break:
+     `LS <setting> LINE 001 - Hgjpqy 0123456789`, incrementing only the number.
+   - Make one file per spacing choice and put the UI setting in its filename,
+     for example `TypedText-LineSpacing-Narrow` / `...-Wide`. If the UI shows
+     only icons, include a screenshot of the selected icon and number them from
+     narrowest to widest.
+   - Keep portrait size and page template fixed. Medium square grid is useful,
+     but use the same template as the existing systematic sample if possible.
+
+   **B. One paragraph-style transition note (required).** This isolates the
+   independently decoded `space_before`, `space_after` and style presets.
+
+   - Default font family, stored size **15**, and the same line-spacing choice
+     used by the existing systematic sample. No blank lines or wrapping.
+   - Start with 8 consecutive plain/default-body paragraphs:
+     `BODY CONTROL 01 - Hgjpqy`, through `08`.
+   - For every paragraph preset exposed by the UI (Body/default, Body 1,
+     Body 2, Heading 3, Heading 2, Heading 1), add this alternating sequence,
+     with the preset applied only to each `STYLE` line:
+
+     ```text
+     BODY <preset> 01 - Hgjpqy
+     STYLE <preset> 01 - Hgjpqy
+     BODY <preset> 02 - Hgjpqy
+     STYLE <preset> 02 - Hgjpqy
+     BODY <preset> 03 - Hgjpqy
+     STYLE <preset> 03 - Hgjpqy
+     BODY <preset> 04 - Hgjpqy
+     STYLE <preset> 04 - Hgjpqy
+     ```
+
+     Alternating both directions is intentional: `BODY → STYLE` isolates the
+     style's leading gap, while `STYLE → BODY` isolates its trailing gap.
+   - Do not manually change font size after choosing a preset: we need the
+     preset's native size and spacing exactly as Samsung applies them.
+   - If Samsung exposes manual paragraph space-before/after controls, make a
+     separate note for each non-default value using the same 8-line alternating
+     pattern. If those controls do not exist, nothing extra is needed.
+
+   **C. In-app ground truth for glyph anchoring (required, no new note).** The
+   vector PDFs determine line-box spacing exactly, but not whether Samsung's
+   editor uses the same font anchor as its PDF exporter.
+
+   - Capture every visible page of the two already delivered notes
+     `OnlyTypeWrittenTextDifferentFont_260713_212408` and
+     `OnlytextTypewritten-Sistematic-carattere15_260713_212435` directly in
+     Samsung Notes, especially the pages containing size 64.
+   - Hide keyboard, caret, selection and editing handles. Use one unchanged zoom
+     and include the full page edges. Lossless device screenshots are preferred;
+     otherwise use perpendicular photos with all four corners visible.
+
+   **For every new note:** export `.sdocx` and PDF from the exact same settled
+   state as the captures, without editing between them. Keep captures in page
+   order and record Samsung Notes version, device model, display/font scaling,
+   selected font family, font size, line-spacing choice and page template.
+
+   With A+B+C, the remaining line-spacing multipliers, paragraph-gap conversion,
+   page-break behaviour and editor glyph anchors are independently measurable;
+   no further typed-text-layout sample should be necessary unless one of these
+   controls reveals a new format flag or a PDF/editor divergence.
+
 ## Open — Priority C: text/objects
 
-4. **Text-box wrap heuristic**: `TextboxAllAngles` proved geometry but its
+5. **Text-box wrap heuristic**: `TextboxAllAngles` proved geometry but its
    4-character text is too short to calibrate wrapping. Need a **long
    identical string in identical-size boxes at 0/90/180/270°** — same text,
    same box dimensions, only rotation varies.
-5. **PARTIAL — `Mathsolver&Hyperlink`:** the hyperlink is an inline Web object
+6. **PARTIAL — `Mathsolver&Hyperlink`:** the hyperlink is an inline Web object
    type 13, not span type 9; Math Solver emits ordinary styled text plus
    per-stroke `RecogUIFeature_MathStrokeUuidStringArray`, not formula span 23.
    A different-font run (type 4), and direct span types 9/23 if the current UI
    can produce them, remain open.
-6. Text box with **vertical alignment** centre/bottom → `Common` gravity
+7. Text box with **vertical alignment** centre/bottom → `Common` gravity
    values 1/2 (corpus is all 0 today).
-7. **DONE — Web object:** `Mathsolver&Hyperlink` contains inline object type 13
+8. **DONE — Web object:** `Mathsolver&Hyperlink` contains inline object type 13
    anchored in the body text, its URL/preview payload, and an `@web_*.jpg`
    thumbnail. Corrected: this is a text-inline object, not a page object.
-8. **Audio variants**: multi-recording note, a renamed recording, and one
+9. **Audio variants**: multi-recording note, a renamed recording, and one
    where the audio widget is visibly placed on the page → settles whether
    page object type 10 (Audio) ever appears in exports.
-9. **Image inserted then deleted**, and one **image reused twice** in the
+10. **Image inserted then deleted**, and one **image reused twice** in the
    same note → `mediaInfo.dat` `ref_count` / `is_attached` edge semantics.
 
 ## Open — Priority D: existing campaigns
 
-10. **`HDR_EXT.counter` isolation**: create one shape, duplicate it, modify
+11. **`HDR_EXT.counter` isolation**: create one shape, duplicate it, modify
     one copy, copy it to another page → separates object lineage vs. group
     lineage vs. copy/edit generation.
-11. **Absolute-f64 stroke variant**: reproduce the coordinate-pair (not
+12. **Absolute-f64 stroke variant**: reproduce the coordinate-pair (not
     delta) stroke encoding seen on a couple of benchmark pages — suspicion
     is shape-converted or imported strokes.
 

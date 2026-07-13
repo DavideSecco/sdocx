@@ -7,14 +7,19 @@ from pysdocx.note import parse_typed_text
 from pysdocx.note_doc import common_frame_paragraphs, note_doc_common_frames, parse_note_doc
 from pysdocx.page import (_parse_object_header, page_background_color, page_template,
                          page_thumbnail_media_index, parse_page, parse_page_tree)
-from pysdocx.render import debug_text_box_layout
+from pysdocx.measure_typed_text_gt import detect_horizontal_ink_bands
+from pysdocx.render import debug_text_box_layout, paginate_typed_text
 from tests.golden import compute_reports, corpus_snapshot, load_golden
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = ROOT / "samples"
 ONLY_TEXT_SQUARED = SAMPLES / "OnlyTextTypeWritten_squared_260703_013624.sdocx"
+ONLY_TEXT_GT = SAMPLES / "OnlyTextTypeWritten_260701_180427_gt"
+ONLY_TEXT_SQUARED_GT = SAMPLES / "OnlyTextTypeWritten_squared_260703_013624"
 MATH_WEB = SAMPLES / "Mathsolver&Hyperlink_260711_180442.sdocx"
+TYPED_TEXT_MIXED_FONTS = SAMPLES / "OnlyTypeWrittenTextDifferentFont_260713_212408.sdocx"
+TYPED_TEXT_UNIFORM_15 = SAMPLES / "OnlytextTypewritten-Sistematic-carattere15_260713_212435.sdocx"
 # Every sample contributes exactly one end_tag.bin/mediaInfo.dat/pageIdInfo.dat/note.note, so
 # "how many of the corpus files exhibit this per-file structural fact" is definitionally the
 # sample count, not a number to hand-update each time a sample is added.
@@ -188,6 +193,81 @@ class TextBoxLayoutRegressionTest(unittest.TestCase):
                 "testo in grassetto e in ",
                 "corsivo ruotato di 90 gradi",
             ],
+        )
+
+
+class TypedTextGroundTruthMeasurementTest(unittest.TestCase):
+    """The two independently captured GT sets must yield the same ink rows."""
+
+    def test_plain_and_squared_screenshots_agree(self) -> None:
+        plain = [
+            ONLY_TEXT_GT / "photo_2026-07-01_18-06-27.jpg",
+            ONLY_TEXT_GT / "photo_2026-07-01_18-06-58.jpg",
+        ]
+        squared = [
+            ONLY_TEXT_SQUARED_GT / "photo_2026-07-03_01-38-42.jpg",
+            ONLY_TEXT_SQUARED_GT / "photo_2026-07-03_01-38-51.jpg",
+        ]
+        for path in plain + squared:
+            require_sample(path)
+
+        expected_typed_lines = [21, 11]
+        for page, expected in enumerate(expected_typed_lines):
+            plain_bands, plain_w, plain_h = detect_horizontal_ink_bands(plain[page])
+            squared_bands, squared_w, squared_h = detect_horizontal_ink_bands(squared[page])
+            self.assertEqual((plain_w, plain_h), (905, 1280))
+            self.assertEqual((squared_w, squared_h), (905, 1280))
+            self.assertGreaterEqual(len(plain_bands), expected)
+            self.assertGreaterEqual(len(squared_bands), expected)
+            if page == 0:
+                self.assertEqual(len(plain_bands), expected)
+                self.assertEqual(len(squared_bands), expected)
+
+            differences = [
+                abs(a.center_px - b.center_px)
+                for a, b in zip(plain_bands[:expected], squared_bands[:expected])
+            ]
+            self.assertLessEqual(max(differences), 0.5)
+
+
+class ControlledTypedTextLayoutTest(unittest.TestCase):
+    @staticmethod
+    def _pages(path: Path) -> list[list[dict]]:
+        require_sample(path)
+        note = load_note(path)
+        assert note is not None
+        typed = parse_typed_text(note)
+        assert typed is not None
+        page_name = list_pages(path)[0]
+        _name, page_data = load_page(path, page_name)
+        page = parse_page(page_data)
+        return paginate_typed_text(typed, page["width"], page["height"], (9, 12))
+
+    def test_uniform_15pt_matches_vector_pdf_page_breaks(self) -> None:
+        pages = self._pages(TYPED_TEXT_UNIFORM_15)
+        self.assertEqual([len(page) for page in pages], [24, 24, 2])
+        for page in pages:
+            self.assertTrue(all(b["y"] - a["y"] == 90.0 for a, b in zip(page, page[1:])))
+
+    def test_mixed_fonts_and_blank_rows_match_vector_pdf_page_breaks(self) -> None:
+        pages = self._pages(TYPED_TEXT_MIXED_FONTS)
+        self.assertEqual([len(page) for page in pages], [23, 6, 3])
+        self.assertEqual([line["y"] for line in pages[2]], [80.0, 464.0, 848.0])
+        self.assertEqual(
+            [b["y"] - a["y"] for a, b in zip(pages[0][:8], pages[0][1:8])],
+            [66.0] * 7,
+        )
+        self.assertEqual(
+            [b["y"] - a["y"] for a, b in zip(pages[0][8:16], pages[0][9:16])],
+            [84.0] * 7,
+        )
+        self.assertEqual(
+            [b["y"] - a["y"] for a, b in zip(pages[0][16:23], pages[0][17:23])],
+            [114.0] * 6,
+        )
+        self.assertEqual(
+            [b["y"] - a["y"] for a, b in zip(pages[1][1:], pages[1][2:])],
+            [384.0] * 4,
         )
 
 
@@ -379,7 +459,7 @@ class StructuralParagraphRegressionTest(unittest.TestCase):
             for i, lg in enumerate(legacy["paragraphs"]):
                 self.assertEqual(structural[i + offset], lg, (sample.name, i))
                 checked += 1
-        self.assertEqual(checked, 212)
+        self.assertEqual(checked, 300)
 
 
 if __name__ == "__main__":

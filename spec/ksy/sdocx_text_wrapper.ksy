@@ -154,6 +154,9 @@ types:
         type: common_frame
         size: common_size
         if: (header.field_flags.value & 1) != 0
+      - id: shape_field_11_f32
+        type: f4
+        if: (header.field_flags.value & 0x800) != 0
       - id: ellipsis_type
         type: u1
         if: (header.field_flags.value & 0x1000) != 0

@@ -41,7 +41,9 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
 - **Shape/Text wrapper residue:** the full ObjectBase → ShapeBase → Shape →
   Text chain and its frame boundaries are decoded and Kaitai-gated. Common is
   reached by Shape's `flex_offset`, not scanning. Remaining micro-unknowns are
-  the semantics of constant ShapeBase bytes and the 32-byte hash-like trailer
+  the semantics of constant ShapeBase bytes, Shape flex bit 11's optional f32
+  (`11.0` on the sole mixed-font instance; exposed as `shape_field_11_f32`),
+  and the 32-byte hash-like trailer
   on page text boxes (0/16 match `sha256(wrapper_without_trailer)`).
 - **Tables:** framing, geometry, cell character/fill styling, column widths,
   outer/inner borders and theme fill are decoded and Kaitai-gated on 20 tables

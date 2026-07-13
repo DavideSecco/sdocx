@@ -52,10 +52,10 @@ TODO_DONE_COLOR = (150, 150, 150)
 TABLE_LINE_COLOR = "#8a8f9a"
 
 # Page-coordinate units per unit of decoded paragraph space-before/after (note.py tags 0x08/0x09).
-# ⚠ HEURISTIC: the space values are decoded from the file, but this scale factor is calibrated
-# against the squared ground truth (OnlyTextTypeWritten_squared): body1→heading3 = 207 page units,
-# heading2→heading1 = 222, both matched within ~3% at 4.9. Re-verify if a new sample disagrees.
-PARA_SPACE_UNIT = 4.9
+# ⚠ HEURISTIC: the stored values are decoded, while this scale is fitted against the typed-text
+# GT. The controlled 2026-07-13 samples ground font/blank advances exactly; the mixed heading GT
+# leaves this small independent conversion at 5.0 (best fit; former eyeballed value 4.9).
+PARA_SPACE_UNIT = 5.0
 
 # Typed-text layout geometry (page coordinates). x0/y0 = top-left text anchor; line_h = body line
 # pitch (matches the GT grid at 11pt); fontpt = base point size.
@@ -63,13 +63,20 @@ TYPED_TEXT_X0 = 64
 TYPED_TEXT_Y0 = 80
 TYPED_TEXT_FONTPT = 17
 TYPED_TEXT_LINE_H = 66
-# ⚠ HEURISTIC: an empty paragraph's height. Text lines match the grid at line_h=66, but blank
-# paragraphs measure taller in the GT; 75 lands the known anchors (Testo normale top≈74, heading3
-# top≈1944 on OnlyTextTypeWritten_squared) and is what makes heading2 fall to page 2. Re-verify if
-# a new sample disagrees.
-TYPED_TEXT_BLANK_H = 75
-# Keep a whole line off the very bottom edge before pushing it to the next page.
-TYPED_TEXT_PAGE_PAD = 40
+# Retained as the legacy text-box/default function argument; document-body blank rows use the
+# active newline font through `_typed_note_advance` below.
+TYPED_TEXT_BLANK_H = 66
+# Samsung PDF ground truth exposes the exact typed-note transform: stored font size → PDF font is
+# *5/3, PDF → page units is *8/3, and the default line-spacing multiplier is 1.35. Therefore the
+# default baseline pitch is raw_font_size * 6; explicit line_spacing replaces 1.35. Blank lines
+# retain the font size carried by their newline. The decoded Common body margins are [16,10,16,10]
+# in the same logical font unit, so the vertical content band removes 10 * 40/9 at both ends.
+TYPED_TEXT_FONT_TO_PAGE = 40.0 / 9.0
+TYPED_TEXT_DEFAULT_LINE_SPACING = 1.35
+TYPED_TEXT_VERTICAL_MARGIN = 10.0 * TYPED_TEXT_FONT_TO_PAGE
+# Checkbox controls impose a taller row than 11pt text alone. This remains a render calibration:
+# the old GT directly measures consecutive todo pitches at 77.76 and 75.99 page units.
+TYPED_TEXT_TODO_MIN_H = (77.76 + 75.99) / 2.0
 
 # ⚠ HEURISTIC: text-box frame_midpoints describe the outer rotated frame, but Samsung lays text
 # out inside a smaller inner frame. Keeping the decoded anchor fixed and shrinking only the logical
@@ -670,6 +677,22 @@ def _blank_advance(blank_h, paragraph):
     return blank_h * _paragraph_spacing(paragraph)
 
 
+def _typed_note_advance(raw_font_size: float, paragraph: dict | None) -> float:
+    """Samsung document-body line-box advance, grounded by vector PDF GT."""
+    spacing = (paragraph or {}).get("line_spacing")
+    if not isinstance(spacing, (int, float)) or spacing != spacing or spacing <= 0:
+        spacing = TYPED_TEXT_DEFAULT_LINE_SPACING
+    advance = raw_font_size * TYPED_TEXT_FONT_TO_PAGE * spacing
+    if _is_todo(paragraph):
+        advance = max(advance, TYPED_TEXT_TODO_MIN_H)
+    return advance
+
+
+def _is_todo(paragraph: dict | None) -> bool:
+    item = (paragraph or {}).get("list")
+    return bool(item and item.get("type") == "todo")
+
+
 def _draw_text_segment(
     ax,
     renderer,
@@ -800,6 +823,7 @@ def _render_rich_text(
     angle_deg=0.0,
     line_dir=1.0,
     sink=None,
+    typed_note_model=False,
 ):
     """Shared rich-text renderer for note.note typed text and in-page text boxes.
 
@@ -818,6 +842,7 @@ def _render_rich_text(
     inv = ax.transData.inverted()
     bold, italic, underline, strike, color, highlight, font_size = _char_styles(parsed)
     paragraphs = parsed.get("paragraphs") or []
+    default_raw_font_size = float(parsed.get("font_size") or 11.0)
 
     def emit(x, y, seg, style, line_h_cur):
         if sink is None:
@@ -840,7 +865,18 @@ def _render_rich_text(
         space_before = ((paragraph or {}).get("space_before") or 0.0) * PARA_SPACE_UNIT
         space_after = ((paragraph or {}).get("space_after") or 0.0) * PARA_SPACE_UNIT
         y += space_before * line_dir
-        rendered_line_h = _line_advance(line_h, paragraph, _line_fontpt(font_size, line_start, line_end, fontpt), fontpt)
+        raw_sizes = [fs for fs in font_size[line_start:line_end] if fs]
+        raw_line_font_size = max(raw_sizes, default=default_raw_font_size)
+        rendered_line_h = (
+            _typed_note_advance(raw_line_font_size, paragraph)
+            if typed_note_model
+            else _line_advance(
+                line_h,
+                paragraph,
+                _line_fontpt(font_size, line_start, line_end, fontpt),
+                fontpt,
+            )
+        )
         indent = (paragraph or {}).get("indent") or 0
         line_x0 = x0 + indent * 70
         line_max_width = max(max_width - indent * 70, fontpt * 4)
@@ -878,8 +914,19 @@ def _render_rich_text(
                     line_x0 += line_max_width - line_width
         max_x = line_x0 + line_max_width
         if not line:
+            if typed_note_model:
+                # The newline itself carries the active font of an empty paragraph. This is what
+                # makes the controlled 11/14/19pt blank rows match their preceding blocks.
+                blank_raw = (
+                    font_size[line_start]
+                    if line_start < len(font_size) and font_size[line_start]
+                    else default_raw_font_size
+                )
+                blank_advance = _typed_note_advance(blank_raw, paragraph)
+            else:
+                blank_advance = _blank_advance(blank_h, paragraph)
             gi += 1
-            y += (_blank_advance(blank_h, paragraph) + space_after) * line_dir
+            y += (blank_advance + space_after) * line_dir
             continue
         x = line_x0
         i = 0
@@ -975,16 +1022,16 @@ def render_typed_text(ax, parsed, bg_color, x0=TYPED_TEXT_X0, y0=TYPED_TEXT_Y0,
     return _render_rich_text(
         ax, parsed, x0=x0, y0=y0, max_width=max(ax.get_xlim()) - x0,
         line_h=line_h, blank_h=blank_h, fontpt=fontpt, default_ink=default_ink,
+        typed_note_model=True,
     )
 
 
-def _paginate_segments(sink, y0, page_height, bottom_pad=TYPED_TEXT_PAGE_PAD):
+def _paginate_segments(sink, y0, page_height):
     """Group recorded segments into visual lines and split them across page-height bands.
 
-    Samsung paginates typed text by whole lines: a line whose bottom would cross the page height
-    is pushed entirely to the top of the next page (leaving whitespace below on the current one),
-    it is never clipped mid-line. Returns a list of pages, each a list of `{"y", "segs"}` visual
-    lines with `y` already rebased to the page (first line of every page sits at `y0`).
+    Samsung paginates typed text by whole line boxes inside the decoded Common body's vertical
+    margins. A break retains the inter-line gap immediately before the bumped line (notably a
+    heading's space-before), while a uniform paragraph starts the next page with no extra gap.
     """
     lines: list[dict] = []
     by_y: dict[float, dict] = {}
@@ -1001,15 +1048,19 @@ def _paginate_segments(sink, y0, page_height, bottom_pad=TYPED_TEXT_PAGE_PAD):
 
     pages: list[list[dict]] = []
     current: list[dict] = []
-    base = 0.0
+    content_height = page_height - 2.0 * TYPED_TEXT_VERTICAL_MARGIN
+    base = lines[0]["y"] if lines else y0
+    previous = None
     for ln in lines:
-        y_page = ln["y"] - base
-        if current and y_page + ln["advance"] > page_height - bottom_pad:
+        flow_y = ln["y"] - base
+        if current and flow_y + ln["advance"] > content_height:
             pages.append(current)
             current = []
-            base = ln["y"] - y0
-            y_page = y0
-        current.append({"y": y_page, "segs": ln["segs"]})
+            lead_gap = max(0.0, ln["y"] - (previous["y"] + previous["advance"]))
+            base = ln["y"] - lead_gap
+            flow_y = lead_gap
+        current.append({"y": y0 + flow_y, "segs": ln["segs"]})
+        previous = ln
     if current:
         pages.append(current)
     return pages
@@ -1025,7 +1076,7 @@ def paginate_typed_text(parsed, width, height, figsize, default_ink=DEFAULT_INK)
         _render_rich_text(
             ax, parsed, x0=TYPED_TEXT_X0, y0=TYPED_TEXT_Y0, max_width=width - TYPED_TEXT_X0,
             line_h=TYPED_TEXT_LINE_H, blank_h=TYPED_TEXT_BLANK_H, fontpt=TYPED_TEXT_FONTPT,
-            default_ink=default_ink, sink=sink,
+            default_ink=default_ink, sink=sink, typed_note_model=True,
         )
     finally:
         plt.close(fig)

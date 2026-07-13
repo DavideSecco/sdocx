@@ -11,7 +11,7 @@ The keyboard-typed text of a note (title + body) and its styling.
   structural parse by
   [`spec/tools/analyze_note_doc.py`](../../../../spec/tools/analyze_note_doc.py).
 - **Status:** the Shape/Text wrapper and `text_core::Common` layout are
-  **Decoded** (56/56 note wrappers plus 16/16 page text boxes, span records
+  **Decoded** (60/60 note wrappers plus 16/16 page text boxes, span records
   equal to the TLV scans with zero counterexamples); page placement in the renderer is **Heuristic**
   ([`../../heuristics.md`](../../heuristics.md)).
 
@@ -61,6 +61,13 @@ chain `ObjectBase(0) → ShapeBase(6) → Shape(7) → Text(2)`: Shape's
 chain and is embedded directly by `sdocx_note.ksy`; exhaustive scanning is now
 used only as an independent corroborator and to enumerate nested table-cell
 frames inside table inline-object bodies.
+
+After Common, Shape flex bit 11 gates one `f32`. It is observed as `11.0` on
+the controlled mixed-font body (whose first/default run is size 11), but one
+instance is not enough to assign that meaning. The parsers therefore expose the
+neutral name `shape_field_11_f32`. Bits 12 and 13 continue to gate
+`ellipsis_type` and `text_auto_fit_type`; all three gates are structurally
+bounded and validated to wrapper EOF.
 
 ## Span records vs the TLV scans
 
@@ -122,7 +129,7 @@ into the same per-paragraph dict shape (`alignment`/`indent`/`style`/
 from `pysdocx.note`'s legacy TLV marker scan. Cross-validated field-for-field
 against the legacy scan, zero counterexamples on every typed-text sample in the
 corpus (`tests/test_pysdocx_regressions.py::StructuralParagraphRegressionTest`,
-212/212 paragraphs across 11 files) — the structural payload fields above are
+300/300 paragraphs across 13 files) — the structural payload fields above are
 exactly the marker scan's `(value, enabled)` pair, just already segmented per
 paragraph instead of requiring a byte scan. The renderer (`render.py`) still
 reads paragraphs from the legacy scan (unchanged, still the verified path
@@ -161,7 +168,7 @@ consumption are Decoded.
 
 `_find_text_field` locates the body as the longest printable UTF-16LE run
 whose preceding `u32` char-count header matches its length (tolerance ±2). It
-finds exactly the Common frame text (8/8 text-bearing notes) without knowing
+finds exactly the Common frame text (10/10 text-bearing notes) without knowing
 the frame; kept because the renderer consumes its output and it degrades
 gracefully on hostile input.
 
@@ -169,7 +176,8 @@ gracefully on hostile input.
 
 - **Decoded:** the Common frame layout above; all span/paragraph records;
   margins and gravity; inline-object anchoring; table cells as nested frames.
-- **Unknown:** `section_data` pair semantics; paragraph type 6 semantics; the
+- **Unknown:** Shape flex bit-11 `f32` semantics; `section_data` pair semantics;
+  paragraph type 6 semantics; the
   non-boolean strikethrough payloads; the trailing `(3,2)`/`(0,0)` u32 pair of
   inline objects; embedded image internals; Web field 7 semantics.
 - **Heuristic (renderer, not format):** how the decoded text is laid out and

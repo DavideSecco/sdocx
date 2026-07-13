@@ -340,11 +340,12 @@ function drawSegPiece(
 // source line's advance, `pieces` the styled runs to draw at their x within the row.
 interface VisLine { y: number; advance: number; pieces: { seg: STextSeg; text: string; x: number }[] }
 
-// pysdocx typed-note pagination constants (render.py TYPED_TEXT_Y0 / _paginate_segments
-// default bottom_pad). The note body flows from the top margin y0 and a line whose
-// bottom would cross `band_height - PAGE_PAD` is bumped whole to the next band.
-const TYPED_TEXT_Y0 = 80;
-const TYPED_TEXT_PAGE_PAD = 40;
+// The document body's decoded Common margins are [16,10,16,10]. Samsung's
+// exact typed-text transform is stored unit -> PDF *5/3 -> page unit *8/3,
+// so each vertical margin occupies 10*40/9 page units. Pagination operates on
+// line boxes inside that content band; drawing keeps the separately calibrated
+// anchor carried by SceneText.
+const TYPED_TEXT_VERTICAL_MARGIN = 10 * 40 / 9;
 
 // Flow a rich text block into positioned visual rows with measured wrapping
 // (pysdocx _render_rich_text's segment loop, one source `line` per paragraph).
@@ -475,25 +476,26 @@ function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine
   return out;
 }
 
-// Split laid-out rows into page-height bands and keep only band `slot`, rebasing
-// each kept row's `y` to the page anchor. Mirrors pysdocx `_paginate_segments`:
-// the first row of every band sits at the top margin, and a row is bumped whole
-// to the next band when its bottom would cross `band_height - PAGE_PAD`.
+// Split laid-out rows into page-height bands and keep only band `slot`. A
+// heading bumped to a new page retains its preceding inter-line gap; uniform
+// rows have a zero gap and start directly at the SceneText anchor.
 function paginateLines(lines: VisLine[], slot: number, bandHeight: number): VisLine[] {
   const bands: VisLine[][] = [];
   let cur: VisLine[] = [];
-  let base = 0;
+  const contentHeight = bandHeight - 2 * TYPED_TEXT_VERTICAL_MARGIN;
+  let base = lines[0]?.y ?? 0;
+  let previous: VisLine | null = null;
   for (const ln of lines) {
-    const absY = TYPED_TEXT_Y0 + ln.y;
-    let yPage = absY - base;
-    if (cur.length && yPage + ln.advance > bandHeight - TYPED_TEXT_PAGE_PAD) {
+    let yPage = ln.y - base;
+    if (cur.length && yPage + ln.advance > contentHeight) {
       bands.push(cur);
       cur = [];
-      base = absY - TYPED_TEXT_Y0;
-      yPage = TYPED_TEXT_Y0;
+      const leadGap = previous ? Math.max(0, ln.y - (previous.y + previous.advance)) : 0;
+      base = ln.y - leadGap;
+      yPage = leadGap;
     }
-    // Draw offset is measured from the anchor (already at TYPED_TEXT_Y0).
-    cur.push({ y: yPage - TYPED_TEXT_Y0, advance: ln.advance, pieces: ln.pieces });
+    cur.push({ y: yPage, advance: ln.advance, pieces: ln.pieces });
+    previous = ln;
   }
   if (cur.length) bands.push(cur);
   return bands[slot] ?? [];
