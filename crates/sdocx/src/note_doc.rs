@@ -22,8 +22,8 @@
 //! fill). Validated against pysdocx `note_doc_tables` by `tests/note_tables.rs`.
 
 use crate::types::{
-    BoundingBox, Color, ColorRun, FontSizeRun, NoteTable, NoteTableCell, Point, RichTextBox,
-    RichTextRun, TableBorder, TableCellSpan,
+    Alignment, BoundingBox, Color, ColorRun, FontSizeRun, ListItem, NoteTable, NoteTableCell,
+    ParagraphInfo, ParagraphStyle, Point, RichTextBox, RichTextRun, TableBorder, TableCellSpan,
 };
 
 /// Inline objects appear in Common frames only from this format version on
@@ -165,11 +165,24 @@ struct InlineObject {
     body_off: usize,
 }
 
+/// One decoded structural paragraph record within a Common frame (pysdocx
+/// `parse_common_frame`'s `paragraphs`). `start`/`end` index paragraphs
+/// (`text.split('\n')`), not characters. `extra` is the raw `size - 12`
+/// payload; see `structural_paragraphs` for how `paragraph_type` gates its
+/// interpretation.
+struct FrameParagraph {
+    paragraph_type: u32,
+    start: u32,
+    end: u32,
+    extra: Vec<u8>,
+}
+
 /// A parsed `text_core::Common` exclusive frame.
 struct CommonFrame {
     frame_size: usize,
     text: String,
     spans: Vec<FrameSpan>,
+    paragraphs: Vec<FrameParagraph>,
     inline_objects: Vec<InlineObject>,
 }
 
@@ -213,10 +226,15 @@ fn parse_common_frame(blob: &[u8], off: usize, format_version: u32) -> R<CommonF
     if paragraph_count > win.remaining() / (2 + PARAGRAPH_BASE_SIZE) + 1 {
         return Err("paragraph count too large");
     }
+    let mut paragraphs = Vec::with_capacity(paragraph_count);
     for _ in 0..paragraph_count {
         let size = win.u16()? as usize;
         ensure(size >= PARAGRAPH_BASE_SIZE, "paragraph record too small")?;
-        win.bytes(size)?; // paragraph_type + start + end + extra
+        let paragraph_type = win.u32()?;
+        let start = win.u32()?;
+        let end = win.u32()?;
+        let extra = win.bytes(size - PARAGRAPH_BASE_SIZE)?.to_vec();
+        paragraphs.push(FrameParagraph { paragraph_type, start, end, extra });
     }
 
     let _margins = [win.f32()?, win.f32()?, win.f32()?, win.f32()?];
@@ -255,7 +273,7 @@ fn parse_common_frame(blob: &[u8], off: usize, format_version: u32) -> R<CommonF
         }
     }
 
-    Ok(CommonFrame { frame_size, text, spans, inline_objects })
+    Ok(CommonFrame { frame_size, text, spans, paragraphs, inline_objects })
 }
 
 /// All offsets in `blob` where a complete Common frame parses cleanly (pysdocx
@@ -485,6 +503,104 @@ pub(crate) struct WrapperRichText {
     pub colors: Vec<ColorRun>,
     pub highlights: Vec<ColorRun>,
     pub font_sizes: Vec<FontSizeRun>,
+    pub paragraphs: Vec<ParagraphInfo>,
+}
+
+fn u32_at(b: &[u8], off: usize) -> Option<u32> {
+    Some(u32::from_le_bytes(b.get(off..off + 4)?.try_into().ok()?))
+}
+
+fn f32_at(b: &[u8], off: usize) -> Option<f32> {
+    u32_at(b, off).map(f32::from_bits)
+}
+
+/// Decode a Common frame's structural `paragraphs` records into per-paragraph
+/// layout metadata, aligned index-for-index with `frame.text.split('\n')`
+/// (straight port of pysdocx `note_doc.common_frame_paragraphs` — see its
+/// docstring for the `paragraph_type` -> payload-field mapping, validated
+/// zero-counterexample against the legacy TLV marker scan on the whole
+/// corpus).
+fn structural_paragraphs(frame: &CommonFrame) -> Vec<ParagraphInfo> {
+    let paragraph_count = frame.text.split('\n').count();
+    let mut paragraphs = vec![ParagraphInfo::default(); paragraph_count];
+    for rec in &frame.paragraphs {
+        let (start, end) = (rec.start as usize, rec.end as usize);
+        if !(start < end && end <= paragraph_count) {
+            continue;
+        }
+        let extra = &rec.extra;
+        for p in &mut paragraphs[start..end] {
+            match rec.paragraph_type {
+                2 => {
+                    if let (Some(value), Some(enabled)) = (u32_at(extra, 0), u32_at(extra, 4))
+                        && enabled != 0
+                    {
+                        p.indent = value;
+                    }
+                }
+                3 => {
+                    if let Some(value) = u32_at(extra, 0) {
+                        p.alignment = match value {
+                            0 => Alignment::Left,
+                            1 => Alignment::Right,
+                            2 => Alignment::Center,
+                            _ => p.alignment,
+                        };
+                    }
+                }
+                4 => {
+                    if let Some(spacing) = f32_at(extra, 4)
+                        && spacing.is_finite()
+                        && (0.5..=4.0).contains(&spacing)
+                    {
+                        p.line_spacing = Some(spacing);
+                    }
+                }
+                5 => {
+                    if let (Some(kind), Some(value), Some(enabled)) =
+                        (u32_at(extra, 0), u32_at(extra, 4), u32_at(extra, 12))
+                        && enabled != 0
+                    {
+                        p.list = match kind {
+                            4 => Some(ListItem::Numbered { number: value }),
+                            8 => Some(ListItem::Bullet),
+                            2 => Some(ListItem::Todo { checked: value != 0 }),
+                            _ => p.list,
+                        };
+                    }
+                }
+                8 => {
+                    if let Some(value) = f32_at(extra, 0)
+                        && value.is_finite()
+                        && (0.0..=200.0).contains(&value)
+                    {
+                        p.space_before = value;
+                    }
+                }
+                9 => {
+                    if let Some(value) = f32_at(extra, 0)
+                        && value.is_finite()
+                        && (0.0..=200.0).contains(&value)
+                    {
+                        p.space_after = value;
+                    }
+                }
+                10 => {
+                    if let Some(value) = u32_at(extra, 0) {
+                        p.style = match value {
+                            0 => Some(ParagraphStyle::Heading1),
+                            1 => Some(ParagraphStyle::Heading2),
+                            2 => Some(ParagraphStyle::Heading3),
+                            3 => Some(ParagraphStyle::Body1),
+                            _ => p.style,
+                        };
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    paragraphs
 }
 
 fn common_frame_rich_text(frame: &CommonFrame) -> Option<WrapperRichText> {
@@ -534,7 +650,8 @@ fn common_frame_rich_text(frame: &CommonFrame) -> Option<WrapperRichText> {
             _ => {}
         }
     }
-    Some(WrapperRichText { text, runs, colors, highlights, font_sizes })
+    let paragraphs = structural_paragraphs(frame);
+    Some(WrapperRichText { text, runs, colors, highlights, font_sizes, paragraphs })
 }
 
 /// Decode a raw type-2 page text-box blob through the structural wrapper and
@@ -577,6 +694,7 @@ pub(crate) fn wrapper_rich_text_box(
         highlights: rt.highlights,
         font_sizes: rt.font_sizes,
         frame_midpoints,
+        paragraphs: rt.paragraphs,
     }
 }
 
@@ -1028,6 +1146,67 @@ mod wrapper_parity {
                 "{ctx}: common_char_count"
             );
             assert_eq!(c.spans.len() as u64, u("common_span_count"), "{ctx}: common_span_count");
+            assert_paragraphs(ctx, c, &e["paragraphs"]);
+        }
+    }
+
+    /// `structural_paragraphs` (the semantic decode of a Common frame's raw
+    /// `paragraphs` records) must match pysdocx `common_frame_paragraphs`
+    /// field-for-field: alignment, indent, style, line_spacing, space_before/
+    /// after, and list marker.
+    fn assert_paragraphs(ctx: &str, frame: &CommonFrame, want: &serde_json::Value) {
+        let want = want.as_array().unwrap();
+        let got = structural_paragraphs(frame);
+        assert_eq!(got.len(), want.len(), "{ctx}: paragraph count");
+        for (i, (g, w)) in got.iter().zip(want).enumerate() {
+            let pctx = format!("{ctx} paragraph[{i}]");
+            let got_align = match g.alignment {
+                Alignment::Left => "left",
+                Alignment::Right => "right",
+                Alignment::Center => "center",
+            };
+            assert_eq!(got_align, w["alignment"].as_str().unwrap(), "{pctx}: alignment");
+            assert_eq!(g.indent as u64, w["indent"].as_u64().unwrap(), "{pctx}: indent");
+
+            let got_style = g.style.map(|s| match s {
+                ParagraphStyle::Heading1 => "heading1",
+                ParagraphStyle::Heading2 => "heading2",
+                ParagraphStyle::Heading3 => "heading3",
+                ParagraphStyle::Body1 => "body1",
+            });
+            assert_eq!(got_style, w["style"].as_str(), "{pctx}: style");
+
+            match w["line_spacing"].as_f64() {
+                Some(v) => assert!(
+                    close(g.line_spacing.unwrap() as f64, v, 1e-4),
+                    "{pctx}: line_spacing"
+                ),
+                None => assert!(g.line_spacing.is_none(), "{pctx}: line_spacing != None"),
+            }
+            assert!(
+                close(g.space_before as f64, w["space_before"].as_f64().unwrap(), 1e-4),
+                "{pctx}: space_before"
+            );
+            assert!(
+                close(g.space_after as f64, w["space_after"].as_f64().unwrap(), 1e-4),
+                "{pctx}: space_after"
+            );
+
+            match (&g.list, &w["list"]) {
+                (None, serde_json::Value::Null) => {}
+                (Some(ListItem::Numbered { number }), v) => {
+                    assert_eq!(v["type"].as_str().unwrap(), "numbered", "{pctx}: list type");
+                    assert_eq!(*number as u64, v["number"].as_u64().unwrap(), "{pctx}: list number");
+                }
+                (Some(ListItem::Bullet), v) => {
+                    assert_eq!(v["type"].as_str().unwrap(), "bullet", "{pctx}: list type");
+                }
+                (Some(ListItem::Todo { checked }), v) => {
+                    assert_eq!(v["type"].as_str().unwrap(), "todo", "{pctx}: list type");
+                    assert_eq!(*checked, v["checked"].as_bool().unwrap(), "{pctx}: list checked");
+                }
+                (g, w) => panic!("{pctx}: list mismatch got={g:?} want={w:?}"),
+            }
         }
     }
 

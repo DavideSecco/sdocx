@@ -289,6 +289,7 @@ fn parse_note_text(data: &[u8]) -> Option<RichTextBox> {
         highlights: styles.highlights,
         font_sizes: styles.font_sizes,
         frame_midpoints: None,
+        paragraphs: Vec::new(),
     })
 }
 

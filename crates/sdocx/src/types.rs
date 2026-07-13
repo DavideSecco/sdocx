@@ -436,6 +436,71 @@ pub struct RichTextBox {
     /// The 4 stored edge-midpoints of a rotated text-box frame, when present
     /// and self-consistent with `bbox` (see pysdocx `_text_box_frame_midpoints`).
     pub frame_midpoints: Option<[Point; 4]>,
+    /// Per-paragraph layout metadata, aligned index-for-index with
+    /// `text.split('\n')`. Empty when decoded through a legacy fallback path
+    /// that carries no paragraph records (the renderer then treats every line
+    /// as left-aligned, unindented, unstyled, with no extra spacing).
+    pub paragraphs: Vec<ParagraphInfo>,
+}
+
+/// Per-paragraph layout metadata decoded from a Common frame's structural
+/// `paragraphs` records (pysdocx `note_doc.common_frame_paragraphs`; see its
+/// docstring for the exact `paragraph_type` -> payload-field mapping this
+/// mirrors byte-for-byte). Aligned index-for-index with `RichTextBox::text`
+/// split on `'\n'`.
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ParagraphInfo {
+    /// Paragraph text alignment.
+    pub alignment: Alignment,
+    /// Indent level (0 = no indent); the renderer scales this by its own
+    /// indent unit.
+    pub indent: u32,
+    /// Named paragraph style (heading1/2/3, body1), when set.
+    pub style: Option<ParagraphStyle>,
+    /// Decoded line-spacing multiplier, when present.
+    pub line_spacing: Option<f32>,
+    /// Extra space before the paragraph (Samsung logical units).
+    pub space_before: f32,
+    /// Extra space after the paragraph (Samsung logical units).
+    pub space_after: f32,
+    /// List/todo marker, when the paragraph is a list item.
+    pub list: Option<ListItem>,
+}
+
+/// Paragraph text alignment (structural `paragraph_type` 3).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum Alignment {
+    #[default]
+    Left,
+    Right,
+    Center,
+}
+
+/// Named paragraph style (structural `paragraph_type` 10).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum ParagraphStyle {
+    Heading1,
+    Heading2,
+    Heading3,
+    Body1,
+}
+
+/// A list/todo paragraph marker (structural `paragraph_type` 5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case", tag = "kind"))]
+pub enum ListItem {
+    /// Numbered list item; `number` is the displayed ordinal.
+    Numbered { number: u32 },
+    /// Bulleted list item.
+    Bullet,
+    /// Todo checkbox item.
+    Todo { checked: bool },
 }
 
 /// A rich text style run.

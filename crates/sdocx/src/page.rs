@@ -857,6 +857,7 @@ fn parse_text_box_object(blob: &[u8]) -> Option<RichTextBox> {
         highlights: styles.highlights,
         font_sizes: styles.font_sizes,
         frame_midpoints,
+        paragraphs: Vec::new(),
     })
 }
 

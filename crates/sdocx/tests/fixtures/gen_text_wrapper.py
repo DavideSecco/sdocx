@@ -22,7 +22,7 @@ import struct
 import zipfile
 from pathlib import Path
 
-from pysdocx.note_doc import parse_note_doc, parse_text_wrapper
+from pysdocx.note_doc import common_frame_paragraphs, parse_note_doc, parse_text_wrapper
 
 REPO = Path(__file__).resolve().parents[4]
 SAMPLES = REPO / "samples"
@@ -55,6 +55,9 @@ def fields(raw: bytes) -> dict:
         "has_common": common is not None,
         "common_char_count": len(common["text"]) if common else 0,
         "common_span_count": len(common["spans"]) if common else 0,
+        # Semantic paragraph decode (align/indent/style/line_spacing/space_before/
+        # space_after/list) — see note_doc.common_frame_paragraphs's docstring.
+        "paragraphs": common_frame_paragraphs(common) if common else [],
     }
 
 
