@@ -65,11 +65,66 @@ struct SceneTextSeg {
     highlight: Option<[u8; 3]>,
 }
 
+/// A paragraph's list/todo marker glyph, pre-selected and sized here; the
+/// worker measures and reserves its width like any other segment (pysdocx
+/// `_paragraph_prefix` + the prefix-emit block in `_render_rich_text`).
+#[derive(Serialize)]
+struct ScenePrefix {
+    text: String,
+    /// Bridged page-unit font size, like `SceneTextSeg::font`.
+    font: f64,
+    /// The SAME size, unbridged (raw matplotlib points). pysdocx's own
+    /// prefix-gap formula (`prefix_text_w + prefix_pt*0.9`, floor
+    /// `prefix_pt*2.4`) adds this raw point number directly to a page-unit
+    /// glyph-width measurement — a pre-existing unit quirk in the reference
+    /// renderer; kept byte-for-byte rather than "fixed" so the reserved gap
+    /// matches pysdocx's (and thus the GT's) spacing exactly.
+    pt: f64,
+    color: Option<[u8; 3]>,
+}
+
+/// Non-left paragraph alignment (pysdocx only ever shifts a paragraph that
+/// already fits `max_width` unwrapped — see `SceneTextLine::align`'s doc).
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum SceneAlign {
+    Center,
+    Right,
+}
+
 #[derive(Serialize)]
 struct SceneTextLine {
-    /// Baseline-to-baseline advance to the NEXT line, in page units.
+    /// This paragraph's own row height: the baseline-to-baseline advance
+    /// used for every visual row it wraps into (pysdocx `rendered_line_h` /
+    /// `_blank_advance`). Pagination's fit check uses this value alone —
+    /// NOT `lead_gap`/`trail_gap` — matching pysdocx `_paginate_segments`,
+    /// whose per-row `line_h` is this same pre-gap number.
     advance: f64,
-    /// Empty for a blank line (the advance still applies).
+    /// Extra gap added once, before this paragraph's first visual row
+    /// (pysdocx `space_before * PARA_SPACE_UNIT`, added ahead of the
+    /// paragraph's layout).
+    lead_gap: f64,
+    /// Extra gap added once, after this paragraph's last visual row
+    /// (pysdocx `space_after * PARA_SPACE_UNIT`, added once the paragraph's
+    /// lines are laid out).
+    trail_gap: f64,
+    /// Indent offset added to the block anchor's x for every visual row of
+    /// this paragraph, page units (pysdocx `indent * 70`).
+    x_offset: f64,
+    /// This paragraph's own available width before its list-prefix (if any)
+    /// is subtracted: `SceneText::wrap_width - x_offset`, floored at
+    /// `SceneText::min_width` (pysdocx `line_max_width`).
+    max_width: f64,
+    /// `None` = left (pysdocx default). The worker applies this only when
+    /// the paragraph's plain text already fits `max_width` (after the
+    /// prefix is subtracted) without wrapping — a paragraph that wraps
+    /// never centers/right-aligns in pysdocx either.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    align: Option<SceneAlign>,
+    /// List/todo marker, when this paragraph is a list item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prefix: Option<ScenePrefix>,
+    /// Empty for a blank line (the advance/gaps still apply).
     segs: Vec<SceneTextSeg>,
 }
 
@@ -84,6 +139,15 @@ struct SceneText {
     wrap_width: f64,
     /// Clockwise rotation applied around `anchor`, degrees.
     angle_deg: f64,
+    /// This block's plain (non-bold/italic) font size, bridged to page units
+    /// like `SceneTextSeg::font`. Used by the worker only to measure whether
+    /// a paragraph's alignment shift applies (pysdocx measures the alignment
+    /// pre-check at this same plain base size, not per-run sizes).
+    base_font: f64,
+    /// `base fontpt * 4` in the same mixed-unit convention as
+    /// `SceneTextLine::max_width` (pysdocx's wrap-width floor), reused by the
+    /// worker after subtracting a measured list-prefix width.
+    min_width: f64,
     lines: Vec<SceneTextLine>,
     /// Present only for the document-level typed note body: the flow spans the
     /// whole note and is split into page-height bands (pysdocx `paginate_typed_text`).
@@ -532,6 +596,50 @@ const TYPED_TEXT_Y0: f64 = 80.0;
 const TYPED_TEXT_FONTPT: f64 = 17.0;
 const TYPED_TEXT_LINE_H: f64 = 66.0;
 const TYPED_TEXT_BLANK_H: f64 = 75.0;
+/// pysdocx `PARA_SPACE_UNIT`: converts a paragraph's decoded `space_before`/
+/// `space_after` into page units.
+const PARA_SPACE_UNIT: f64 = 4.9;
+/// pysdocx `TODO_DONE_COLOR`: a checked todo's text (and its checkbox glyph)
+/// forces this gray unless the run already carries an explicit color.
+const TODO_DONE_COLOR: [u8; 3] = [150, 150, 150];
+
+/// pysdocx `_paragraph_spacing`: a paragraph's decoded `line_spacing` (already
+/// range-validated by `structural_paragraphs`) as a multiplier on the block's
+/// base row height; unset means the neutral 1.0.
+fn paragraph_spacing(p: &sdocx::ParagraphInfo) -> f64 {
+    match p.line_spacing {
+        Some(s) => s as f64 / 1.35,
+        None => 1.0,
+    }
+}
+
+/// pysdocx `_line_advance`.
+fn line_advance(line_h: f64, p: &sdocx::ParagraphInfo, line_fontpt: f64, fontpt: f64) -> f64 {
+    let sized = line_h * f64::max(line_fontpt / fontpt, 1.0);
+    f64::max(sized * paragraph_spacing(p), line_fontpt * 2.25)
+}
+
+/// pysdocx `_blank_advance`.
+fn blank_advance(blank_h: f64, p: &sdocx::ParagraphInfo) -> f64 {
+    blank_h * paragraph_spacing(p)
+}
+
+/// pysdocx `_paragraph_prefix`: the list/todo marker text, when this
+/// paragraph is a list item.
+fn paragraph_prefix_text(p: &sdocx::ParagraphInfo) -> Option<String> {
+    match p.list {
+        Some(sdocx::ListItem::Numbered { number }) => Some(format!("{number}. ")),
+        Some(sdocx::ListItem::Bullet) => Some("\u{2022} ".to_string()),
+        Some(sdocx::ListItem::Todo { checked: true }) => Some("\u{2611} ".to_string()),
+        Some(sdocx::ListItem::Todo { checked: false }) => Some("\u{2610} ".to_string()),
+        None => None,
+    }
+}
+
+/// pysdocx `_is_checked_todo`.
+fn is_checked_todo(p: &sdocx::ParagraphInfo) -> bool {
+    matches!(p.list, Some(sdocx::ListItem::Todo { checked: true }))
+}
 
 /// Anchor/wrap parameters resolved from the box bbox + rotation
 /// (pysdocx `_text_box_layout`).
@@ -644,29 +752,63 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
     }
 
     let chars: Vec<char> = tb.text.chars().collect();
+    let default_paragraph = sdocx::ParagraphInfo::default();
     let mut lines = Vec::new();
     let mut gi = 0usize;
-    for line in tb.text.split('\n') {
+    for (para_idx, line) in tb.text.split('\n').enumerate() {
         let len = line.chars().count();
+        let paragraph = tb.paragraphs.get(para_idx).unwrap_or(&default_paragraph);
+        let checked_todo = is_checked_todo(paragraph);
+        let x_offset = paragraph.indent as f64 * 70.0;
+        let max_width = f64::max(wrap_width - x_offset, fontpt * 4.0);
+        let align = match paragraph.alignment {
+            sdocx::Alignment::Center => Some(SceneAlign::Center),
+            sdocx::Alignment::Right => Some(SceneAlign::Right),
+            sdocx::Alignment::Left => None,
+        };
+        let lead_gap = paragraph.space_before as f64 * PARA_SPACE_UNIT;
+        let trail_gap = paragraph.space_after as f64 * PARA_SPACE_UNIT;
+
         if len == 0 {
             lines.push(SceneTextLine {
-                advance: blank_h,
+                advance: blank_advance(blank_h, paragraph),
+                lead_gap,
+                trail_gap,
+                x_offset,
+                max_width,
+                align,
+                prefix: None,
                 segs: Vec::new(),
             });
             gi += 1;
             continue;
         }
         // Line advance scales with the largest per-run font on the line
-        // (pysdocx `_line_advance` with no paragraph metadata).
+        // (pysdocx `_line_advance`).
         let line_fontpt = (gi..gi + len)
             .filter_map(|i| font_pt.get(i).copied().flatten())
             .fold(fontpt, f64::max);
-        let advance = f64::max(
-            line_h * f64::max(line_fontpt / fontpt, 1.0),
-            line_fontpt * 2.25,
-        );
+        let advance = line_advance(line_h, paragraph, line_fontpt, fontpt);
 
-        // Group consecutive equal-style characters into segments.
+        // List/todo marker: sized at the paragraph's own font (pysdocx draws it
+        // at `para_font_raw * 1.36`, i.e. the same already-bridged value stored
+        // in `font_pt`), so it matches its list text instead of the block's base size.
+        let prefix = paragraph_prefix_text(paragraph).map(|text| {
+            let prefix_pt = (gi..gi + len)
+                .filter_map(|i| font_pt.get(i).copied().flatten())
+                .next()
+                .unwrap_or(fontpt);
+            ScenePrefix {
+                text,
+                font: prefix_pt * MPL_PT_TO_PAGE_UNITS,
+                pt: prefix_pt,
+                color: checked_todo.then_some(TODO_DONE_COLOR),
+            }
+        });
+
+        // Group consecutive equal-style characters into segments. A checked
+        // todo forces strikethrough + gray (unless a color is already set) on
+        // its whole paragraph (pysdocx `checked_todo` style override).
         let mut segs = Vec::new();
         let mut i = 0usize;
         while i < len {
@@ -675,8 +817,8 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
                     bold[gi + k],
                     italic[gi + k],
                     underline[gi + k],
-                    strike[gi + k],
-                    color[gi + k],
+                    strike[gi + k] || checked_todo,
+                    if checked_todo { Some(color[gi + k].unwrap_or(TODO_DONE_COLOR)) } else { color[gi + k] },
                     highlight[gi + k],
                     font_pt[gi + k].map(|v| v.to_bits()),
                 )
@@ -699,13 +841,24 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
             });
             i = j;
         }
-        lines.push(SceneTextLine { advance, segs });
+        lines.push(SceneTextLine {
+            advance,
+            lead_gap,
+            trail_gap,
+            x_offset,
+            max_width,
+            align,
+            prefix,
+            segs,
+        });
         gi += len + 1;
     }
 
     SceneText {
         anchor,
         wrap_width,
+        base_font: fontpt * MPL_PT_TO_PAGE_UNITS,
+        min_width: fontpt * 4.0,
         angle_deg: tb.rotation_degrees.unwrap_or(0.0).rem_euclid(360.0),
         lines,
         paginate: None,
@@ -1316,6 +1469,47 @@ mod tests {
             .find(|t| (t.angle_deg - 16.0).abs() < 0.5)
             .expect("16° box");
         assert!(rotated.anchor[0].is_finite() && rotated.anchor[1].is_finite());
+    }
+
+    /// The typed note body carries every paragraph-layout feature this sample
+    /// exercises: numbered/bullet/todo list markers, center/right alignment, and
+    /// left indent — ported from pysdocx `common_frame_paragraphs`. Assert each
+    /// survives into the Scene (`SceneTextLine`), not just the run-level styling
+    /// `text_boxes_scene_resolves_layout_and_styles` already covers.
+    #[test]
+    fn typed_note_body_scene_resolves_paragraphs() {
+        let Some(mut reader) = sample("OnlyTextTypeWritten_260701_180427.sdocx") else {
+            return;
+        };
+        let note_text = reader.metadata().note_text.clone().expect("typed note body");
+        let (width, _) = reader.page_size(0).expect("page 0 size");
+        let st = build_scene_text(&note_text, width as f64);
+
+        let line_text = |l: &SceneTextLine| -> String { l.segs.iter().map(|s| s.text.as_str()).collect() };
+        let find = |needle: &str| -> &SceneTextLine {
+            st.lines
+                .iter()
+                .find(|l| line_text(l) == needle)
+                .unwrap_or_else(|| panic!("missing line {needle:?}"))
+        };
+
+        assert_eq!(find("elenco numerato 2").prefix.as_ref().expect("numbered prefix").text, "2. ");
+        assert_eq!(find("elenco puntato1").prefix.as_ref().expect("bullet prefix").text, "\u{2022} ");
+        let todo_done = find("todo3-fatta");
+        assert_eq!(todo_done.prefix.as_ref().expect("todo prefix").text, "\u{2611} ");
+        assert!(todo_done.segs.iter().all(|s| s.strike), "a checked todo strikes its own text");
+
+        assert_eq!(find("testo al centro").align, Some(SceneAlign::Center));
+        assert_eq!(find("testo a dx").align, Some(SceneAlign::Right));
+        assert_eq!(find("testo rientrato da sx di 1").x_offset, 70.0);
+        assert_eq!(find("testo rientrato da sx di 2").x_offset, 140.0);
+
+        // Headings carry decoded space_before/space_after, giving them extra
+        // breathing room the plain paragraphs around them don't have.
+        let heading = find("questo è heading 1");
+        assert!(heading.lead_gap > 0.0 && heading.trail_gap > 0.0, "heading spacing");
+        let plain = find("Testo normale scritto carattere 11");
+        assert_eq!((plain.lead_gap, plain.trail_gap), (0.0, 0.0));
     }
 
     /// The 4×3 structural table resolves to page-local grid edges + 12

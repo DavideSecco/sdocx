@@ -25,11 +25,52 @@ interface STextSeg {
   color: RGB | null;
   highlight: RGB | null;
 }
-interface STextLine { advance: number; segs: STextSeg[] }
+// A paragraph's list/todo marker glyph — measured and reserved like a segment
+// (pysdocx `_paragraph_prefix` + the prefix-emit block in `_render_rich_text`).
+interface STextPrefix {
+  text: string;
+  font: number; // em size in page units, like STextSeg.font
+  // The SAME size, unbridged (raw matplotlib points): pysdocx's own prefix-gap
+  // formula (`prefix_text_w + prefix_pt*0.9`, floor `prefix_pt*2.4`) adds this
+  // raw point number directly to a page-unit glyph-width measurement — a
+  // pre-existing unit quirk in the reference renderer, kept byte-for-byte here
+  // rather than "fixed" so the reserved gap matches pysdocx's spacing exactly.
+  pt: number;
+  color: RGB | null;
+}
+interface STextLine {
+  // This paragraph's own row height, reused for every visual row it wraps
+  // into (pysdocx `rendered_line_h` / `_blank_advance`).
+  advance: number;
+  // Extra gap added once before/after this paragraph's first/last visual row
+  // (pysdocx `space_before`/`space_after * PARA_SPACE_UNIT`).
+  lead_gap: number;
+  trail_gap: number;
+  // Indent offset added to the block anchor's x for every visual row of this
+  // paragraph, page units (pysdocx `indent * 70`).
+  x_offset: number;
+  // This paragraph's own available width before its list-prefix (if any) is
+  // subtracted (pysdocx `line_max_width`).
+  max_width: number;
+  // Undefined = left. Applied only when the paragraph's plain text already
+  // fits `max_width` (after the prefix is subtracted) without wrapping — a
+  // wrapped paragraph never centers/right-aligns in pysdocx either.
+  align?: "center" | "right";
+  prefix?: STextPrefix;
+  segs: STextSeg[];
+}
 interface SText {
   anchor: [number, number];
   wrap_width: number;
   angle_deg: number;
+  // This block's plain (non-bold/italic) font size, page units, like
+  // STextSeg.font — used only to measure whether a paragraph's alignment
+  // shift applies (pysdocx measures the alignment pre-check at this same
+  // plain base size, not per-run sizes).
+  base_font: number;
+  // `base font (raw pt) * 4`, the wrap-width floor pysdocx applies after
+  // subtracting a measured list-prefix width from a paragraph's max_width.
+  min_width: number;
   lines: STextLine[];
   // Present only for the document-level typed note body: the flow is laid out in
   // full, then split into page-height bands; this page draws only band `slot`
@@ -306,9 +347,18 @@ const TYPED_TEXT_Y0 = 80;
 const TYPED_TEXT_PAGE_PAD = 40;
 
 // Flow a rich text block into positioned visual rows with measured wrapping
-// (pysdocx _render_rich_text's segment loop, paragraphs excluded). Blank source
-// lines advance `y` but emit no row — matching pysdocx, whose sink only records
-// drawn segments, so pagination keys off real content rows only.
+// (pysdocx _render_rich_text's segment loop, one source `line` per paragraph).
+// Blank source lines advance `y` but emit no row — matching pysdocx, whose sink
+// only records drawn segments, so pagination keys off real content rows only.
+//
+// Per paragraph: `lead_gap` shifts `y` down once before the first row (pysdocx
+// `space_before`); indent/prefix/alignment resolve this paragraph's starting x
+// and available width (pysdocx indent/`_paragraph_prefix`/align block, in that
+// order — alignment must see the post-prefix width); the wrap loop below is
+// otherwise unchanged; the closing `y += line.advance + line.trail_gap` folds
+// in `space_after` once, after the paragraph's last visual row. Pagination's
+// fit check (`paginateLines`) uses each pushed row's `advance` alone — not
+// `trail_gap` — matching pysdocx `_paginate_segments`.
 function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine[] {
   const out: VisLine[] = [];
   let y = 0;
@@ -319,21 +369,62 @@ function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine
     pieces = [];
   };
   for (const line of t.lines) {
-    let x = 0;
+    y += line.lead_gap;
+    // The paragraph's first row sits at the post-`lead_gap` y (pysdocx adds
+    // `space_before` BEFORE laying the line out). `rowY` must follow `y` here,
+    // or this row — and the pagination fit check that reads its y — would be
+    // short by the paragraph's own `space_before` (dropped headings back onto
+    // the previous page). Every later y bump already refreshes `rowY`.
+    rowY = y;
+    let x0 = line.x_offset;
+    let maxWidth = line.max_width;
+
+    if (line.prefix) {
+      const prefixSeg: STextSeg = {
+        text: line.prefix.text,
+        font: line.prefix.font,
+        bold: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        color: line.prefix.color,
+        highlight: null,
+      };
+      c.font = segFont(prefixSeg);
+      const prefixTextW = c.measureText(line.prefix.text).width;
+      const prefixW = Math.max(prefixTextW + line.prefix.pt * 0.9, line.prefix.pt * 2.4);
+      pieces.push({ seg: prefixSeg, text: line.prefix.text, x: x0 });
+      x0 += prefixW;
+      maxWidth = Math.max(maxWidth - prefixW, t.min_width);
+    }
+
+    // A paragraph only centers/right-aligns when its plain text (measured at
+    // the block's base font, not per-run sizes) already fits `maxWidth`
+    // unwrapped — a wrapped paragraph stays left-flush (pysdocx rule).
+    if (line.align && line.segs.length) {
+      c.font = `${t.base_font}px sans-serif`;
+      const lineWidth = c.measureText(line.segs.map((s) => s.text).join("")).width;
+      if (lineWidth < maxWidth) {
+        x0 += line.align === "center" ? (maxWidth - lineWidth) / 2 : maxWidth - lineWidth;
+      }
+    }
+
+    const rightEdge = x0 + maxWidth;
+    let x = x0;
     for (const seg of line.segs) {
       let rest = seg.text;
       while (rest) {
         c.font = segFont(seg);
         const w = c.measureText(rest).width;
-        if (x + w <= t.wrap_width) {
+        if (x + w <= rightEdge) {
           pieces.push({ seg, text: rest, x });
           x += w;
           rest = "";
           continue;
         }
-        const fit = fitPrefix(c, rest, t.wrap_width - x);
+        const fit = fitPrefix(c, rest, rightEdge - x);
         if (fit <= 0) {
-          if (x === 0) {
+          if (x === x0) {
             // Nothing fits even from the margin: emit one char to guarantee progress.
             const ch = rest.slice(0, 1);
             pieces.push({ seg, text: ch, x });
@@ -343,17 +434,17 @@ function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine
           flushRow(line.advance);
           y += line.advance;
           rowY = y;
-          x = 0;
+          x = x0;
           continue;
         }
         // A styled segment that would split mid-word only because the line is
         // already partially filled moves to the next line whole (pysdocx rule).
-        if (x > 0 && fit < rest.length && !/[ \t]/.test(rest.slice(0, fit))) {
-          if (c.measureText(rest).width <= t.wrap_width) {
+        if (x > x0 && fit < rest.length && !/[ \t]/.test(rest.slice(0, fit))) {
+          if (c.measureText(rest).width <= maxWidth) {
             flushRow(line.advance);
             y += line.advance;
             rowY = y;
-            x = 0;
+            x = x0;
             continue;
           }
         }
@@ -362,7 +453,7 @@ function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine
           flushRow(line.advance);
           y += line.advance;
           rowY = y;
-          x = 0;
+          x = x0;
           continue;
         }
         c.font = segFont(seg);
@@ -372,13 +463,13 @@ function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine
           flushRow(line.advance);
           y += line.advance;
           rowY = y;
-          x = 0;
+          x = x0;
         }
         rest = tail;
       }
     }
     flushRow(line.advance);
-    y += line.advance;
+    y += line.advance + line.trail_gap;
     rowY = y;
   }
   return out;
