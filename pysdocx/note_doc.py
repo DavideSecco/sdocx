@@ -53,6 +53,8 @@ from __future__ import annotations
 
 import struct
 
+from pysdocx.note import ALIGNMENTS, LIST_TYPES, PARAGRAPH_STYLES
+
 HASH_SIZE = 32
 SPAN_BASE_SIZE = 16  # u32 span_type + u32 start + u32 end + u32 interval_type
 PARAGRAPH_BASE_SIZE = 12  # u32 paragraph_type + u32 start + u32 end
@@ -1097,3 +1099,79 @@ def note_doc_common_frames(note: bytes, doc: dict) -> dict:
     body_frames = find_common_frames(body_blob, fmt)
     cells = [f for f in body_frames if body is not None and f["off"] != body["off"]]
     return {"title": title, "body": body, "cells": cells}
+
+
+def common_frame_paragraphs(frame: dict) -> list[dict]:
+    """Decode a Common frame's structural `paragraphs` records into per-paragraph
+    layout metadata, aligned index-for-index with `frame["text"].split("\\n")`.
+
+    Each raw record is `{paragraph_type, start, end, extra}` (start/end index
+    paragraphs, not characters — see module docstring). `paragraph_type` gates
+    how `extra` is read; the fields are byte-for-byte the same trailing
+    (value, enabled) pair `pysdocx.note`'s marker scan reads off the `14 00
+    <tag> 00` / `1c 00 05 00` TLV records — the structural frame just already
+    segments them per paragraph instead of requiring a scan:
+
+      2 indent_level  -> extra[0:4] u32 value, extra[4:8] u32 enabled
+      3 align         -> extra[0:4] u32 value (0/1/2 = left/right/center)
+      4 line_spacing  -> extra[0:4] u32 (unused), extra[4:8] f32 spacing
+      5 bullet/list   -> extra u32 kind, u32 value, u32 reserved, u32 enabled
+      6 parsing_state -> Unknown, observed always zero; not layout-relevant
+      8 space_before  -> extra[0:4] f32 value, extra[4:8] u32 (unused)
+      9 space_after   -> extra[0:4] f32 value, extra[4:8] u32 (unused)
+      10 style        -> extra[0:4] u32 value (0..3 = heading1/2/3/body1)
+
+    Validated zero-counterexample against `pysdocx.note`'s legacy marker scan
+    on the whole corpus (`tests/test_pysdocx_regressions.py`,
+    `StructuralParagraphRegressionTest`).
+    """
+    paragraph_count = len(frame["text"].split("\n"))
+    paragraphs = [
+        {
+            "alignment": "left", "indent": 0, "style": None, "line_spacing": None,
+            "space_before": 0.0, "space_after": 0.0, "list": None,
+        }
+        for _ in range(paragraph_count)
+    ]
+    for rec in frame["paragraphs"]:
+        ptype, start, end = rec["paragraph_type"], rec["start"], rec["end"]
+        if not (0 <= start < end <= paragraph_count):
+            continue
+        extra = bytes.fromhex(rec["extra"])
+        for i in range(start, end):
+            p = paragraphs[i]
+            if ptype == 2 and len(extra) >= 8:
+                value, enabled = struct.unpack_from("<II", extra)
+                if enabled:
+                    p["indent"] = value
+            elif ptype == 3 and len(extra) >= 4:
+                value = struct.unpack_from("<I", extra)[0]
+                if value in ALIGNMENTS:
+                    p["alignment"] = ALIGNMENTS[value]
+            elif ptype == 4 and len(extra) >= 8:
+                spacing = struct.unpack_from("<f", extra, 4)[0]
+                if spacing == spacing and 0.5 <= spacing <= 4.0:
+                    p["line_spacing"] = spacing
+            elif ptype == 5 and len(extra) >= 16:
+                kind, value, _reserved, enabled = struct.unpack_from("<IIII", extra)
+                list_type = LIST_TYPES.get(kind)
+                if list_type is not None and enabled:
+                    item = {"type": list_type}
+                    if list_type == "numbered":
+                        item["number"] = value
+                    elif list_type == "todo":
+                        item["checked"] = bool(value)
+                    p["list"] = item
+            elif ptype == 8 and len(extra) >= 4:
+                value = struct.unpack_from("<f", extra)[0]
+                if value == value and 0.0 <= value <= 200.0:
+                    p["space_before"] = value
+            elif ptype == 9 and len(extra) >= 4:
+                value = struct.unpack_from("<f", extra)[0]
+                if value == value and 0.0 <= value <= 200.0:
+                    p["space_after"] = value
+            elif ptype == 10 and len(extra) >= 4:
+                value = struct.unpack_from("<I", extra)[0]
+                if value in PARAGRAPH_STYLES:
+                    p["style"] = PARAGRAPH_STYLES[value]
+    return paragraphs

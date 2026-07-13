@@ -3,7 +3,7 @@
 The keyboard-typed text of a note (title + body) and its styling.
 
 - **Structural parser:** `parse_text_wrapper` / `parse_common_frame` /
-  `note_doc_common_frames` in
+  `note_doc_common_frames` / `common_frame_paragraphs` in
   [`pysdocx/note_doc.py`](../../../../pysdocx/note_doc.py).
 - **Render-oriented scans (still the renderer's input):** `parse_typed_text` /
   `_find_text_field` / `_style_runs` / `_paragraph_metadata` in
@@ -102,19 +102,33 @@ Same TLV correspondence: `14 00 <tag> 00` is `record_size = 0x14` (20) with an
 `(u32 kind, u32 value, u32 reserved, u32 enabled)` — kind 2 todo / 4 numbered
 / 8 bullet, `value` = number or checked state.
 
-| paragraph_type | name | source |
-|---|---|---|
-| 2 | indent_level | sdocx2pdf + corpus |
-| 3 | align (0 left, 1 right, 2 center) | sdocx2pdf + corpus |
-| 4 | line_spacing (f32 in payload) | sdocx2pdf + corpus |
-| 5 | bullet (list prefix record) | sdocx2pdf + corpus |
-| 6 | parsing_state (≈ one record per character; semantics Unknown) | sdocx2pdf name |
-| 8 / 9 | space_before / space_after (f32 payload) | corpus only |
-| 10 | style (0 heading1, 1 heading2, 2 heading3, 3 body1) | corpus only |
+| paragraph_type | name | 8-byte payload (`extra[0:4]`, `extra[4:8]`) | source |
+|---|---|---|---|
+| 2 | indent_level | `u32 value`, `u32 enabled` | sdocx2pdf + corpus |
+| 3 | align (0 left, 1 right, 2 center) | `u32 value`, `u32 0` (unused) | sdocx2pdf + corpus |
+| 4 | line_spacing | `u32 1` (unused), `f32 spacing` | sdocx2pdf + corpus |
+| 5 | bullet (list prefix record, 16-byte payload — see above) | | sdocx2pdf + corpus |
+| 6 | parsing_state (≈ one record per character; semantics Unknown) | always `0,0` on the corpus | sdocx2pdf name |
+| 8 / 9 | space_before / space_after | `f32 value`, `u32 0` (unused) | corpus only |
+| 10 | style (0 heading1, 1 heading2, 2 heading3, 3 body1) | `u32 value`, `u32 3` (unused) | corpus only |
 
 `start`/`end` index paragraphs (aligned with `text.split("\n")`), not
 characters. Types 8/9/10 are **not** in `sdocx2pdf`'s enum — their parser would
 reject our styled notes; corpus evidence keeps them.
+
+`common_frame_paragraphs` (`pysdocx/note_doc.py`) decodes these payload fields
+into the same per-paragraph dict shape (`alignment`/`indent`/`style`/
+`line_spacing`/`space_before`/`space_after`/`list`) that the renderer consumes
+from `pysdocx.note`'s legacy TLV marker scan. Cross-validated field-for-field
+against the legacy scan, zero counterexamples on every typed-text sample in the
+corpus (`tests/test_pysdocx_regressions.py::StructuralParagraphRegressionTest`,
+212/212 paragraphs across 11 files) — the structural payload fields above are
+exactly the marker scan's `(value, enabled)` pair, just already segmented per
+paragraph instead of requiring a byte scan. The renderer (`render.py`) still
+reads paragraphs from the legacy scan (unchanged, still the verified path
+against the GT photos); the structural decoder is what
+[OpenSdocx](../../../app/README.md) ports to Rust, since the Rust core has no
+marker-scan equivalent.
 
 ## Table cells and inline objects
 

@@ -2,8 +2,9 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from pysdocx.container import list_pages, load_page
-from pysdocx.note_doc import note_doc_common_frames, parse_note_doc
+from pysdocx.container import list_pages, load_note, load_page
+from pysdocx.note import parse_typed_text
+from pysdocx.note_doc import common_frame_paragraphs, note_doc_common_frames, parse_note_doc
 from pysdocx.page import (_parse_object_header, page_background_color, page_template,
                          page_thumbnail_media_index, parse_page, parse_page_tree)
 from pysdocx.render import debug_text_box_layout
@@ -347,6 +348,38 @@ class PageThumbnailLinkTest(unittest.TestCase):
                     self.assertTrue(media.get(index, "").endswith(".spi"), (sample.name, page_name, index))
                     checked += 1
         self.assertEqual(checked, 30)
+
+
+class StructuralParagraphRegressionTest(unittest.TestCase):
+    """`note_doc.common_frame_paragraphs` (structural, decoded from the body Common
+    frame's `paragraphs` records) must agree field-for-field with `pysdocx.note`'s
+    legacy TLV marker scan (`parse_typed_text`'s `paragraphs`) on every typed-text
+    sample in the corpus. This is the zero-counterexample gate for the RE finding
+    that structural `paragraph_type`/`extra` are byte-for-byte the same fields the
+    legacy scan reads (see `common_frame_paragraphs`'s docstring for the mapping).
+    """
+
+    def test_structural_matches_legacy_scan(self) -> None:
+        checked = 0
+        for sample in sorted(SAMPLES.glob("*.sdocx")):
+            note = load_note(sample)
+            if not note:
+                continue
+            legacy = parse_typed_text(note)
+            if legacy is None or not legacy["paragraphs"]:
+                continue
+            doc = parse_note_doc(note)
+            body = note_doc_common_frames(note, doc)["body"]
+            self.assertIsNotNone(body, sample.name)
+            structural = common_frame_paragraphs(body)
+            # Legacy paragraphs are trimmed of the header's leading blank lines;
+            # structural indexes the raw body text, so align on the tail.
+            offset = len(structural) - len(legacy["paragraphs"])
+            self.assertGreaterEqual(offset, 0, sample.name)
+            for i, lg in enumerate(legacy["paragraphs"]):
+                self.assertEqual(structural[i + offset], lg, (sample.name, i))
+                checked += 1
+        self.assertEqual(checked, 212)
 
 
 if __name__ == "__main__":
