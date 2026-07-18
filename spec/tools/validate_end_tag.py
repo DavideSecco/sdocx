@@ -98,7 +98,7 @@ def kaitai_fields(data: bytes) -> dict:
 
 
 def main() -> int:
-    samples = sorted((ROOT / "samples").glob("*.sdocx"))
+    samples = sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx"))
     ok = 0
     failures = 0
     for sample in samples:

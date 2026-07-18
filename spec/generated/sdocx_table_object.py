@@ -513,6 +513,7 @@ class SdocxTableObject(KaitaiStruct):
 
 
     class SectionPair(KaitaiStruct):
+        """Character range in Common.text."""
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxTableObject.SectionPair, self).__init__(_io)
             self._parent = _parent
@@ -520,8 +521,8 @@ class SdocxTableObject(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.a = self._io.read_u4le()
-            self.b = self._io.read_u4le()
+            self.text_start = self._io.read_u4le()
+            self.text_length = self._io.read_u4le()
 
 
         def _fetch_instances(self):
@@ -531,8 +532,8 @@ class SdocxTableObject(KaitaiStruct):
     class SpanRec(KaitaiStruct):
         """Character-style span with cell-local coordinates. Ground-truth-confirmed
         span types: 1 foreground_color (extra = LE 0xAARRGGBB), 3 font_size
-        (extra = f4 pt), 5 bold / 6 italic / 7 underline / 20 strikethrough
-        (extra = u4 bool). Payloads end with a constant zero u4.
+        (extra = f4 pt), 5 bold / 6 italic / 7 underline (extra = u4 bool).
+        Type 20 strikethrough stores a u8 boolean followed by three residue bytes.
         """
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxTableObject.SpanRec, self).__init__(_io)
@@ -551,6 +552,18 @@ class SdocxTableObject(KaitaiStruct):
 
         def _fetch_instances(self):
             pass
+
+        @property
+        def strikethrough_enabled(self):
+            """Type-20 boolean stored in payload byte 0; remaining bytes are residue."""
+            if hasattr(self, '_m_strikethrough_enabled'):
+                return self._m_strikethrough_enabled
+
+            if self.span_type == 20:
+                pass
+                self._m_strikethrough_enabled = KaitaiStream.byte_array_index(self.extra, 0)
+
+            return getattr(self, '_m_strikethrough_enabled', None)
 
 
     class TableCell(KaitaiStruct):

@@ -51,6 +51,10 @@ def _frame_diffs(kf, ref: dict) -> list[str]:
               for s in kf.spans]
     if kspans != ref["spans"]:
         out.append("frame spans")
+    if ([s.strikethrough_enabled for s in kf.spans if s.span_type == 20]
+            != [bytes.fromhex(s["extra"])[0] for s in ref["spans"]
+                if s["span_type"] == 20]):
+        out.append("frame strikethrough enabled")
     kparas = [{"record_size": p.record_size, "paragraph_type": p.paragraph_type,
                "start": p.start, "end": p.end, "extra": p.extra.hex()}
               for p in kf.paragraphs]
@@ -58,7 +62,7 @@ def _frame_diffs(kf, ref: dict) -> list[str]:
         out.append("frame paragraphs")
     if list(kf.margins) != ref["margins"] or kf.gravity != ref["gravity"]:
         out.append("frame margins/gravity")
-    if [(s.a, s.b) for s in kf.sections] != ref["sections"]:
+    if [(s.text_start, s.text_length) for s in kf.sections] != ref["sections"]:
         out.append("frame sections")
     inline = ref["inline"]
     if inline is not None and (kf.inline_present != inline["present"]
@@ -155,7 +159,7 @@ def diffs_for_note(note: bytes) -> list[tuple[int, list[str]]]:
 
 def main() -> int:
     ok = failures = 0
-    for sample in sorted((ROOT / "samples").glob("*.sdocx")):
+    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
         note = load_note(sample)
         if note is None:
             continue

@@ -32,7 +32,12 @@ seq:
     doc: Note modified timestamp; matches note.note modified_time (13/13).
   - id: property_flags
     type: u4
-    doc: SDK property flags; bit 1 is `is_landscape` in sdocx2pdf. Zero on the corpus.
+    doc: |
+      SDK property flags. Zero on the whole corpus (30/30), so bit 1's meaning
+      is disputed and unconfirmed either way: sdocx2pdf calls it `is_landscape`
+      (negative-tested against a genuine landscape note), while app-code static
+      RE found a competing `is_favorite` read/write pair on the same bit. See
+      docs/format/unknowns.md.
   - id: cover_image_len
     type: u2
   - id: cover_image

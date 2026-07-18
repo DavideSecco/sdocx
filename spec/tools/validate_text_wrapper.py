@@ -16,7 +16,7 @@ from pysdocx.note_doc import parse_note_doc, parse_text_wrapper  # noqa: E402
 
 
 def iter_wrappers():
-    for sample in sorted((ROOT / "samples").glob("*.sdocx")):
+    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
         with zipfile.ZipFile(sample) as z:
             note = z.read("note.note")
             doc = parse_note_doc(note)
@@ -81,9 +81,17 @@ def diffs_for(raw: bytes) -> list[str]:
     common = ref["common"]
     eq("common.text", k.shape.body.common.text_utf16, common["text"])
     eq("common.spans", len(k.shape.body.common.spans), len(common["spans"]))
+    eq("common.strikethrough_enabled",
+       [s.strikethrough_enabled for s in k.shape.body.common.spans
+        if s.span_type == 20],
+       [bytes.fromhex(s["extra"])[0] for s in common["spans"]
+        if s["span_type"] == 20])
     eq("common.paragraphs", len(k.shape.body.common.paragraphs), len(common["paragraphs"]))
     eq("common.margins", list(k.shape.body.common.margins), common["margins"])
     eq("common.gravity", k.shape.body.common.gravity, common["gravity"])
+    eq("common.sections",
+       [(s.text_start, s.text_length) for s in k.shape.body.common.sections],
+       common["sections"])
     eq("text.size", k.text.size, ref["text"]["size"])
     eq("text.type", k.text.body.header.data_type, 2)
     eq("text.border_colour",

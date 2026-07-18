@@ -146,7 +146,7 @@ page, confirming the `text_core` span types (previously named only from
 | 5  | `bold`             | u32 bool (`1` = on)                | col 1 = grassetto |
 | 6  | `italic`           | u32 bool (only `0` observed)       | — |
 | 7  | `underline`        | u32 bool (only `0` observed)       | — |
-| 20 | `strikethrough`    | u32 bool (`1` = on), 20-byte record | last row = cancellata |
+| 20 | `strikethrough`    | u8 bool (`1` = on) + 3 residue bytes, 20-byte record | last row = cancellata |
 | 1  | `foreground_color` | little-endian `0xAARRGGBB`         | row 3 = azzurro (`ff3396ff`) |
 
 Each span-payload also carries a constant trailing `u32 0`. The `interval_type`

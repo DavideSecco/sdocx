@@ -32,7 +32,7 @@ offset  size  field                    status
 2       4     format_version           Decoded   = note.note format_version
 6       var   note_uuid                Decoded   short UTF-16 string; empty corpus-wide
 8       8     modified_time (s64)      Decoded   = note.note modified_time
-16      4     property_flags           Decoded   bit 1 = is_landscape; zero corpus-wide
+16      4     property_flags           Decoded   bit 1 meaning disputed; zero corpus-wide
 20      var   cover_image              Decoded   short UTF-16 string; empty corpus-wide
 22      4     note_width               Decoded   = page header width
 26      4     document_height          Decoded   f32 = note.note height
@@ -127,8 +127,12 @@ the end of the stream, which is why a single spec parses both size families.
 
 ## Remaining caveats
 
-- Property flag semantics are only cross-checked for the current zero value; a
-  landscape sample is needed to validate bit 1 in practice.
+- Property flag bit 1's meaning is disputed and unconfirmed: a genuine
+  landscape sample already tested negative against `is_landscape`, and a
+  competing `is_favorite` hypothesis (from app-code static RE, outside this
+  repo) has no positive evidence either — `property_flags` is `0` on the whole
+  30-sample corpus. See `docs/format/unknowns.md` and `sample-wishlist.md` #13
+  (a favorited/starred note would settle it).
 - `display_created_time` / `display_modified_time` use a different apparent unit
   or conversion on the three older/imported samples.
 - Non-empty SDK strings, skipped blocks, encryption data, and custom data are

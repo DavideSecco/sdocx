@@ -505,8 +505,8 @@ types:
     doc: |
       Character-style span with cell-local coordinates. Ground-truth-confirmed
       span types: 1 foreground_color (extra = LE 0xAARRGGBB), 3 font_size
-      (extra = f4 pt), 5 bold / 6 italic / 7 underline / 20 strikethrough
-      (extra = u4 bool). Payloads end with a constant zero u4.
+      (extra = f4 pt), 5 bold / 6 italic / 7 underline (extra = u4 bool).
+      Type 20 strikethrough stores a u8 boolean followed by three residue bytes.
     seq:
       - id: record_size
         type: u2
@@ -520,6 +520,11 @@ types:
         type: u4
       - id: extra
         size: record_size - 16
+    instances:
+      strikethrough_enabled:
+        doc: Type-20 boolean stored in payload byte 0; remaining bytes are residue.
+        value: extra[0]
+        if: span_type == 20
   paragraph_rec:
     seq:
       - id: record_size
@@ -533,10 +538,11 @@ types:
       - id: extra
         size: record_size - 12
   section_pair:
+    doc: Character range in Common.text.
     seq:
-      - id: a
+      - id: text_start
         type: u4
-      - id: b
+      - id: text_length
         type: u4
   inline_object:
     doc: Opaque here; a nested table would recurse via this same spec.
