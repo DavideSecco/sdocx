@@ -15,14 +15,14 @@ Always use the venv:
 File:
 
 ```text
-samples/OnlyTextTypeWritten_squared_260703_013624.sdocx
+samples/OnlyTextTypeWritten_squared_260703_013624/note.sdocx
 ```
 
 Commands:
 
 ```bash
-.venv/bin/python -m pysdocx text samples/OnlyTextTypeWritten_squared_260703_013624.sdocx --layout-debug
-.venv/bin/python -m pysdocx render samples/OnlyTextTypeWritten_squared_260703_013624.sdocx /tmp/regression-squared
+.venv/bin/python -m pysdocx text samples/OnlyTextTypeWritten_squared_260703_013624/note.sdocx --layout-debug
+.venv/bin/python -m pysdocx render samples/OnlyTextTypeWritten_squared_260703_013624/note.sdocx /tmp/regression-squared
 ```
 
 Expected:
@@ -66,7 +66,7 @@ Red flags:
 File:
 
 ```text
-samples/OnlyTextTypeWritten_squared_260703_013624.sdocx
+samples/OnlyTextTypeWritten_squared_260703_013624/note.sdocx
 ```
 
 Expected:

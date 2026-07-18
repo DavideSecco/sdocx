@@ -21,6 +21,8 @@ page* is calibrated:
 | `raw_font_size * 40/9 * line_spacing` | document-body line-box advance |
 | `10 * 40/9` | decoded top/bottom Common margin → page units |
 | `TYPED_TEXT_TODO_MIN_H` (~76.875) | checkbox-control minimum row height |
+| `TYPED_TEXT_GLYPH_WIDTH_SCALE` (0.96) | host sans-serif width correction for body wrapping |
+| list hanging indents (80/116) | numbered vs bullet/todo body columns at size 11 |
 | `*1.36` / `indent*70` | still-calibrated glyph size and indent placement |
 
 Typed-text **pagination** fits whole line boxes inside the decoded Common body's
@@ -29,6 +31,16 @@ example a heading's `space_before`); uniform rows begin the next page without
 an added gap. The unit conversion and line advances below are exact for the two
 controlled Samsung PDF exports, while glyph anchoring and the todo minimum
 remain render calibration.
+
+The note body has no decoded page reference. Pysdocx therefore anchors it on
+the first otherwise-empty physical page; OpenSdocx mirrors that rule lazily by
+choosing the first small/empty `.page` member (≤512 uncompressed bytes), while
+excluding pages referenced by structural tables. Pagination slots are relative
+to that anchor, not to document page 0. `Allsamsungnotes` pins the important
+counterexample: its typed body starts on physical page 5. Common's decoded
+character sections correlate with page bands in the controlled samples, but
+are not physical page indices: `Mathsolver&Hyperlink` starts in section 0 and
+on physical page 2.
 
 ### Measured GT audit and controlled PDFs (2026-07-13)
 
@@ -43,14 +55,14 @@ Run both independent captures with:
 
 ```bash
 MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pysdocx.measure_typed_text_gt \
-  samples/OnlyTextTypeWritten_260701_180427.sdocx \
-  samples/OnlyTextTypeWritten_260701_180427_gt/photo_2026-07-01_18-06-27.jpg \
-  samples/OnlyTextTypeWritten_260701_180427_gt/photo_2026-07-01_18-06-58.jpg
+  samples/OnlyTextTypeWritten_260701_180427/note.sdocx \
+  samples/OnlyTextTypeWritten_260701_180427/gt/photo_2026-07-01_18-06-27.jpg \
+  samples/OnlyTextTypeWritten_260701_180427/gt/photo_2026-07-01_18-06-58.jpg
 
 MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pysdocx.measure_typed_text_gt \
-  samples/OnlyTextTypeWritten_squared_260703_013624.sdocx \
-  samples/OnlyTextTypeWritten_squared_260703_013624/photo_2026-07-03_01-38-42.jpg \
-  samples/OnlyTextTypeWritten_squared_260703_013624/photo_2026-07-03_01-38-51.jpg
+  samples/OnlyTextTypeWritten_squared_260703_013624/note.sdocx \
+  samples/OnlyTextTypeWritten_squared_260703_013624/gt/photo_2026-07-03_01-38-42.jpg \
+  samples/OnlyTextTypeWritten_squared_260703_013624/gt/photo_2026-07-03_01-38-51.jpg
 ```
 
 The two controlled samples also include vector PDF exports. The tool reads
@@ -58,12 +70,12 @@ their positioned text directly with `pdftotext -bbox-layout`:
 
 ```bash
 MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pysdocx.measure_typed_text_gt \
-  samples/OnlyTypeWrittenTextDifferentFont_260713_212408.sdocx \
-  samples/OnlyTypeWrittenTextDifferentFont_260713_212408.pdf
+  samples/OnlyTypeWrittenTextDifferentFont_260713_212408/note.sdocx \
+  samples/OnlyTypeWrittenTextDifferentFont_260713_212408/gt.pdf
 
 MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pysdocx.measure_typed_text_gt \
-  samples/OnlytextTypewritten-Sistematic-carattere15_260713_212435.sdocx \
-  samples/OnlytextTypewritten-Sistematic-carattere15_260713_212435.pdf
+  samples/OnlytextTypewritten-Sistematic-carattere15_260713_212435/note.sdocx \
+  samples/OnlytextTypewritten-Sistematic-carattere15_260713_212435/gt.pdf
 ```
 
 Controlled-PDF findings:
@@ -80,6 +92,21 @@ Controlled-PDF findings:
 - PDF ink-centre residuals are constant within each font size (−3.41, +5.36,
   +19.97 and +151.47 page units respectively). Their size dependence identifies
   a remaining glyph-anchor/font-metric problem, not cumulative spacing drift.
+
+`Allsamsungnotes` adds a mixed-style, list-heavy counterexample with both an
+in-app GT capture and a vector PDF. Its first sentence is one Samsung line, not
+the two rows produced by the uncorrected host `sans-serif`; that artificial wrap
+was the entire 66-unit downward shift seen on every following list row. A 0.96
+host-width correction preserves the three-line wrap in `OnlyTextTypeWritten`
+while keeping this mixed-style sentence whole. After that correction, all 8 PDF
+body rows match their page and have vertical RMSE **3.60** page units; the
+independent in-app screenshot gives RMSE **4.74** with no unmatched ink rows.
+
+The same GT grounds list hanging columns at stored size 11. Relative to the body
+anchor, numbered text starts at +80 page units; bullet and todo text at +116.
+Their marker offsets are respectively +0, +40 and +24. The type-5 paragraph
+records are byte-identical to `OnlyTextTypeWritten`; the difference was entirely
+our former glyph-width-based prefix reservation, not another on-disk variant.
 
 Existing screenshot findings (32 typed visual lines), remeasured after adopting
 the flow model:
@@ -121,7 +148,7 @@ for line/dot/oxford — not independently re-measured per category.
 The **id → category/name** mapping itself (`TEMPLATE_NAMES` in `pysdocx/page.py`,
 see [`container/page/README.md`](./container/page/README.md#basic-background-template-ids--decoded-naming-heuristic-pitch))
 is a decoded fact, not a heuristic — it comes from user-handwritten labels on
-`samples/AlltypeofPageBasic_260709_200911.sdocx`, not a pixel measurement. The
+`samples/AlltypeofPageBasic_260709_200911/note.sdocx`, not a pixel measurement. The
 *pitches* above are all heuristic/calibrated, same as the original grid ones.
 
 ## Rotated text-box wrapping

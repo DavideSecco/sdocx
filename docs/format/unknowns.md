@@ -34,10 +34,12 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   field-flag bits 4, 5, 8 are not modeled at all (would break the sequence if
   ever set). `attached_files` and `server_check_point` are no longer in this
   list — both decode cleanly on `Shared Notebook1_260710_000433.sdocx`.
-- **`text_core::Common` residue:** `section_data` pair semantics; paragraph
-  type 6 (`parsing_state`, ≈ one record per character); the two non-boolean
-  strikethrough span payloads on the benchmark; the trailing `(3,2)`/`(0,0)`
-  u32 pair of inline objects; `interval_type` values beyond their enum names.
+- **`text_core::Common` residue:** sections are decoded as contiguous
+  `(text_start, text_length)` ranges; whether each range is universally a
+  physical-page band remains open. Paragraph type 6 (`parsing_state`, ≈ one
+  record per character); the three opaque residue bytes after type-20
+  strikethrough's `u8 enabled`; the trailing `(3,2)`/`(0,0)` u32 pair of inline
+  objects; `interval_type` values beyond their enum names.
 - **Shape/Text wrapper residue:** the full ObjectBase → ShapeBase → Shape →
   Text chain and its frame boundaries are decoded and Kaitai-gated. Common is
   reached by Shape's `flex_offset`, not scanning. Remaining micro-unknowns are
@@ -157,8 +159,18 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   genuinely landscape (1600×928, via a builtin "Landscape Grid" PDF
   template). So document-level `is_landscape` is decoupled from per-page
   aspect ratio — it likely tracks a separate orientation-lock setting never
-  triggered here, not the shape of the page content. Treat as closed unless
-  a way to set that device-level flag turns up.
+  triggered here, not the shape of the page content.
+- **`is_favorite` competing hypothesis (2026-07-14, unconfirmed):** app-code
+  static RE (private `apk-re/`, outside this repo's promotion path) found a
+  Java `SetFavorite`/`IsFavorite` pair that reads/writes this exact bit,
+  which would make the `is_landscape` label above wrong rather than just
+  incomplete. Re-checked against the corpus (2026-07-14): `property_flags` is
+  `0` on **all 30 samples**, including `Importedlandscape` — so there is
+  currently zero positive evidence for *either* hypothesis, only the existing
+  negative evidence against `is_landscape`. Neither label can be promoted to
+  Decoded from bytes alone; a favorited/starred-note sample would settle it
+  (see `sample-wishlist.md` #13). Until then, treat `property_flags` bit 1 as
+  Unknown rather than `is_landscape`.
 - **Variant coverage:** SDK strings, skipped blocks, encryption data, and
   non-empty custom data are structurally modeled but not exercised.
 - **Older-sample display timestamp units**: `display_created_time` /

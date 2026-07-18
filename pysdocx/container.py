@@ -393,6 +393,11 @@ def parse_end_tag(data: bytes) -> dict | None:
         "format_version": format_version,
         "note_uuid": note_uuid,
         "property_flags": property_flags,
+        # ⚠ Disputed label: property_flags is always 0 corpus-wide (30/30), so
+        # neither "is_landscape" (negative-tested against a genuine landscape
+        # note) nor a competing "is_favorite" hypothesis has any positive
+        # evidence. See docs/format/unknowns.md "end_tag.bin". Keep reading
+        # bit 1 via property_flags directly rather than trusting this name.
         "is_landscape": bool(property_flags & 0x2),
         "cover_image": cover_image,
         "format_version_dup": format_version_dup,

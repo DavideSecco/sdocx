@@ -40,9 +40,11 @@ u32   paragraph_count     then paragraph records:
 f32×4 margins             left, top, right, bottom (16/10/16/10 body,
                           16.67/0/16.67/0 title on the whole corpus)
 u8    gravity             0 top, 1 centre, 2 bottom
-u16   section_count       then section_count × (u32, u32) pairs — Unknown
-                          ((start,length)-looking; empty-text notes carry
-                          ((0xffffffff,1),(0,0)))
+u16   section_count       then section_count × (u32 text_start,
+                          u32 text_length). On every non-empty body with
+                          sections, ranges start at 0 and are contiguous;
+                          empty-text notes carry the special
+                          ((0xffffffff,1),(0,0)) sequence
 -- if format_version >= 2035:
 u32   inline_present      boolean written as u32
 u32   zero                always 0 on the corpus
@@ -82,7 +84,7 @@ trailing `enabled` u32 is the first payload u32. Span types and payloads:
 | 3 | font_size | 24 | `f32 px` + `u32 0` |
 | 5 / 6 / 7 | bold / italic / underline | 24 | `u32 enabled` + `u32 0` |
 | 17 | background_color (highlight) | 24 | `u32 0xAARRGGBB` + `u32 0` |
-| 20 | strikethrough | 20 | `u32` (usually enabled 0/1; two non-boolean values observed on the benchmark — Unknown) |
+| 20 | strikethrough | 20 | `u8 enabled` + 3 residue bytes (not reliably zero) |
 
 Other span types (4 font_name, 9 hypertext, 19 timestamp, 23 formula, …) are
 named by `sdocx2pdf` but absent from the corpus.
@@ -92,8 +94,9 @@ Structural parsing makes two scan pathologies explainable:
 - **Strikethrough "collisions"**: the scan's 4-byte `14 00 14 00` prefix also
   matches paragraph records, so `pysdocx.note` accepts a run only in a clean
   on/off pairing. Structurally there is no ambiguity — spans and paragraphs
-  live in separate vectors — and the benchmark's "stray" values are real
-  type-20 records with non-boolean payloads.
+  live in separate vectors. AllSamsung proves that only payload byte 0 is the
+  boolean: its `cancellato` on/off pair is `01 77 00 00` / `00 0c 1f 77`.
+  The remaining three bytes stay opaque residue.
 - **Zero-length spans** (`start == end`) exist in the span vector; the scan
   requires `start < end` and cannot see them.
 
@@ -176,9 +179,11 @@ gracefully on hostile input.
 
 - **Decoded:** the Common frame layout above; all span/paragraph records;
   margins and gravity; inline-object anchoring; table cells as nested frames.
-- **Unknown:** Shape flex bit-11 `f32` semantics; `section_data` pair semantics;
-  paragraph type 6 semantics; the
-  non-boolean strikethrough payloads; the trailing `(3,2)`/`(0,0)` u32 pair of
+- **Unknown:** Shape flex bit-11 `f32` semantics; whether every Common section
+  is specifically a physical-page band (the controlled typed samples strongly
+  correlate, but the character-range semantics alone are what is promoted);
+  paragraph type 6 semantics; the three residue bytes of strikethrough
+  payloads; the trailing `(3,2)`/`(0,0)` u32 pair of
   inline objects; embedded image internals; Web field 7 semantics.
 - **Heuristic (renderer, not format):** how the decoded text is laid out and
   paginated onto pages — `PARA_SPACE_UNIT`, `TYPED_TEXT_BLANK_H`, line height,

@@ -202,6 +202,13 @@ derive the linear advance, though they would remain useful counterexamples.
 12. **Absolute-f64 stroke variant**: reproduce the coordinate-pair (not
     delta) stroke encoding seen on a couple of benchmark pages — suspicion
     is shape-converted or imported strokes.
+13. **Favorited note** → `end_tag.bin` `property_flags` bit 1 is `0` on the
+    whole 30-sample corpus (no sample has ever set it). App-code static RE
+    (private `apk-re/`, not this repo) found a Java `SetFavorite`/`IsFavorite`
+    pair reading/writing this exact bit, which would mean the current
+    `is_landscape` label is wrong (see `unknowns.md`) — but that's still an
+    unconfirmed hypothesis: mark a note as favorite/starred in Samsung Notes
+    and export it to see whether `property_flags` becomes `2`.
 
 ## External validation (not a "make a sample" item)
 

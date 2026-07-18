@@ -147,10 +147,16 @@ COVERAGE_MATRIX = [
 
 
 def _iter_paths(targets: list[Path]) -> list[Path]:
+    """Scan targets for .sdocx files, supporting both flat (*.sdocx) and nested (*/note.sdocx) layouts.
+
+    After the samples/ corpus restructure, top-level .sdocx files are stored as
+    <name>/note.sdocx inside subdirectories. This function supports both old-style
+    flat layouts (for generic directory scanning) and the new bundle structure.
+    """
     paths: list[Path] = []
     for target in targets:
         if target.is_dir():
-            paths.extend(sorted(target.glob("*.sdocx")))
+            paths.extend(sorted(target.glob("*.sdocx")) + sorted(target.glob("*/note.sdocx")))
         elif target.suffix == ".sdocx":
             paths.append(target)
     seen = set()

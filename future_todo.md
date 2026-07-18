@@ -8,6 +8,23 @@ profiles were refreshed after the July 11 targeted-sample campaign (incl. the
 `Tabella4x3Regolare` v1+v2 styled-table samples that cracked table styling
 end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
 
+- **APK reverse engineering session, hypothesis to port (NEW, 2026-07-14):**
+  a separate static-RE thread against the Samsung Notes app itself (decompiled
+  code, native libs — kept out of this repo, see the untracked/gitignored
+  `apk-re/` for the full write-up) found that `note.note`'s "unexercised flex
+  fields" (`app_name`, `author_info`, `latitude_longitude`, `template_uri`,
+  `compatible_last_pen_info`, `text_summarisation`, `stroke_group_size`,
+  `app_custom_data` — all "0/corpus" in `unknowns.md`) are likely not
+  fixed-position fields at all, but entries in a **generic 3-map property bag**
+  (int-valued / string-valued / byte-buffer-valued, each keyed by a string
+  name), gated by a 3-bit flag. Coincides with the `extra_key` variable
+  property bag already partially decoded in a parallel session. **NEXT:** port
+  this as a hypothesis into `pysdocx` and validate against the corpus
+  (zero-counterexample discipline) before touching `docs/format/` or the
+  `.ksy`. The same session also traced the *entire* native save pipeline for
+  the `.page` footer hash and found nothing (see updated "Negative results"
+  below) — that thread is paused per the user's call, don't redo the trace,
+  just pick it up from `apk-re/04-ghidra.md` if revisited.
 - **Shape/Text wrapper decoded + Kaitai-gated (NEW, 2026-07-12):** title/body
   Text blobs and raw type-2 page text boxes share the exact inheritance chain
   `ObjectBase(type 0) → ShapeBase(type 6) → Shape(type 7) → Text(type 2)`.
@@ -42,16 +59,19 @@ end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
   runs/colors/font-sizes identical). All green (cargo workspace + clippy
   `--all-targets -D warnings` + pysdocx 23/23 + `text_boxes.rs` still 16/16).
   Uncommitted.
-- **Typed-text pagination ported to OpenSdocx (NEW, 2026-07-12):** the document
+- **Typed-text pagination ported to OpenSdocx (UPDATED, 2026-07-13):** the document
   -level typed note body was being dumped entirely on page 0 (running off the
   bottom, never reaching pages 2+). Ported pysdocx `paginate_typed_text` /
   `_paginate_segments` to the app: the note body is now attached to every page
-  with a band `slot` (= page index) + uniform `band_height` (page 0 height) in
+  from its first otherwise-empty physical page, with an anchor-relative band
+  `slot` + uniform `band_height` (anchor-page height) in
   the Scene (`ScenePaginate` on `SceneText`, [`lib.rs`](./opensdocx/src-tauri/src/lib.rs)),
   and the worker lays out the whole flow, splits it into page-height bands, and
   draws only its own band ([`render.worker.ts`](./opensdocx/src/render.worker.ts)
-  `layoutRichText` + `paginateLines`). Oracle match on `OnlyTextTypeWritten`:
-  2 bands (21 lines pg0, 11 lines pg1, pg2 empty).
+  `layoutRichText` + `paginateLines`). `Allsamsungnotes` is the placement
+  regression gate: its typed body anchors on physical page 5, not over the
+  handwriting on page 1. Oracle match on `OnlyTextTypeWritten`: 2 bands
+  (21 lines pg0, 11 lines pg1, pg2 empty).
 - **Typed-text placement bug RESOLVED (2026-07-13):** re-investigated against
   the GT photos (`samples/OnlyTextTypeWritten_260701_180427_gt`) with a pixel
   measurement script (row-darkness bands vs the predicted layout, scaled by the
@@ -110,6 +130,20 @@ end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
   page 2. NOTE the break margin is only ~19px, a coincidence of the heuristic
   line-height constants, so pagination is not robust to content edits — a
   proper Samsung line-height model is still future work.
+  **AllSamsung structural projection fix (2026-07-13):** the app-specific
+  failure was upstream of layout. Rust forwarded Common's raw leading 119
+  newlines + U+FFFC table anchor, while pysdocx strips that document-flow
+  padding and rebases character/paragraph coordinates; this produced `[OBJ]`
+  and pushed the visible body down. `common_frame_rich_text` now performs the
+  same coordinate-safe projection. Type-20 strikethrough is also decoded as
+  `u8 enabled + 3 residue bytes` (AllSamsung's on/off pair is
+  `01 77 00 00` / `00 0c 1f 77`), rather than treating the whole u32 as a
+  boolean and striking every later list. Both facts are app/core regression
+  gated. Common section pairs were promoted in both text-wrapper/table `.ksy`
+  files to contiguous `(text_start, text_length)` ranges; their physical-page
+  mapping remains open because Mathsolver is a counterexample to section index
+  == page index. Page anchoring therefore remains the explicitly documented
+  first-empty-page heuristic.
   All green: `cargo test`/`clippy --all-targets -D warnings` workspace-wide +
   opensdocx (9/9 incl. the new test) + `tsc --noEmit` + pysdocx unittest
   (24/24 incl. the new regression test). Two **pre-existing** opensdocx clippy
@@ -366,7 +400,10 @@ object bodies.
   Python and OpenSdocx now share this model. Page assignments match the exports
   **32/32** for the 11/14/19/64 sample (`[23,6,3]`) and **50/50** for uniform
   size 15 (`[24,24,2]`). The older screenshot GT now has page-1 RMSE 7.91 and
-  retains its page-break gap. Remaining: font-size-dependent glyph anchor /
+  retains its page-break gap. `Allsamsungnotes` now provides both in-app and
+  vector-PDF GT: removing one host-font-only wrap restores all 8 rows (PDF RMSE
+  3.60, in-app RMSE 4.74 page units), and grounds separate numbered vs
+  bullet/todo hanging columns. Remaining: font-size-dependent glyph anchor /
   baseline metrics, independent validation of each explicit `line_spacing`
   choice, paragraph-style/indent calibration, and the calibrated todo minimum
   row height. Commands and evidence are in `docs/format/heuristics.md`; desired
@@ -526,6 +563,15 @@ object bodies.
   contiguous-range brute force over the smallest page found nothing. Likely a
   canonical/serialized input or a keyed construction. The `note.note` trailing
   hash is no longer part of this negative result; it is `sha256(note.note[:-32])`.
+  **Also ruled out (2026-07-14) via APK static RE** (see `apk-re/`, untracked):
+  the entire native save pipeline (`SDoc_save1..4` → `SDocImpl::Save` →
+  `SaveWriteCache`/`SDocDocument::WriteFile`/`SDocContent::WriteFile` →
+  `SavePrepareZip`/`SaveZip`/`NoteZip::Zip`) was traced call-by-call and
+  contains no hash/digest logic; neither do the 3 Java call sites of
+  `spenSDoc.save()` in the app's real save path. Paused by user decision, not
+  because the trail is exhausted — a live runtime trace would likely resolve
+  it quickly since the obvious places are now excluded. Don't redo the native
+  trace if picking this back up; start from `apk-re/04-ghidra.md`.
 
 ## Lower-priority backlog
 
@@ -544,9 +590,15 @@ object bodies.
 - **Audio→media schema**: `voice_clip` links to a `.m4a` media index as a
   diagnostic (2/2 current clips); current pages contain 0 raw type-10 audio
   objects, so a full page-object schema needs more audio samples.
+- **Favorited/starred note** (APK-RE pending validation, 2026-07-14): `end_tag.bin`
+  `property_flags` bit 1 has a disputed meaning — either `is_landscape` (negative-tested)
+  or `is_favorite` (app-code static RE hypothesis). Zero positive evidence on the
+  30-sample corpus. Mark a note as favorite/starred in Samsung Notes and export it to
+  settle which bit actually toggles. See `docs/format/sample-wishlist.md` #13 and
+  `docs/format/unknowns.md`.
 - **`mediaInfo.dat` reference-count / attached-flag edge semantics**,
-  **`end_tag.bin` variant coverage** (landscape/non-empty SDK strings/custom
-  data/skipped/encryption blocks), **image/painting flex fields**, and
+  **`end_tag.bin` variant coverage** (non-empty SDK strings/custom
+  data/skipped/encryption blocks, true landscape-lock setting), **image/painting flex fields**, and
   **`ext_block.seq`/`counter`**: bounded but still need isolated samples for
   semantic edge cases.
 

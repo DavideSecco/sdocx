@@ -14,9 +14,9 @@ Example (the two existing plain-background GT pages)::
 
     MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python \
       -m pysdocx.measure_typed_text_gt \
-      samples/OnlyTextTypeWritten_260701_180427.sdocx \
-      samples/OnlyTextTypeWritten_260701_180427_gt/photo_2026-07-01_18-06-27.jpg \
-      samples/OnlyTextTypeWritten_260701_180427_gt/photo_2026-07-01_18-06-58.jpg
+      samples/OnlyTextTypeWritten_260701_180427/note.sdocx \
+      samples/OnlyTextTypeWritten_260701_180427/gt/photo_2026-07-01_18-06-27.jpg \
+      samples/OnlyTextTypeWritten_260701_180427/gt/photo_2026-07-01_18-06-58.jpg
 
 With one PDF argument, the tool instead reads vector text boxes through
 ``pdftotext -bbox-layout`` and compares page assignment plus ink centres.  The
@@ -28,8 +28,10 @@ corpus; thresholds can be overridden for future captures.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import math
+import re
 import subprocess
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
@@ -361,10 +363,28 @@ def measure_pdf_ground_truth(sample: Path, pdf: Path) -> dict:
         for line_index, line in enumerate(page, 1)
     ]
     if len(predicted) != len(observed):
+        # A document PDF can contain vector text unrelated to the note body
+        # (notably structural table cells). Keep only the ordered multiset of
+        # body lines; PDF export omits bullet/checkbox marker glyphs, so compare
+        # after stripping list prefixes.
+        def body_key(text: str) -> str:
+            return re.sub(r"^(?:\d+\.\s*|[•☐☑]\s*)", "", text).strip()
+
+        remaining = Counter(body_key(row["text"]) for row in predicted)
+        body_observed = []
+        for row in observed:
+            key = body_key(row["text"])
+            if remaining[key] > 0:
+                body_observed.append(row)
+                remaining[key] -= 1
+        if not any(remaining.values()):
+            observed = body_observed
+    if len(predicted) != len(observed):
         raise ValueError(
             f"PDF has {len(observed)} vector text lines, current model has {len(predicted)}"
         )
 
+    first_observed_page = min(row["page"] for row in observed)
     rows = []
     for index, (want, got, flow) in enumerate(zip(predicted, observed, continuous), 1):
         pdf_width, _pdf_height = pdf_sizes[got["page"] - 1]
@@ -373,13 +393,15 @@ def measure_pdf_ground_truth(sample: Path, pdf: Path) -> dict:
         # ratios (the PDF MediaBox height differs from .page by ~0.15%).
         scale = page_width / pdf_width
         observed_center = (got["y_min"] + got["y_max"]) / 2.0 * scale
-        same_page = want["page"] == got["page"]
+        relative_pdf_page = got["page"] - first_observed_page + 1
+        same_page = want["page"] == relative_pdf_page
         rows.append(
             {
                 "index": index,
                 "text": got["text"],
                 "predicted_page": want["page"],
-                "pdf_page": got["page"],
+                "pdf_page": relative_pdf_page,
+                "pdf_document_page": got["page"],
                 "predicted_y": want["y"],
                 "pdf_ink_center_y": observed_center,
                 "residual": observed_center - want["y"] if same_page else None,
