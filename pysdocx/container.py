@@ -374,7 +374,19 @@ def parse_end_tag(data: bytes) -> dict | None:
         min_unknown_version = struct.unpack_from("<I", data, off + 20)[0]
         off += 24
         app_custom_data = ""
-        if off < signature_off:
+        password_hash = ""
+        # Check for password hash: 64-char UTF-16LE hex string (128 bytes) before signature
+        # Password-protected notes have end_tag.bin size > 148 bytes with hash at fixed offset ~0x40
+        try:
+            if signature_off > 0x40 + 128:
+                hash_area = data[0x40:0x40+128]
+                hash_str = hash_area.decode('utf-16le', errors='ignore').rstrip('\x00')
+                if len(hash_str) == 64 and all(c in "0123456789ABCDEFabcdef" for c in hash_str):
+                    password_hash = hash_str
+        except (UnicodeDecodeError, struct.error):
+            pass
+
+        if off < signature_off and not password_hash:
             custom_result = _read_long_u16_string_before(data, off, signature_off)
             if custom_result is None:
                 return None
@@ -432,6 +444,7 @@ def parse_end_tag(data: bytes) -> dict | None:
         "new_orientation": new_orientation,
         "min_unknown_version": min_unknown_version,
         "app_custom_data": app_custom_data,
+        "password_hash": password_hash,
         "sdk_struct_end_off": off,
         "footer_u32": [footer_a, footer_b],
         "footer_sentinel": footer_sentinel,
