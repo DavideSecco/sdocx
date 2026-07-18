@@ -36,6 +36,8 @@ interface STextPrefix {
   // pre-existing unit quirk in the reference renderer, kept byte-for-byte here
   // rather than "fixed" so the reserved gap matches pysdocx's spacing exactly.
   pt: number;
+  marker_indent: number | null;
+  body_indent: number | null;
   color: RGB | null;
 }
 interface STextLine {
@@ -269,11 +271,13 @@ function segFont(seg: STextSeg): string {
 
 // Longest prefix of `text` whose measured width fits in `max` (binary search,
 // mirrors pysdocx _fit_segment_prefix).
-function fitPrefix(c: OffscreenCanvasRenderingContext2D, text: string, max: number): number {
+function fitPrefix(
+  c: OffscreenCanvasRenderingContext2D, text: string, max: number, widthScale = 1,
+): number {
   let lo = 1, hi = text.length, best = 0;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (c.measureText(text.slice(0, mid)).width <= max) { best = mid; lo = mid + 1; }
+    if (c.measureText(text.slice(0, mid)).width * widthScale <= max) { best = mid; lo = mid + 1; }
     else hi = mid - 1;
   }
   return best;
@@ -302,10 +306,11 @@ function drawSegPiece(
   y: number,
   paper: RGB,
   di: RGB,
+  widthScale = 1,
 ): number {
   c.font = segFont(seg);
   const m = c.measureText(text);
-  const w = m.width;
+  const w = m.width * widthScale;
   const asc = m.fontBoundingBoxAscent, desc = m.fontBoundingBoxDescent;
   const h = Number.isFinite(asc + desc) && asc + desc > 0 ? asc + desc : seg.font * 1.2;
   if (seg.highlight) {
@@ -314,7 +319,14 @@ function drawSegPiece(
   }
   const fg = inkFor(seg.color, paper, di);
   c.fillStyle = fg;
-  c.fillText(text, x, y);
+  if (widthScale === 1) c.fillText(text, x, y);
+  else {
+    c.save();
+    c.translate(x, y);
+    c.scale(widthScale, 1);
+    c.fillText(text, 0, 0);
+    c.restore();
+  }
   if (seg.underline || seg.strike) {
     c.strokeStyle = fg;
     // pysdocx decoration lines are 1.3 matplotlib pt (the Scene's pt→page-units
@@ -346,6 +358,7 @@ interface VisLine { y: number; advance: number; pieces: { seg: STextSeg; text: s
 // line boxes inside that content band; drawing keeps the separately calibrated
 // anchor carried by SceneText.
 const TYPED_TEXT_VERTICAL_MARGIN = 10 * 40 / 9;
+const TYPED_TEXT_GLYPH_WIDTH_SCALE = 0.96;
 
 // Flow a rich text block into positioned visual rows with measured wrapping
 // (pysdocx _render_rich_text's segment loop, one source `line` per paragraph).
@@ -362,6 +375,7 @@ const TYPED_TEXT_VERTICAL_MARGIN = 10 * 40 / 9;
 // `trail_gap` — matching pysdocx `_paginate_segments`.
 function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine[] {
   const out: VisLine[] = [];
+  const widthScale = t.paginate ? TYPED_TEXT_GLYPH_WIDTH_SCALE : 1;
   let y = 0;
   let rowY = 0;
   let pieces: VisLine["pieces"] = [];
@@ -392,9 +406,14 @@ function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine
         highlight: null,
       };
       c.font = segFont(prefixSeg);
-      const prefixTextW = c.measureText(line.prefix.text).width;
-      const prefixW = Math.max(prefixTextW + line.prefix.pt * 0.9, line.prefix.pt * 2.4);
-      pieces.push({ seg: prefixSeg, text: line.prefix.text, x: x0 });
+      const prefixTextW = c.measureText(line.prefix.text).width * widthScale;
+      const prefixW = line.prefix.body_indent ??
+        Math.max(prefixTextW + line.prefix.pt * 0.9, line.prefix.pt * 2.4);
+      pieces.push({
+        seg: prefixSeg,
+        text: line.prefix.text,
+        x: x0 + (line.prefix.marker_indent ?? 0),
+      });
       x0 += prefixW;
       maxWidth = Math.max(maxWidth - prefixW, t.min_width);
     }
@@ -404,7 +423,7 @@ function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine
     // unwrapped — a wrapped paragraph stays left-flush (pysdocx rule).
     if (line.align && line.segs.length) {
       c.font = `${t.base_font}px sans-serif`;
-      const lineWidth = c.measureText(line.segs.map((s) => s.text).join("")).width;
+      const lineWidth = c.measureText(line.segs.map((s) => s.text).join("")).width * widthScale;
       if (lineWidth < maxWidth) {
         x0 += line.align === "center" ? (maxWidth - lineWidth) / 2 : maxWidth - lineWidth;
       }
@@ -416,20 +435,20 @@ function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine
       let rest = seg.text;
       while (rest) {
         c.font = segFont(seg);
-        const w = c.measureText(rest).width;
+        const w = c.measureText(rest).width * widthScale;
         if (x + w <= rightEdge) {
           pieces.push({ seg, text: rest, x });
           x += w;
           rest = "";
           continue;
         }
-        const fit = fitPrefix(c, rest, rightEdge - x);
+        const fit = fitPrefix(c, rest, rightEdge - x, widthScale);
         if (fit <= 0) {
           if (x === x0) {
             // Nothing fits even from the margin: emit one char to guarantee progress.
             const ch = rest.slice(0, 1);
             pieces.push({ seg, text: ch, x });
-            x += c.measureText(ch).width;
+            x += c.measureText(ch).width * widthScale;
             rest = rest.slice(1);
           }
           flushRow(line.advance);
@@ -441,7 +460,7 @@ function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine
         // A styled segment that would split mid-word only because the line is
         // already partially filled moves to the next line whole (pysdocx rule).
         if (x > x0 && fit < rest.length && !/[ \t]/.test(rest.slice(0, fit))) {
-          if (c.measureText(rest).width <= maxWidth) {
+          if (c.measureText(rest).width * widthScale <= maxWidth) {
             flushRow(line.advance);
             y += line.advance;
             rowY = y;
@@ -459,7 +478,7 @@ function layoutRichText(c: OffscreenCanvasRenderingContext2D, t: SText): VisLine
         }
         c.font = segFont(seg);
         pieces.push({ seg, text: head, x });
-        x += c.measureText(head).width;
+        x += c.measureText(head).width * widthScale;
         if (tail) {
           flushRow(line.advance);
           y += line.advance;
@@ -511,9 +530,10 @@ function drawRichText(c: OffscreenCanvasRenderingContext2D, t: SText, paper: RGB
   c.lineCap = "butt";
   let rows = layoutRichText(c, t);
   if (t.paginate) rows = paginateLines(rows, t.paginate.slot, t.paginate.band_height);
+  const widthScale = t.paginate ? TYPED_TEXT_GLYPH_WIDTH_SCALE : 1;
   for (const row of rows) {
     for (const p of row.pieces) {
-      drawSegPiece(c, p.seg, p.text, p.x, row.y, paper, di);
+      drawSegPiece(c, p.seg, p.text, p.x, row.y, paper, di, widthScale);
     }
   }
   c.restore();

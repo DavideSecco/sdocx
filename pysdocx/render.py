@@ -74,6 +74,14 @@ TYPED_TEXT_BLANK_H = 66
 TYPED_TEXT_FONT_TO_PAGE = 40.0 / 9.0
 TYPED_TEXT_DEFAULT_LINE_SPACING = 1.35
 TYPED_TEXT_VERTICAL_MARGIN = 10.0 * TYPED_TEXT_FONT_TO_PAGE
+# Samsung's PDF uses Roboto; the workbench/app normally resolve generic sans-serif to a wider
+# host font. Horizontally condense document-body glyph metrics/drawing to the measured PDF width.
+TYPED_TEXT_GLYPH_WIDTH_SCALE = 0.96
+# Hanging-list columns at stored size 11, measured from both Allsamsungnotes PDF + in-app GT.
+TYPED_TEXT_NUMBER_BODY_INDENT = 80.0
+TYPED_TEXT_LIST_BODY_INDENT = 116.0
+TYPED_TEXT_BULLET_MARKER_INDENT = 40.0
+TYPED_TEXT_TODO_MARKER_INDENT = 24.0
 # Checkbox controls impose a taller row than 11pt text alone. This remains a render calibration:
 # the old GT directly measures consecutive todo pitches at 77.76 and 75.99 page units.
 TYPED_TEXT_TODO_MIN_H = (77.76 + 75.99) / 2.0
@@ -632,7 +640,9 @@ def _char_styles(parsed):
     return bold, italic, underline, strike, color, highlight, font_size
 
 
-def _measure_text(ax, renderer, inv, x, y, text, fontpt, bold, italic, angle_deg=0.0):
+def _measure_text(
+    ax, renderer, inv, x, y, text, fontpt, bold, italic, angle_deg=0.0, width_scale=1.0
+):
     probe = ax.text(
         x, y, text, fontsize=fontpt, va="top", ha="left",
         fontweight="bold" if bold else "normal",
@@ -643,6 +653,8 @@ def _measure_text(ax, renderer, inv, x, y, text, fontpt, bold, italic, angle_deg
     )
     corners = inv.transform(probe.get_window_extent(renderer).corners())
     probe.remove()
+    if width_scale != 1.0:
+        corners[:, 0] = x + (corners[:, 0] - x) * width_scale
     return corners
 
 
@@ -705,11 +717,14 @@ def _draw_text_segment(
     default_ink,
     angle_deg=0.0,
     origin=None,
+    width_scale=1.0,
 ):
     b, it, u, st, c, hl, fs = style
     seg_fontpt = _style_fontpt(style, fontpt)
     hexc = f"#{c[0]:02x}{c[1]:02x}{c[2]:02x}" if c else default_ink
-    corners = _measure_text(ax, renderer, inv, x, y, seg, seg_fontpt, b, it)
+    corners = _measure_text(
+        ax, renderer, inv, x, y, seg, seg_fontpt, b, it, width_scale=width_scale
+    )
     w = corners[:, 0].max() - corners[:, 0].min()
     y_top = corners[:, 1].min()
     y_bottom = corners[:, 1].max()
@@ -728,6 +743,14 @@ def _draw_text_segment(
         fontweight="bold" if b else "normal", fontstyle="italic" if it else "normal",
         rotation=-angle_deg if angle_deg else 0.0, rotation_mode="anchor",
     )
+    if width_scale != 1.0 and not angle_deg:
+        text.set_transform(
+            mtransforms.Affine2D()
+            .translate(-text_x, -text_y)
+            .scale(width_scale, 1.0)
+            .translate(text_x, text_y)
+            + ax.transData
+        )
     text.set_in_layout(False)
     if u:
         line_kw = {"transform": line_transform} if line_transform is not None else {}
@@ -739,12 +762,18 @@ def _draw_text_segment(
     return w
 
 
-def _fit_segment_prefix(ax, renderer, inv, x, y, seg, fontpt, bold, italic, max_x, angle_deg=0.0):
+def _fit_segment_prefix(
+    ax, renderer, inv, x, y, seg, fontpt, bold, italic, max_x, angle_deg=0.0,
+    width_scale=1.0,
+):
     lo, hi = 1, len(seg)
     best = 0
     while lo <= hi:
         mid = (lo + hi) // 2
-        corners = _measure_text(ax, renderer, inv, x, y, seg[:mid], fontpt, bold, italic)
+        corners = _measure_text(
+            ax, renderer, inv, x, y, seg[:mid], fontpt, bold, italic,
+            width_scale=width_scale,
+        )
         width = corners[:, 0].max() - corners[:, 0].min()
         if x + width <= max_x:
             best = mid
@@ -843,14 +872,18 @@ def _render_rich_text(
     bold, italic, underline, strike, color, highlight, font_size = _char_styles(parsed)
     paragraphs = parsed.get("paragraphs") or []
     default_raw_font_size = float(parsed.get("font_size") or 11.0)
+    width_scale = TYPED_TEXT_GLYPH_WIDTH_SCALE if typed_note_model else 1.0
 
     def emit(x, y, seg, style, line_h_cur):
         if sink is None:
             return _draw_text_segment(
                 ax, renderer, inv, x, y, seg, fontpt, style, default_ink,
-                angle_deg=angle_deg, origin=(x0, y0),
+                angle_deg=angle_deg, origin=(x0, y0), width_scale=width_scale,
             )
-        corners = _measure_text(ax, renderer, inv, x, y, seg, _style_fontpt(style, fontpt), style[0], style[1])
+        corners = _measure_text(
+            ax, renderer, inv, x, y, seg, _style_fontpt(style, fontpt), style[0], style[1],
+            width_scale=width_scale,
+        )
         sink.append((x, y, seg, style, line_h_cur))
         return corners[:, 0].max() - corners[:, 0].min()
 
@@ -887,15 +920,31 @@ def _render_rich_text(
             # number/bullet matches its list text instead of towering over smaller (e.g. 11pt) runs.
             para_font_raw = next((font_size[k] for k in range(line_start, line_end) if font_size[k]), None)
             prefix_pt = para_font_raw * 1.36 if para_font_raw else fontpt
-            # Reserve a column sized to the marker's actual glyph width plus a font-proportional
-            # gap, so the text starts clear of the marker regardless of glyph (single digit vs
-            # bullet vs checkbox) instead of butting right against it.
-            prefix_corners = _measure_text(ax, renderer, inv, line_x0, y, prefix, prefix_pt, False, False)
-            prefix_text_w = prefix_corners[:, 0].max() - prefix_corners[:, 0].min()
-            prefix_w = max(prefix_text_w + prefix_pt * 0.9, prefix_pt * 2.4)
+            # Document-body lists use Samsung's measured hanging columns; text boxes retain the
+            # older glyph-measured fallback because their bbox-local scale is independent.
+            if typed_note_model:
+                item_type = ((paragraph or {}).get("list") or {}).get("type")
+                size_scale = (para_font_raw or default_raw_font_size) / 11.0
+                if item_type == "numbered":
+                    marker_indent = 0.0
+                    prefix_w = TYPED_TEXT_NUMBER_BODY_INDENT * size_scale
+                else:
+                    marker_indent = (
+                        TYPED_TEXT_TODO_MARKER_INDENT
+                        if item_type == "todo"
+                        else TYPED_TEXT_BULLET_MARKER_INDENT
+                    ) * size_scale
+                    prefix_w = TYPED_TEXT_LIST_BODY_INDENT * size_scale
+            else:
+                prefix_corners = _measure_text(
+                    ax, renderer, inv, line_x0, y, prefix, prefix_pt, False, False
+                )
+                prefix_text_w = prefix_corners[:, 0].max() - prefix_corners[:, 0].min()
+                prefix_w = max(prefix_text_w + prefix_pt * 0.9, prefix_pt * 2.4)
+                marker_indent = 0.0
             prefix_color = TODO_DONE_COLOR if checked_todo else None
             emit(
-                line_x0,
+                line_x0 + marker_indent,
                 y,
                 prefix,
                 (False, False, False, False, prefix_color, None, para_font_raw),
@@ -905,7 +954,10 @@ def _render_rich_text(
             line_max_width = max(line_max_width - prefix_w, fontpt * 4)
         align = (paragraph or {}).get("alignment", "left")
         if line and align in {"center", "right"}:
-            corners = _measure_text(ax, renderer, inv, line_x0, y, line, fontpt, False, False, angle_deg=angle_deg)
+            corners = _measure_text(
+                ax, renderer, inv, line_x0, y, line, fontpt, False, False,
+                angle_deg=angle_deg, width_scale=width_scale,
+            )
             line_width = corners[:, 0].max() - corners[:, 0].min()
             if line_width < line_max_width:
                 if align == "center":
@@ -968,7 +1020,8 @@ def _render_rich_text(
             while seg:
                 seg_fontpt = _style_fontpt(style, fontpt)
                 corners = _measure_text(
-                    ax, renderer, inv, x, y, seg, seg_fontpt, style[0], style[1]
+                    ax, renderer, inv, x, y, seg, seg_fontpt, style[0], style[1],
+                    width_scale=width_scale,
                 )
                 width = corners[:, 0].max() - corners[:, 0].min()
                 if x + width <= max_x:
@@ -976,7 +1029,8 @@ def _render_rich_text(
                     seg = ""
                     continue
                 fit_len = _fit_segment_prefix(
-                    ax, renderer, inv, x, y, seg, seg_fontpt, style[0], style[1], max_x, angle_deg=angle_deg
+                    ax, renderer, inv, x, y, seg, seg_fontpt, style[0], style[1], max_x,
+                    angle_deg=angle_deg, width_scale=width_scale,
                 )
                 if fit_len <= 0:
                     x = line_x0
@@ -989,7 +1043,8 @@ def _render_rich_text(
                 # than the paragraph's own word wrapping.
                 if x > line_x0 and fit_len < len(seg) and not re.search(r"[ \t]", seg[:fit_len]):
                     seg_corners = _measure_text(
-                        ax, renderer, inv, line_x0, y, seg, seg_fontpt, style[0], style[1]
+                        ax, renderer, inv, line_x0, y, seg, seg_fontpt, style[0], style[1],
+                        width_scale=width_scale,
                     )
                     seg_width = seg_corners[:, 0].max() - seg_corners[:, 0].min()
                     if line_x0 + seg_width <= max_x:
@@ -1091,7 +1146,10 @@ def draw_typed_page(ax, page_lines, fontpt=TYPED_TEXT_FONTPT, default_ink=DEFAUL
     inv = ax.transData.inverted()
     for ln in page_lines:
         for x, seg, style in ln["segs"]:
-            _draw_text_segment(ax, renderer, inv, x, ln["y"], seg, fontpt, style, default_ink)
+            _draw_text_segment(
+                ax, renderer, inv, x, ln["y"], seg, fontpt, style, default_ink,
+                width_scale=TYPED_TEXT_GLYPH_WIDTH_SCALE,
+            )
 
 
 # The header/"evidenzia" cell ink (foreground_color ff3a3a3d) — Samsung's

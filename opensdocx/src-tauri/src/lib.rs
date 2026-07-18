@@ -15,6 +15,7 @@ use tauri::State;
 #[derive(Default)]
 struct AppState {
     reader: Mutex<Option<sdocx::Reader<std::fs::File>>>,
+    typed_text_anchor: Mutex<Option<usize>>,
 }
 
 #[derive(Serialize)]
@@ -80,6 +81,10 @@ struct ScenePrefix {
     /// renderer; kept byte-for-byte rather than "fixed" so the reserved gap
     /// matches pysdocx's (and thus the GT's) spacing exactly.
     pt: f64,
+    /// Fixed Samsung document-body hanging indents. `None` keeps the
+    /// glyph-measured bbox-local fallback used by page text boxes.
+    marker_indent: Option<f64>,
+    body_indent: Option<f64>,
     color: Option<[u8; 3]>,
 }
 
@@ -600,6 +605,10 @@ const TYPED_TEXT_BLANK_H: f64 = 66.0;
 /// stored font -> PDF font is 5/3 and PDF -> page units is 8/3.
 const TYPED_TEXT_FONT_TO_PAGE: f64 = 40.0 / 9.0;
 const TYPED_TEXT_DEFAULT_LINE_SPACING: f64 = 1.35;
+const TYPED_TEXT_NUMBER_BODY_INDENT: f64 = 80.0;
+const TYPED_TEXT_LIST_BODY_INDENT: f64 = 116.0;
+const TYPED_TEXT_BULLET_MARKER_INDENT: f64 = 40.0;
+const TYPED_TEXT_TODO_MARKER_INDENT: f64 = 24.0;
 /// Checkbox controls impose a taller minimum than an ordinary 11pt text row.
 const TYPED_TEXT_TODO_MIN_H: f64 = (77.76 + 75.99) / 2.0;
 /// pysdocx `PARA_SPACE_UNIT`: converts a paragraph's decoded `space_before`/
@@ -827,15 +836,36 @@ fn build_scene_text(tb: &sdocx::RichTextBox, page_width: f64) -> SceneText {
         // at `para_font_raw * 1.36`, i.e. the same already-bridged value stored
         // in `font_pt`), so it matches its list text instead of the block's base size.
         let prefix = paragraph_prefix_text(paragraph).map(|text| {
-            let prefix_pt = (gi..gi + len)
+            let prefix_raw = (gi..gi + len)
                 .filter_map(|i| font_raw.get(i).copied().flatten())
                 .next()
-                .map(|raw| raw * 1.36)
-                .unwrap_or(fontpt);
+                .unwrap_or(default_raw);
+            let prefix_pt = prefix_raw * 1.36;
+            let (marker_indent, body_indent) = if is_note_body {
+                let scale = prefix_raw / 11.0;
+                match paragraph.list {
+                    Some(sdocx::ListItem::Numbered { .. }) => {
+                        (Some(0.0), Some(TYPED_TEXT_NUMBER_BODY_INDENT * scale))
+                    }
+                    Some(sdocx::ListItem::Bullet) => (
+                        Some(TYPED_TEXT_BULLET_MARKER_INDENT * scale),
+                        Some(TYPED_TEXT_LIST_BODY_INDENT * scale),
+                    ),
+                    Some(sdocx::ListItem::Todo { .. }) => (
+                        Some(TYPED_TEXT_TODO_MARKER_INDENT * scale),
+                        Some(TYPED_TEXT_LIST_BODY_INDENT * scale),
+                    ),
+                    None => (None, None),
+                }
+            } else {
+                (None, None)
+            };
             ScenePrefix {
                 text,
                 font: prefix_pt * MPL_PT_TO_PAGE_UNITS,
                 pt: prefix_pt,
+                marker_indent,
+                body_indent,
                 color: checked_todo.then_some(TODO_DONE_COLOR),
             }
         });
@@ -1139,14 +1169,44 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
 /// huge multi-page notes open instantly and cheaply.
 #[tauri::command]
 async fn open_document(path: String, state: State<'_, AppState>) -> Result<DocMeta, String> {
-    let reader = sdocx::open(&path).map_err(|e| e.to_string())?;
+    let mut reader = sdocx::open(&path).map_err(|e| e.to_string())?;
+    let typed_text_anchor = find_typed_text_anchor(&mut reader)?;
     let meta = DocMeta {
         page_count: reader.page_count(),
         dark_mode: reader.metadata().dark_mode_compatibility.unwrap_or(false),
         background: reader.metadata().background_color.as_ref().map(color_arr),
     };
     *state.reader.lock().unwrap() = Some(reader);
+    *state.typed_text_anchor.lock().unwrap() = typed_text_anchor;
     Ok(meta)
+}
+
+/// Pysdocx places document-level typed text on the first otherwise-empty page,
+/// excluding pages occupied by a structural table. Keep opening lazy by using
+/// ZIP member sizes: corpus-empty `.page` members are 336–340 bytes, whereas a
+/// serialized page object makes the member much larger. This is a placement
+/// heuristic, not a decoded note→page reference.
+fn find_typed_text_anchor(
+    reader: &mut sdocx::Reader<std::fs::File>,
+) -> Result<Option<usize>, String> {
+    if reader.metadata().note_text.is_none() {
+        return Ok(None);
+    }
+    let table_pages: Vec<usize> = reader
+        .metadata()
+        .note_tables
+        .iter()
+        .map(sdocx::NoteTable::page_index)
+        .collect();
+    for index in 0..reader.page_count() {
+        if table_pages.contains(&index) {
+            continue;
+        }
+        if reader.page_uncompressed_size(index).map_err(|e| e.to_string())? <= 512 {
+            return Ok(Some(index));
+        }
+    }
+    Ok(Some(0))
 }
 
 /// Parse and return the lightweight render scene for a single page (on demand).
@@ -1156,21 +1216,29 @@ async fn open_document(path: String, state: State<'_, AppState>) -> Result<DocMe
 /// prefetch) parse in parallel instead of queueing on one page at a time.
 #[tauri::command]
 async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<PageScene, String> {
-    let (bytes, note_text, band_height, tables) = {
+    let typed_text_anchor = *state.typed_text_anchor.lock().unwrap();
+    let (bytes, note_text, pagination, tables) = {
         let mut guard = state.reader.lock().unwrap();
         let reader = guard.as_mut().ok_or("no document loaded")?;
         let bytes = reader.page_bytes(index).map_err(|e| e.to_string())?;
-        // The typed note body is a document-level flow anchored on page 0. It is
+        // The typed note body is a document-level flow anchored on the first
+        // otherwise-empty page. It is
         // attached to EVERY page and split into page-height bands by the worker
         // (pysdocx `paginate_typed_text`), so overflow flows onto later pages
         // instead of running off the bottom of page 0. Bands use the anchor
-        // page's (page 0) height uniformly.
-        let note_text = reader.metadata().note_text.clone();
-        let band_height = note_text
-            .is_some()
-            .then(|| reader.page_size(0).map(|(_, h)| h as f64))
+        // anchor page's height uniformly.
+        let pagination = typed_text_anchor
+            .filter(|&anchor| index >= anchor)
+            .map(|anchor| {
+                reader
+                    .page_size(anchor)
+                    .map(|(_, height)| (index - anchor, height as f64))
+            })
             .transpose()
             .map_err(|e| e.to_string())?;
+        let note_text = pagination
+            .as_ref()
+            .and_then(|_| reader.metadata().note_text.clone());
         // Byte-exact structural tables carry their own 0-based host page
         // (`NoteTable::page_index`, note.note's table→page reference), so each
         // goes on exactly its page — no placement guess.
@@ -1181,16 +1249,16 @@ async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<Page
             .filter(|t| t.page_index() == index)
             .cloned()
             .collect();
-        (bytes, note_text, band_height, tables)
+        (bytes, note_text, pagination, tables)
     };
     // Media indices in the parsed page are the decoded `<index>@` archive indices
     // (the parser's one media currency, same as pysdocx); `get_media` resolves them.
     let page = sdocx::parse_page(&bytes).map_err(|e| e.to_string())?;
     let mut scene = build_page_scene(&page);
-    if let (Some(text), Some(band_height)) = (note_text, band_height) {
+    if let (Some(text), Some((slot, band_height))) = (note_text, pagination) {
         let mut st = build_scene_text(&text, page.width as f64);
         st.paginate = Some(ScenePaginate {
-            slot: index,
+            slot,
             band_height,
         });
         scene.texts.push(st);
@@ -1289,6 +1357,41 @@ mod tests {
         assert_eq!(contrast_ink([252, 252, 252]), [0x1a, 0x1a, 0x1a]); // white paper
         assert_eq!(contrast_ink([245, 221, 221]), [0x1a, 0x1a, 0x1a]); // pink paper
         assert_eq!(contrast_ink([37, 37, 37]), [0xff, 0xff, 0xff]); // dark paper
+    }
+
+    /// Document-level text is not intrinsically page-addressed. The benchmark
+    /// puts its typed body on physical page 5; pin the same first-empty-page
+    /// placement used by pysdocx so an app pagination change cannot silently
+    /// overlay it on page 1 again.
+    #[test]
+    fn typed_text_anchor_matches_end_to_end_samples() {
+        let cases = [
+            ("Allsamsungnotes_260630_113259.sdocx", Some(4)),
+            ("Associationpages&stickynote&images&audio_260701_183225.sdocx", Some(2)),
+            ("Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx", None),
+            ("Mathsolver&Hyperlink_260711_180442.sdocx", Some(1)),
+            ("OnlyImages_260702_190147.sdocx", None),
+            ("OnlyTextTypeWritten_260701_180427.sdocx", Some(0)),
+            ("OnlyTextTypeWritten_squared_260703_013624.sdocx", Some(0)),
+            ("OnlyTypeWrittenTextDifferentFont_260713_212408.sdocx", Some(0)),
+            (
+                "OnlytextTypewritten-Sistematic-carattere15_260713_212435.sdocx",
+                Some(0),
+            ),
+            ("Tabella4x3Regolare_260711_160040.sdocx", None),
+            ("Tabella4x3Regolarev2_260711_174656.sdocx", None),
+            ("cs61bl_su22.sdocx", None),
+            ("quiz.sdocx", None),
+        ];
+        for (name, expected) in cases {
+            if let Some(mut reader) = sample(name) {
+                let actual = find_typed_text_anchor(&mut reader).unwrap();
+                assert_eq!(actual, expected, "{name}");
+            }
+        }
+        if let Some(mut reader) = sample("OnlyShapesblack_new_260701_185935.sdocx") {
+            assert_eq!(find_typed_text_anchor(&mut reader).unwrap(), None);
+        }
     }
 
     /// The Scene resolves paper + default_ink per page from the RE-decoded `.page`
@@ -1528,9 +1631,15 @@ mod tests {
         };
 
         assert_eq!(find("elenco numerato 2").prefix.as_ref().expect("numbered prefix").text, "2. ");
-        assert_eq!(find("elenco puntato1").prefix.as_ref().expect("bullet prefix").text, "\u{2022} ");
+        let numbered = find("elenco numerato 2").prefix.as_ref().expect("numbered prefix");
+        assert_eq!((numbered.marker_indent, numbered.body_indent), (Some(0.0), Some(80.0)));
+        let bullet = find("elenco puntato1").prefix.as_ref().expect("bullet prefix");
+        assert_eq!(bullet.text, "\u{2022} ");
+        assert_eq!((bullet.marker_indent, bullet.body_indent), (Some(40.0), Some(116.0)));
         let todo_done = find("todo3-fatta");
-        assert_eq!(todo_done.prefix.as_ref().expect("todo prefix").text, "\u{2611} ");
+        let todo_prefix = todo_done.prefix.as_ref().expect("todo prefix");
+        assert_eq!(todo_prefix.text, "\u{2611} ");
+        assert_eq!((todo_prefix.marker_indent, todo_prefix.body_indent), (Some(24.0), Some(116.0)));
         assert!(todo_done.segs.iter().all(|s| s.strike), "a checked todo strikes its own text");
 
         assert_eq!(find("testo al centro").align, Some(SceneAlign::Center));
@@ -1546,6 +1655,28 @@ mod tests {
         assert_eq!((plain.lead_gap, plain.trail_gap), (0.0, 0.0));
         assert!((plain.advance - 66.0).abs() < 1e-9);
         assert!((todo_done.advance - TYPED_TEXT_TODO_MIN_H).abs() < 1e-9);
+    }
+
+    /// End-to-end guard for the structural Common projection used by the app,
+    /// not merely the pre-normalized Python render model.
+    #[test]
+    fn all_samsung_scene_drops_object_padding_and_limits_strike() {
+        let Some(mut reader) = sample("Allsamsungnotes_260630_113259.sdocx") else {
+            return;
+        };
+        let note_text = reader.metadata().note_text.clone().expect("typed note body");
+        let (width, _) = reader.page_size(4).expect("page 4 size");
+        let st = build_scene_text(&note_text, width as f64);
+        let line_text = |line: &SceneTextLine| -> String {
+            line.segs.iter().map(|seg| seg.text.as_str()).collect()
+        };
+
+        assert_eq!(line_text(&st.lines[0]),
+            "Testo scritto a tastiera. Grassetto corsivo sottolineato cancellato");
+        assert!(st.lines.iter().all(|line| !line_text(line).contains('\u{FFFC}')));
+        let struck: Vec<_> = st.lines.iter().flat_map(|line| &line.segs)
+            .filter(|seg| seg.strike).map(|seg| seg.text.as_str()).collect();
+        assert_eq!(struck, ["cancellato"]);
     }
 
     /// The 4×3 structural table resolves to page-local grid edges + 12
