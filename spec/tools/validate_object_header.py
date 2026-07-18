@@ -70,7 +70,7 @@ def _diffs(blob: bytes) -> list[str]:
 
 def main() -> int:
     ok = failures = 0
-    for sample in sorted((ROOT / "samples").glob("*.sdocx")):
+    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
         with zipfile.ZipFile(sample) as z:
             page_names = [n for n in z.namelist() if n.endswith(".page")]
         n_ok = n_bad = 0

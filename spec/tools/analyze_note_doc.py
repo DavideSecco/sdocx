@@ -309,7 +309,7 @@ def collect(paths: list[Path]) -> dict:
     files = []
     for path in paths:
         if path.is_dir():
-            files.extend(sorted(path.glob("*.sdocx")))
+            files.extend(sorted(path.glob("*.sdocx")) + sorted(path.glob("*/note.sdocx")))
         elif path.suffix == ".sdocx":
             files.append(path)
     files = sorted(dict.fromkeys(files))

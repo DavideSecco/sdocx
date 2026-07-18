@@ -17,7 +17,7 @@ from pysdocx.container import parse_media_info  # noqa: E402
 
 def main() -> int:
     ok = failures = 0
-    for sample in sorted((ROOT / "samples").glob("*.sdocx")):
+    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
         with zipfile.ZipFile(sample) as z:
             if "media/mediaInfo.dat" not in z.namelist():
                 print(f"SKIP  {sample.name}: no mediaInfo.dat")

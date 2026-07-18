@@ -119,3 +119,7 @@ samples/*
 
 # CLI render output (python -m pysdocx render), regenerate on demand
 outputs_render/
+
+# Samsung Notes APK reverse engineering (decompiled code, native libs,
+# instrumentation scripts) — private, not for the public repo
+apk-re/

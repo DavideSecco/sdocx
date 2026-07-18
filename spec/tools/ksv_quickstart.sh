@@ -32,35 +32,35 @@ run_ksv() {
 case "${1:-}" in
   page-id)
     run_ksv \
-      "samples/OnlyPensBlacksize10_260630_120309.sdocx" \
+      "samples/OnlyPensBlacksize10_260630_120309/note.sdocx" \
       "pageIdInfo.dat" \
       "pageIdInfo.dat" \
       "sdocx_page_id_info.ksy"
     ;;
   end-tag)
     run_ksv \
-      "samples/OnlyPensBlacksize10_260630_120309.sdocx" \
+      "samples/OnlyPensBlacksize10_260630_120309/note.sdocx" \
       "end_tag.bin" \
       "end_tag.bin" \
       "sdocx_end_tag.ksy"
     ;;
   media-info)
     run_ksv \
-      "samples/OnlyImages_260702_190147.sdocx" \
+      "samples/OnlyImages_260702_190147/note.sdocx" \
       "media/mediaInfo.dat" \
       "mediaInfo.dat" \
       "sdocx_media_info.ksy"
     ;;
   page)
     run_ksv \
-      "samples/OnlyPensBlacksize10_260630_120309.sdocx" \
+      "samples/OnlyPensBlacksize10_260630_120309/note.sdocx" \
       "4302b93e-746a-11f1-9552-b7833a8a74d9.page" \
       "OnlyPens.page" \
       "sdocx_page.ksy"
     ;;
   note)
     run_ksv \
-      "samples/OnlyPensBlacksize10_260630_120309.sdocx" \
+      "samples/OnlyPensBlacksize10_260630_120309/note.sdocx" \
       "note.note" \
       "note.note" \
       "sdocx_note.ksy"

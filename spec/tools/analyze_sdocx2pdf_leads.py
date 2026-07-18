@@ -33,7 +33,7 @@ def _paths(paths: list[Path]) -> list[Path]:
     out = []
     for path in paths:
         if path.is_dir():
-            out.extend(sorted(path.glob("*.sdocx")))
+            out.extend(sorted(path.glob("*.sdocx")) + sorted(path.glob("*/note.sdocx")))
         elif path.suffix == ".sdocx":
             out.append(path)
     return sorted(dict.fromkeys(out))
