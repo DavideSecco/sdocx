@@ -46,7 +46,7 @@ from pysdocx.page import (  # noqa: E402
 
 
 def _samples():
-    return sorted(SAMPLES.glob("*.sdocx"))
+    return sorted(SAMPLES.glob("*.sdocx")) + sorted(SAMPLES.glob("*/note.sdocx"))
 
 
 def _member(sample: Path, name: str) -> bytes | None:

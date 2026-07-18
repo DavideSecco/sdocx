@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn renders_sample_to_valid_png() {
-        let doc = sdocx::parse("../../samples/handwritten.sdocx").expect("parse sample");
+        let doc = sdocx::parse("../../samples/handwritten/note.sdocx").expect("parse sample");
         let pages = sdocx_render::render_document(&doc);
         assert!(!pages.is_empty(), "sample has no pages");
         let png = svg_to_png(&pages[0].svg).expect("render sample to png");

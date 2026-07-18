@@ -65,7 +65,7 @@ def dump_table(t: dict) -> dict:
 
 def main() -> None:
     result: dict[str, list] = {}
-    for path in sorted(SAMPLES.glob("*.sdocx")):
+    for path in sorted(SAMPLES.glob("*.sdocx")) + sorted(SAMPLES.glob("*/note.sdocx")):
         try:
             with zipfile.ZipFile(path) as z:
                 note = z.read("note.note")

@@ -521,7 +521,7 @@ mod tests {
 
     #[test]
     fn render_document_emits_one_svg_per_page_with_dimensions() {
-        let doc = sdocx::parse("../../samples/handwritten.sdocx").expect("parse sample");
+        let doc = sdocx::parse("../../samples/handwritten/note.sdocx").expect("parse sample");
         assert!(!doc.pages.is_empty(), "sample has no pages");
         let rendered = render_document(&doc);
         assert_eq!(rendered.len(), doc.pages.len());

@@ -1457,7 +1457,7 @@ mod tests {
         // points inside the stroke's own bounding box. Before the bbox-aware
         // layout selection, ~3-4% of strokes here decoded to garbage
         // coordinates (off-canvas or collapsed on the origin).
-        let doc = crate::parse("../../samples/handwritten.sdocx").expect("parse sample");
+        let doc = crate::parse("../../samples/handwritten/note.sdocx").expect("parse sample");
         let mut checked = 0;
         for page in &doc.pages {
             for stroke in &page.strokes {
@@ -1628,7 +1628,7 @@ mod tests {
     #[test]
     fn parses_custom_image_page_template() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../samples/PagLiscia&templatescustoms_260711_122117.sdocx");
+            .join("../../samples/PagLiscia&templatescustoms_260711_122117/note.sdocx");
         if !path.exists() {
             eprintln!("skipping: custom-image sample not present");
             return;

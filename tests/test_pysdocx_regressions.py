@@ -14,16 +14,17 @@ from tests.golden import compute_reports, corpus_snapshot, load_golden
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = ROOT / "samples"
-ONLY_TEXT_SQUARED = SAMPLES / "OnlyTextTypeWritten_squared_260703_013624.sdocx"
-ONLY_TEXT_GT = SAMPLES / "OnlyTextTypeWritten_260701_180427_gt"
-ONLY_TEXT_SQUARED_GT = SAMPLES / "OnlyTextTypeWritten_squared_260703_013624"
-MATH_WEB = SAMPLES / "Mathsolver&Hyperlink_260711_180442.sdocx"
-TYPED_TEXT_MIXED_FONTS = SAMPLES / "OnlyTypeWrittenTextDifferentFont_260713_212408.sdocx"
-TYPED_TEXT_UNIFORM_15 = SAMPLES / "OnlytextTypewritten-Sistematic-carattere15_260713_212435.sdocx"
+ONLY_TEXT_SQUARED = SAMPLES / "OnlyTextTypeWritten_squared_260703_013624" / "note.sdocx"
+ONLY_TEXT_GT = SAMPLES / "OnlyTextTypeWritten_260701_180427" / "gt"
+ONLY_TEXT_SQUARED_GT = SAMPLES / "OnlyTextTypeWritten_squared_260703_013624" / "gt"
+MATH_WEB = SAMPLES / "Mathsolver&Hyperlink_260711_180442" / "note.sdocx"
+ALL_SAMSUNG_NOTES = SAMPLES / "Allsamsungnotes_260630_113259" / "note.sdocx"
+TYPED_TEXT_MIXED_FONTS = SAMPLES / "OnlyTypeWrittenTextDifferentFont_260713_212408" / "note.sdocx"
+TYPED_TEXT_UNIFORM_15 = SAMPLES / "OnlytextTypewritten-Sistematic-carattere15_260713_212435" / "note.sdocx"
 # Every sample contributes exactly one end_tag.bin/mediaInfo.dat/pageIdInfo.dat/note.note, so
 # "how many of the corpus files exhibit this per-file structural fact" is definitionally the
 # sample count, not a number to hand-update each time a sample is added.
-SAMPLE_COUNT = len(list(SAMPLES.glob("*.sdocx")))
+SAMPLE_COUNT = len(list(SAMPLES.glob("*.sdocx"))) + len(list(SAMPLES.glob("*/note.sdocx")))
 
 REGEN_HINT = (
     "corpus fingerprint changed. If this is an intentional sample add or decoder change, "
@@ -249,6 +250,32 @@ class ControlledTypedTextLayoutTest(unittest.TestCase):
         for page in pages:
             self.assertTrue(all(b["y"] - a["y"] == 90.0 for a, b in zip(page, page[1:])))
 
+    def test_allsamsungnotes_gt_wrap_lists_and_todos(self) -> None:
+        pages = self._pages(ALL_SAMSUNG_NOTES)
+        self.assertEqual([len(page) for page in pages], [8])
+        page = pages[0]
+        self.assertEqual(
+            ["".join(segment[1] for segment in line["segs"]) for line in page],
+            [
+                "Testo scritto a tastiera. Grassetto corsivo sottolineato cancellato",
+                "1. Elenco numerato",
+                "2. Elenco numerato 2",
+                "• Elenco puntato",
+                "• Elenco puntato",
+                "☐ Todolist1",
+                "☐ Todolist2",
+                "Testo13 testorosso",
+            ],
+        )
+        expected_y = [80.0, 212.0, 278.0, 410.0, 476.0, 608.0, 684.875, 827.75]
+        for line, expected in zip(page, expected_y):
+            self.assertAlmostEqual(line["y"], expected, places=3)
+        self.assertAlmostEqual(page[1]["segs"][1][0], 144.0, places=3)
+        self.assertAlmostEqual(page[3]["segs"][0][0], 104.0, places=3)
+        self.assertAlmostEqual(page[3]["segs"][1][0], 180.0, places=3)
+        self.assertAlmostEqual(page[5]["segs"][0][0], 88.0, places=3)
+        self.assertAlmostEqual(page[5]["segs"][1][0], 180.0, places=3)
+
     def test_mixed_fonts_and_blank_rows_match_vector_pdf_page_breaks(self) -> None:
         pages = self._pages(TYPED_TEXT_MIXED_FONTS)
         self.assertEqual([len(page) for page in pages], [23, 6, 3])
@@ -460,6 +487,35 @@ class StructuralParagraphRegressionTest(unittest.TestCase):
                 self.assertEqual(structural[i + offset], lg, (sample.name, i))
                 checked += 1
         self.assertEqual(checked, 300)
+
+    def test_all_samsung_strikethrough_uses_low_payload_byte(self) -> None:
+        require_sample(ALL_SAMSUNG_NOTES)
+        typed = parse_typed_text(load_note(ALL_SAMSUNG_NOTES))
+        strikes = [run for run in typed["runs"] if run["style"] == "strikethrough"]
+        self.assertEqual(strikes, [{"start": 57, "end": 69, "style": "strikethrough"}])
+        self.assertEqual(typed["text"][57:67], "cancellato")
+
+    def test_body_sections_are_contiguous_text_ranges(self) -> None:
+        checked = 0
+        for sample in sorted(SAMPLES.glob("*.sdocx")):
+            note = load_note(sample)
+            if not note:
+                continue
+            body = note_doc_common_frames(note, parse_note_doc(note))["body"]
+            if body is None or not body["sections"]:
+                continue
+            sections = body["sections"]
+            if not body["text"]:
+                self.assertEqual(sections, [(0xFFFFFFFF, 1), (0, 0)], sample.name)
+                checked += 1
+                continue
+            self.assertEqual(sections[0][0], 0, sample.name)
+            for current, following in zip(sections, sections[1:]):
+                self.assertEqual(current[0] + current[1], following[0], sample.name)
+            for start, length in sections:
+                self.assertLessEqual(start + length, len(body["text"]), sample.name)
+            checked += 1
+        self.assertGreater(checked, 0)
 
 
 if __name__ == "__main__":

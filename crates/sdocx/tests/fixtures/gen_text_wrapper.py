@@ -101,7 +101,7 @@ def wrappers_for(z: zipfile.ZipFile) -> list[dict]:
 
 def main() -> None:
     result: dict = {}
-    for sample in sorted(SAMPLES.glob("*.sdocx")):
+    for sample in sorted(SAMPLES.glob("*.sdocx")) + sorted(SAMPLES.glob("*/note.sdocx")):
         if sample.name.startswith("Appunti vari"):
             continue  # personal — keep out of the committed fixture
         with zipfile.ZipFile(sample) as z:
