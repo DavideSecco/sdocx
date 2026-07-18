@@ -3,8 +3,8 @@
 
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-import sdocx_table_object
 import sdocx_web_object
+import sdocx_table_object
 
 
 if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
@@ -293,8 +293,6 @@ class SdocxTextWrapper(KaitaiStruct):
         def _fetch_instances(self):
             pass
             self.body._fetch_instances()
-
-
     class ObjectHeader(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxTextWrapper.ObjectHeader, self).__init__(_io)
@@ -404,6 +402,11 @@ class SdocxTextWrapper(KaitaiStruct):
 
 
     class SectionPair(KaitaiStruct):
+        """A character range in Common.text. Non-empty body sections form a
+        contiguous sequence: `text_start + text_length` equals the next range's
+        `text_start` corpus-wide. Empty bodies use the special pair
+        `(0xffffffff, 1)` followed by `(0, 0)`.
+        """
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxTextWrapper.SectionPair, self).__init__(_io)
             self._parent = _parent
@@ -411,8 +414,8 @@ class SdocxTextWrapper(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.first = self._io.read_u4le()
-            self.second = self._io.read_u4le()
+            self.text_start = self._io.read_u4le()
+            self.text_length = self._io.read_u4le()
 
 
         def _fetch_instances(self):
@@ -532,6 +535,18 @@ class SdocxTextWrapper(KaitaiStruct):
 
         def _fetch_instances(self):
             pass
+
+        @property
+        def strikethrough_enabled(self):
+            """Type-20 boolean stored in payload byte 0; remaining bytes are residue."""
+            if hasattr(self, '_m_strikethrough_enabled'):
+                return self._m_strikethrough_enabled
+
+            if self.span_type == 20:
+                pass
+                self._m_strikethrough_enabled = KaitaiStream.byte_array_index(self.extra, 0)
+
+            return getattr(self, '_m_strikethrough_enabled', None)
 
 
     class TextBody(KaitaiStruct):

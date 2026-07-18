@@ -247,6 +247,11 @@ types:
         type: u4
       - id: extra
         size: size - 16
+    instances:
+      strikethrough_enabled:
+        doc: Type-20 boolean stored in payload byte 0; remaining bytes are residue.
+        value: extra[0]
+        if: span_type == 20
   paragraph_rec:
     seq:
       - id: size
@@ -260,10 +265,15 @@ types:
       - id: extra
         size: size - 12
   section_pair:
+    doc: |
+      A character range in Common.text. Non-empty body sections form a
+      contiguous sequence: `text_start + text_length` equals the next range's
+      `text_start` corpus-wide. Empty bodies use the special pair
+      `(0xffffffff, 1)` followed by `(0, 0)`.
     seq:
-      - id: first
+      - id: text_start
         type: u4
-      - id: second
+      - id: text_length
         type: u4
   inline_object:
     seq:

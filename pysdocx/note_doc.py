@@ -1119,7 +1119,11 @@ def common_frame_paragraphs(frame: dict) -> list[dict]:
 
       2 indent_level  -> extra[0:4] u32 value, extra[4:8] u32 enabled
       3 align         -> extra[0:4] u32 value (0/1/2 = left/right/center)
-      4 line_spacing  -> extra[0:4] u32 (unused), extra[4:8] f32 spacing
+      4 line_spacing  -> extra[0:4] u32 enabled (always 1 whenever this record
+                         is present, confirmed corpus-wide via APK static RE —
+                         Samsung's native line-height formula takes a separate
+                         boolean "explicit spacing set" flag), extra[4:8] f32
+                         spacing multiplier
       5 bullet/list   -> extra u32 kind, u32 value, u32 reserved, u32 enabled
       6 parsing_state -> Unknown, observed always zero; not layout-relevant
       8 space_before  -> extra[0:4] f32 value, extra[4:8] u32 (unused)
@@ -1154,8 +1158,8 @@ def common_frame_paragraphs(frame: dict) -> list[dict]:
                 if value in ALIGNMENTS:
                     p["alignment"] = ALIGNMENTS[value]
             elif ptype == 4 and len(extra) >= 8:
-                spacing = struct.unpack_from("<f", extra, 4)[0]
-                if spacing == spacing and 0.5 <= spacing <= 4.0:
+                enabled, spacing = struct.unpack_from("<If", extra)
+                if enabled and spacing == spacing and 0.5 <= spacing <= 4.0:
                     p["line_spacing"] = spacing
             elif ptype == 5 and len(extra) >= 16:
                 kind, value, _reserved, enabled = struct.unpack_from("<IIII", extra)

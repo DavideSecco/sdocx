@@ -264,15 +264,14 @@ def parse_typed_text(note_bytes: bytes) -> dict | None:
                 if rb:
                     runs.append({"start": rb[0], "end": rb[1], "style": key})
     strike_runs = _marker_runs(note_bytes, STRIKETHROUGH_MARKER, raw_len)
-    # Unlike `18 00 <tag> 00`, the 4-byte `14 00 14 00` prefix is short enough to collide with
-    # unrelated binary data elsewhere in the TLV block (confirmed on the benchmark note.note: a
-    # stray hit with enabled=30465/1998523392 — clearly not a boolean flag). Real strikethrough
-    # runs mirror bold/italic/underline: a clean enabled∈{0,1} "on" run immediately followed by an
-    # "off" run whose start equals the "on" run's end (e.g. (84,95,enabled=1),(95,171,enabled=0)
-    # on the confirmed sample) — require that exact pairing to reject isolated collisions.
-    strike_starts = {s for s, _e, _v, en in strike_runs if en in (0, 1)}
+    # Type 20 stores its boolean in payload byte 0.  The upper three bytes are
+    # residue and need not be zero (AllSamsung carries 0x00007701 / 0x771f0c00,
+    # whose low bytes are the expected on/off pair).  The short marker can also
+    # collide elsewhere, so retain the structural pairing guard: the following
+    # type-20 record must begin exactly where the active one ends.
+    strike_starts = {s for s, _e, _v, en in strike_runs if en & 0xFF in (0, 1)}
     for start, end, _value, enabled in strike_runs:
-        if enabled == 1 and end in strike_starts:
+        if enabled & 0xFF == 1 and end in strike_starts:
             rb = rebase(start, end)
             if rb:
                 runs.append({"start": rb[0], "end": rb[1], "style": "strikethrough"})

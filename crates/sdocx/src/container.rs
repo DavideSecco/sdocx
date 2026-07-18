@@ -257,7 +257,9 @@ fn parse_note_text(data: &[u8]) -> Option<RichTextBox> {
         }
     }
 
-    let (text, text_end) = first_utf16_text(data)?;
+    let Some((text, text_end)) = first_utf16_text(data) else {
+        return None;
+    };
     // A body that is only object anchors (U+FFFC, e.g. table placeholders) and
     // whitespace has no visible typed text — a note that is just a table. pysdocx
     // strips these to an empty body and renders nothing; do the same (avoids a
@@ -670,6 +672,17 @@ impl<R: Read + Seek> Reader<R> {
         self.page_names.len()
     }
 
+    /// Uncompressed size of a page member without decoding its contents.
+    /// Useful for cheap placement heuristics that must preserve lazy loading.
+    pub fn page_uncompressed_size(&mut self, index: usize) -> Result<u64> {
+        let name = self
+            .page_names
+            .get(index)
+            .ok_or_else(|| Error::Format("page index out of range".into()))?
+            .clone();
+        Ok(self.archive.by_name(&name)?.size())
+    }
+
     /// Parse a single page by index (in `pageIdInfo` order).
     /// Extract one page's raw bytes from the archive without parsing. Parsing
     /// (`parse_page`) is a pure function of these bytes, so callers that hold a
@@ -767,6 +780,32 @@ mod tests {
         assert_eq!(metadata.dark_mode_compatibility, Some(false));
     }
 
+    /// The structural Common projection must discard document-flow padding
+    /// and rebase both character and paragraph coordinates.  This is the
+    /// end-to-end regression that the earlier renderer-only tests missed:
+    /// without it AllSamsung showed an [OBJ] glyph, sat far too low, and the
+    /// non-zero residue bytes in type-20 spans struck every following list.
+    #[test]
+    fn all_samsung_note_body_is_rebased_and_strike_is_boolean() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../samples/Allsamsungnotes_260630_113259/note.sdocx");
+        if !path.exists() {
+            eprintln!("skipping: AllSamsung sample not present");
+            return;
+        }
+        let reader = crate::open(&path).expect("open sample");
+        let text = reader.metadata().note_text.as_ref().expect("typed body");
+
+        assert!(text.text.starts_with("Testo scritto a tastiera."));
+        assert!(!text.text.contains('\u{FFFC}'));
+        assert_eq!(text.paragraphs.len(), text.text.split('\n').count());
+
+        let strikes: Vec<_> = text.runs.iter().filter(|run| run.strikethrough).collect();
+        assert_eq!(strikes.len(), 1);
+        assert_eq!((strikes[0].start, strikes[0].end), (57, 69));
+        assert_eq!(&text.text[57..67], "cancellato");
+    }
+
     /// The decoded `<index>@` archive index is the ONE media currency, end to end:
     /// a PDF template's `media_index` is the raw index pysdocx reports (0 = Study,
     /// 2 = Planner here) and `media_bytes(raw)` must fetch actual PDF bytes.
@@ -776,7 +815,7 @@ mod tests {
     #[test]
     fn pdf_template_media_index_is_the_decoded_archive_index() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../samples/Notebook&Planner1_260709_213306.sdocx");
+            .join("../../samples/Notebook&Planner1_260709_213306/note.sdocx");
         if !path.exists() {
             eprintln!("skipping: Notebook&Planner sample not present");
             return;

@@ -607,7 +607,16 @@ fn structural_paragraphs(frame: &CommonFrame) -> Vec<ParagraphInfo> {
 }
 
 fn common_frame_rich_text(frame: &CommonFrame) -> Option<WrapperRichText> {
-    let text: String = frame.text.trim_end_matches(['\0', '\n']).to_string();
+    // Common's character coordinates include document-flow padding before the
+    // first visible body paragraph: blank lines and U+FFFC inline-object
+    // anchors.  The long-standing pysdocx projection strips exactly these
+    // leading units (`note._LEADING_PAD`) and rebases every character- and
+    // paragraph-indexed record.  Keeping the raw prefix here rendered the
+    // table anchor as "[OBJ]" and pushed AllSamsung's page-5 text far down.
+    let raw = frame.text.trim_end_matches(['\0', '\n']);
+    let lead = raw.chars().take_while(|&c| c == '\n' || c == '\u{FFFC}').count();
+    let paragraph_lead = raw.chars().take(lead).filter(|&c| c == '\n').count();
+    let text: String = raw.chars().skip(lead).collect();
     if text.trim().is_empty() {
         return None;
     }
@@ -616,15 +625,35 @@ fn common_frame_rich_text(frame: &CommonFrame) -> Option<WrapperRichText> {
     let mut colors = Vec::new();
     let mut highlights = Vec::new();
     let mut font_sizes = Vec::new();
+    // Type 20 stores the boolean in payload byte 0; the upper three bytes are
+    // residue and are not reliably zero (AllSamsung has 00_00_77_01 and
+    // 77_1f_0c_00).  A real "on" span is paired with the following type-20
+    // record at its end, matching the established pysdocx collision guard.
+    let strike_boundaries: Vec<u32> = frame
+        .spans
+        .iter()
+        .filter(|span| span.span_type == 20 && span.value & 0xFF <= 1)
+        .map(|span| span.start)
+        .collect();
     for span in &frame.spans {
-        let start = span.start as usize;
-        let end = (span.end as usize).min(text_len);
+        let raw_start = span.start as usize;
+        let raw_end = span.end as usize;
+        if raw_end <= lead {
+            continue;
+        }
+        let start = raw_start.saturating_sub(lead);
+        let end = raw_end.saturating_sub(lead).min(text_len);
         if start >= end {
             continue;
         }
         let value = span.value;
+        let enabled_style = match span.span_type {
+            5 | 6 | 7 => value != 0,
+            20 => value & 0xFF == 1 && strike_boundaries.contains(&span.end),
+            _ => false,
+        };
         match span.span_type {
-            5 | 6 | 7 | 20 if value != 0 => runs.push(RichTextRun {
+            5 | 6 | 7 | 20 if enabled_style => runs.push(RichTextRun {
                 start,
                 end,
                 bold: span.span_type == 5,
@@ -653,8 +682,15 @@ fn common_frame_rich_text(frame: &CommonFrame) -> Option<WrapperRichText> {
             _ => {}
         }
     }
-    let paragraphs = structural_paragraphs(frame);
-    Some(WrapperRichText { text, runs, colors, highlights, font_sizes, paragraphs })
+    let paragraphs = structural_paragraphs(frame).into_iter().skip(paragraph_lead).collect();
+    Some(WrapperRichText {
+        text,
+        runs,
+        colors,
+        highlights,
+        font_sizes,
+        paragraphs,
+    })
 }
 
 /// Decode a raw type-2 page text-box blob through the structural wrapper and
