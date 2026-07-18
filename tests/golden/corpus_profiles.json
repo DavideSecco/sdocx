@@ -1,40 +1,42 @@
 {
   "end_tag": {
     "format_versions": {
-      "4000": 22,
+      "4000": 29,
       "5400": 7
     },
     "payload_sizes": {
       "142": 2,
-      "146": 27
+      "146": 33,
+      "274": 1
     },
     "signature_offsets": {
       "122": 2,
-      "126": 27
+      "126": 33,
+      "254": 1
     },
     "time_relations": {
-      "created_time_a_exact": 26,
+      "created_time_a_exact": 33,
       "created_time_a_millis_close": 3,
-      "created_time_b_exact": 26,
-      "created_time_header_exact": 29,
-      "display_created_time_exact": 26,
+      "created_time_b_exact": 33,
+      "created_time_header_exact": 36,
+      "display_created_time_exact": 33,
       "display_created_time_millis_close": 3,
-      "display_modified_time_exact": 26,
-      "extra_time_nonzero": 6,
-      "last_recognised_data_modified_time_nonzero": 6,
-      "modified_exact": 29
+      "display_modified_time_exact": 33,
+      "extra_time_nonzero": 10,
+      "last_recognised_data_modified_time_nonzero": 10,
+      "modified_exact": 36
     }
   },
   "geometry": {
     "by_type": {
-      "image": 49,
+      "image": 64,
       "shape": 424,
-      "text_box": 16
+      "text_box": 24
     },
-    "count": 489,
+    "count": 512,
     "marker_deltas": [
       {
-        "count": 49,
+        "count": 64,
         "l0_delta": 0,
         "l1_delta": 0,
         "marker": "image",
@@ -48,7 +50,7 @@
         "object_type": "shape"
       },
       {
-        "count": 16,
+        "count": 24,
         "l0_delta": 123,
         "l1_delta": 0,
         "marker": "text",
@@ -62,7 +64,7 @@
       "15": 1,
       "2": 83,
       "3": 10,
-      "4": 198,
+      "4": 221,
       "5": 28,
       "6": 79,
       "7": 1,
@@ -164,77 +166,80 @@
   },
   "leads": {
     "end_tag_page_models": {
-      "0": 26,
+      "0": 33,
       "1": 3
     },
     "media_by_kind": {
-      "image": 49,
+      "image": 63,
       "painting": 1
     },
-    "media_known_ref_u32_hits": 50,
-    "media_objects": 50,
-    "note_text_common_frame_hits": 41,
-    "note_text_surfaces": 43,
-    "text_boxes": 16,
+    "media_known_ref_u32_hits": 64,
+    "media_objects": 64,
+    "note_text_common_frame_hits": 48,
+    "note_text_surfaces": 50,
+    "text_boxes": 24,
     "text_common_frame_hits": 7,
     "text_structural_frame_offs": {
       "rotated=False:off=386": 5,
-      "rotated=True:off=406": 11
+      "rotated=False:off=402": 1,
+      "rotated=True:off=406": 18
     },
-    "text_structural_frames_found": 16,
-    "text_structural_spans_match": 16,
-    "voice_clips": 2,
+    "text_structural_frames_found": 24,
+    "text_structural_spans_match": 24,
+    "voice_clips": 4,
     "voice_clips_linked_to_audio_media": 2
   },
   "media": {
     "format_versions": {
       "5202": 2,
       "5304": 1,
-      "5400": 26
+      "5400": 33
     },
     "is_attached": {
-      "True": 275
+      "True": 290
     },
     "magic": {
       "0x1452": 2,
       "0x14b8": 1,
-      "0x1518": 26
+      "0x1518": 33
     },
-    "records": 275,
+    "records": 290,
     "ref_counts": {
-      "1": 265,
+      "1": 276,
       "100": 1,
       "2": 4,
       "20": 1,
-      "3": 1,
+      "3": 4,
       "5": 1,
-      "7": 2
+      "7": 2,
+      "9": 1
     },
     "tail_tags": {
-      "1": 265,
+      "1": 276,
       "100": 1,
       "2": 4,
       "20": 1,
-      "3": 1,
+      "3": 4,
       "5": 1,
-      "7": 2
+      "7": 2,
+      "9": 1
     }
   },
   "note_tail": {
-    "coverage_known_bytes": 13270,
+    "coverage_known_bytes": 15566,
     "kinds": {
-      "pen_preload_path": 88,
-      "pen_preload_prelude": 39,
-      "pen_preload_prelude_raw": 48,
-      "pen_style_tail": 22,
-      "tail_post_hash_u32": 6,
-      "voice_clip": 2,
+      "pen_preload_path": 100,
+      "pen_preload_prelude": 44,
+      "pen_preload_prelude_raw": 54,
+      "pen_style_tail": 26,
+      "tail_post_hash_u32": 8,
+      "voice_clip": 4,
       "voice_clip_header": 2,
-      "voice_clip_post": 2
+      "voice_clip_post": 4
     },
     "page_id_info_relations": {
-      "page_id_head_exact": 22,
-      "page_id_head_shifted_u32_2": 6
+      "page_id_head_exact": 27,
+      "page_id_head_shifted_u32_2": 8
     },
     "pen_style_tail_params": {
       "5;": 1,
@@ -248,14 +253,14 @@
       "18;0;100;": 5,
       "22;": 1,
       "4;": 2,
-      "5;": 3,
+      "5;": 4,
       "7;": 1,
-      "8;": 18
+      "8;": 22
     },
     "voice_media_links": {
-      "voice_actual_duration_ms_candidate": 2,
+      "voice_actual_duration_ms_candidate": 4,
       "voice_media_index_candidate": 2,
-      "voice_media_time_candidate": 2
+      "voice_media_time_candidate": 4
     },
     "voice_post_u64_pairs": [
       {
@@ -273,6 +278,22 @@
           4294967298,
           1782923525405332
         ]
+      },
+      {
+        "count": 1,
+        "post_u64_pairs": [
+          1783863359403,
+          4294967298,
+          1783863360080940
+        ]
+      },
+      {
+        "count": 1,
+        "post_u64_pairs": [
+          1783863399408,
+          4294967298,
+          1783863399555708
+        ]
       }
     ]
   },
@@ -280,12 +301,12 @@
     "cell_text_surfaces": 4,
     "gap_sizes": {
       "0": 3,
-      "8": 26
+      "8": 33
     },
-    "inline_object_surfaces": 6,
+    "inline_object_surfaces": 7,
     "table_cells_structural": 260,
     "tables_structural": 20,
-    "voice_records": 2
+    "voice_records": 5
   },
-  "page_id_records": 198
+  "page_id_records": 214
 }
