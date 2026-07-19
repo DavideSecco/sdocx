@@ -3,7 +3,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 
 // ── Types mirroring the Rust Scene (src-tauri/src/lib.rs) ────────────────────
 type RGB = [number, number, number];
-interface DocMeta { page_count: number; dark_mode: boolean; background: RGB | null }
+interface AudioClip { file_id: number; name: string; duration_ms: number; duration_str: string; created_time_us: number }
+interface DocMeta { page_count: number; dark_mode: boolean; background: RGB | null; audio: AudioClip[] }
 interface Stroke { points: [number, number][]; color: RGB | null; width: number; tapered: boolean; tool_id: number | null; pressures?: number[] }
 interface SImage {
   x: number;
@@ -39,6 +40,19 @@ let docHeight = 0;
 // scale abort instead of drawing stale bitmaps.
 let layoutGen = 0;
 let curPage = 0;
+
+// ── Audio playback state ────────────────────────────────────────────────────
+const AUDIO_SPEEDS = [1, 1.25, 1.5, 2];
+let audioClips: AudioClip[] = [];
+let clipStarts: number[] = []; // cumulative ms offset of each clip in the virtual timeline
+let totalMs = 0;
+let curClip = 0;
+let speedIdx = 0;
+let audioBarOpen = false;
+let audioSeeking = false; // true while the user is dragging the scrub handle
+const audioBlobCache = new Map<number, string>(); // file_id -> object URL
+const audioEl = new Audio();
+audioEl.preload = "auto";
 
 const sceneCache = new Map<number, PageScene>();
 const mediaCache = new Map<number, ImageBitmap | null>();
@@ -88,7 +102,23 @@ const sidebarBtn = document.querySelector<HTMLButtonElement>("#sidebar-btn")!;
 const thumbsEl = document.querySelector<HTMLElement>("#thumbs")!;
 const viewmodeBtn = document.querySelector<HTMLButtonElement>("#viewmode-btn")!;
 // Controls enabled only while a document is open (mirrors the old prev/next/fit).
-const docControls = [prevBtn, nextBtn, pageInput, zoomOut, zoomIn, zoomInput, zoomMenuBtn, audioBtn, exportBtn, sidebarBtn, viewmodeBtn];
+// audioBtn is NOT here: it's gated on the open note actually having clips
+// (see resetAudioState), not on "a document is open" like the others.
+const docControls = [prevBtn, nextBtn, pageInput, zoomOut, zoomIn, zoomInput, zoomMenuBtn, exportBtn, sidebarBtn, viewmodeBtn];
+
+const audioBar = document.querySelector<HTMLElement>("#audio-bar")!;
+const audioSpeedBtn = document.querySelector<HTMLButtonElement>("#audio-speed")!;
+const audioBack10Btn = document.querySelector<HTMLButtonElement>("#audio-back10")!;
+const audioPlayPauseBtn = document.querySelector<HTMLButtonElement>("#audio-playpause")!;
+const audioFwd10Btn = document.querySelector<HTMLButtonElement>("#audio-fwd10")!;
+const audioElapsedEl = document.querySelector<HTMLElement>("#audio-elapsed")!;
+const audioTotalEl = document.querySelector<HTMLElement>("#audio-total")!;
+const audioScrubTrack = document.querySelector<HTMLElement>("#audio-scrub-track")!;
+const audioScrubFill = document.querySelector<HTMLElement>("#audio-scrub-fill")!;
+const audioScrubDots = document.querySelector<HTMLElement>("#audio-scrub-dots")!;
+const audioScrubHandle = document.querySelector<HTMLElement>("#audio-scrub-handle")!;
+const audioListBtn = document.querySelector<HTMLButtonElement>("#audio-list-btn")!;
+const audioListMenu = document.querySelector<HTMLElement>("#audio-list-menu")!;
 
 // ── Render worker ────────────────────────────────────────────────────────────
 let jobSeq = 0;
@@ -652,6 +682,302 @@ function setZoom(newZoom: number): void {
   updateNav();
 }
 
+// ── Audio playback ───────────────────────────────────────────────────────────
+// Clips are separate .m4a archive members (no single combined media file), so
+// a "continuous timeline" is a frontend-only construct: one reused <audio>
+// element whose `src` is swapped at clip boundaries, with a virtual position
+// (clipStarts[curClip] + audioEl.currentTime*1000) presented as one scrub bar.
+
+// mm:ss (h:mm:ss once an hour is reached), zero-padded like the Samsung UI.
+function formatClock(ms: number): string {
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function parseHms(s: string): number {
+  const parts = s.split(":").map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return 0;
+  const [h, m, sec] = parts;
+  return (h * 3600 + m * 60 + sec) * 1000;
+}
+
+// Prefer the authoritative precise_duration_ms; duration_str (HH:MM:SS) is a
+// fallback for the (unobserved in-corpus) case where it's non-positive.
+function durationMsOf(clip: AudioClip): number {
+  return clip.duration_ms > 0 ? clip.duration_ms : parseHms(clip.duration_str);
+}
+
+// Recording timestamp, formatted in the viewer's local timezone — the
+// authoring device's original tz offset isn't stored in the voice record, so
+// exact reproduction of Samsung's displayed time isn't possible.
+function formatClipDate(createdUs: number): string {
+  const d = new Date(createdUs / 1000);
+  return new Intl.DateTimeFormat(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
+
+function setPlayPauseIcon(playing: boolean): void {
+  audioPlayPauseBtn.innerHTML = `<svg class="icon"><use href="#icon-${playing ? "pause" : "play"}" /></svg>`;
+  audioPlayPauseBtn.title = playing ? "Pausa" : "Riproduci";
+}
+
+function renderScrubDots(): void {
+  audioScrubDots.replaceChildren();
+  for (let k = 1; k < clipStarts.length; k++) {
+    const dot = document.createElement("div");
+    dot.className = "audio-scrub-dot";
+    dot.style.left = `${totalMs > 0 ? (clipStarts[k] / totalMs) * 100 : 0}%`;
+    audioScrubDots.appendChild(dot);
+  }
+}
+
+function renderClipList(): void {
+  audioListMenu.replaceChildren();
+  audioClips.forEach((c, i) => {
+    const btn = document.createElement("button");
+    btn.className = "menu-item audio-clip-item";
+    btn.dataset.i = String(i);
+    const nameEl = document.createElement("span");
+    nameEl.className = "audio-clip-name";
+    nameEl.textContent = c.name;
+    const metaEl = document.createElement("span");
+    metaEl.className = "audio-clip-meta";
+    metaEl.textContent = `${formatClock(durationMsOf(c))} · ${formatClipDate(c.created_time_us)}`;
+    btn.append(nameEl, metaEl);
+    audioListMenu.appendChild(btn);
+  });
+}
+
+function updateCurrentClipHighlight(): void {
+  audioListMenu.querySelectorAll<HTMLElement>(".audio-clip-item").forEach((el, i) => {
+    el.classList.toggle("current", i === curClip);
+  });
+}
+
+function updateScrubUI(virtualMs: number): void {
+  const pct = totalMs > 0 ? (Math.min(Math.max(virtualMs, 0), totalMs) / totalMs) * 100 : 0;
+  audioScrubFill.style.width = `${pct}%`;
+  audioScrubHandle.style.left = `${pct}%`;
+  audioElapsedEl.textContent = formatClock(virtualMs);
+}
+
+// Last clip whose start offset is <= ms (clamped into range).
+function clipIndexAt(ms: number): number {
+  let idx = 0;
+  for (let i = 0; i < clipStarts.length; i++) {
+    if (clipStarts[i] <= ms) idx = i;
+    else break;
+  }
+  return idx;
+}
+
+async function clipBlobUrl(fileId: number): Promise<string> {
+  const cached = audioBlobCache.get(fileId);
+  if (cached) return cached;
+  const m = await invoke<{ mime: string; base64: string }>("get_media", { index: fileId });
+  const bytes = Uint8Array.from(atob(m.base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: m.mime }));
+  audioBlobCache.set(fileId, url);
+  return url;
+}
+
+// Swap the shared <audio> element onto clip `idx` and wait for it to be
+// seekable. playbackRate resets to 1 on every `src` change, so it's re-applied
+// here rather than left to the caller.
+async function setClipSrc(idx: number): Promise<void> {
+  const url = await clipBlobUrl(audioClips[idx].file_id);
+  curClip = idx;
+  await new Promise<void>((resolve) => {
+    audioEl.addEventListener("loadedmetadata", () => resolve(), { once: true });
+    audioEl.src = url;
+  });
+  audioEl.playbackRate = AUDIO_SPEEDS[speedIdx];
+  updateCurrentClipHighlight();
+}
+
+async function advanceToNextClip(): Promise<void> {
+  const next = curClip + 1;
+  if (next >= audioClips.length) return;
+  await setClipSrc(next);
+  audioEl.currentTime = 0;
+  try {
+    await audioEl.play();
+  } catch {
+    /* autoplay blocked — user can press play */
+  }
+}
+
+function currentVirtualMs(): number {
+  return clipStarts[curClip] + audioEl.currentTime * 1000;
+}
+
+async function seekTo(virtualMs: number, opts: { play?: boolean } = {}): Promise<void> {
+  if (!audioClips.length) return;
+  virtualMs = Math.min(Math.max(virtualMs, 0), totalMs);
+  const idx = clipIndexAt(virtualMs);
+  const localSec = (virtualMs - clipStarts[idx]) / 1000;
+  if (idx !== curClip || !audioEl.src) {
+    await setClipSrc(idx);
+  }
+  audioEl.currentTime = localSec;
+  updateScrubUI(virtualMs);
+  const shouldPlay = opts.play ?? !audioEl.paused;
+  if (shouldPlay) {
+    try {
+      await audioEl.play();
+    } catch {
+      /* autoplay blocked — user can press play */
+    }
+  } else {
+    audioEl.pause();
+  }
+}
+
+function toggleAudioBar(): void {
+  if (audioBtn.disabled) return;
+  audioBarOpen = !audioBarOpen;
+  audioBar.hidden = !audioBarOpen;
+  audioBtn.classList.toggle("active", audioBarOpen);
+}
+
+// Rebuild all audio state for the freshly opened document (called from
+// loadDocument). Revokes blob URLs from the previous document and resets the
+// shared <audio> element, mirroring the cache-clearing block around it.
+function resetAudioState(): void {
+  audioEl.pause();
+  stopScrubLoop();
+  audioEl.removeAttribute("src");
+  audioEl.load();
+  for (const url of audioBlobCache.values()) URL.revokeObjectURL(url);
+  audioBlobCache.clear();
+
+  audioClips = meta?.audio ?? [];
+  clipStarts = [];
+  let acc = 0;
+  for (const c of audioClips) {
+    clipStarts.push(acc);
+    acc += durationMsOf(c);
+  }
+  totalMs = acc;
+  curClip = 0;
+  speedIdx = 0;
+  audioSpeedBtn.textContent = "1x";
+  setPlayPauseIcon(false);
+
+  audioBtn.disabled = audioClips.length === 0;
+  audioBtn.title = audioClips.length === 0 ? "Nessuna registrazione audio" : "Audio";
+  if (audioClips.length === 0 && audioBarOpen) {
+    audioBarOpen = false;
+    audioBar.hidden = true;
+    audioBtn.classList.remove("active");
+  }
+
+  renderScrubDots();
+  renderClipList();
+  updateScrubUI(0);
+  audioTotalEl.textContent = formatClock(totalMs);
+}
+
+// `timeupdate` only fires a few times a second — driving the scrub bar off it
+// alone reads as stepped/jerky. While playing, repaint every animation frame
+// instead; `timeupdate` stays as the catch-up source while paused (e.g. right
+// after a seek, before any frame loop is running).
+let scrubRaf = 0;
+function scrubTick(): void {
+  if (!audioSeeking) updateScrubUI(currentVirtualMs());
+  scrubRaf = requestAnimationFrame(scrubTick);
+}
+function startScrubLoop(): void {
+  if (!scrubRaf) scrubRaf = requestAnimationFrame(scrubTick);
+}
+function stopScrubLoop(): void {
+  if (scrubRaf) cancelAnimationFrame(scrubRaf);
+  scrubRaf = 0;
+}
+
+audioEl.addEventListener("timeupdate", () => {
+  if (audioSeeking || scrubRaf) return;
+  updateScrubUI(currentVirtualMs());
+});
+audioEl.addEventListener("play", () => {
+  setPlayPauseIcon(true);
+  startScrubLoop();
+});
+audioEl.addEventListener("pause", () => {
+  setPlayPauseIcon(false);
+  stopScrubLoop();
+  updateScrubUI(currentVirtualMs());
+});
+audioEl.addEventListener("ended", () => {
+  if (curClip + 1 < audioClips.length) void advanceToNextClip();
+});
+
+audioBtn.addEventListener("click", toggleAudioBar);
+audioSpeedBtn.addEventListener("click", () => {
+  speedIdx = (speedIdx + 1) % AUDIO_SPEEDS.length;
+  audioSpeedBtn.textContent = `${AUDIO_SPEEDS[speedIdx]}x`;
+  audioEl.playbackRate = AUDIO_SPEEDS[speedIdx];
+});
+audioPlayPauseBtn.addEventListener("click", () => {
+  if (!audioClips.length) return;
+  if (!audioEl.src) {
+    void seekTo(0, { play: true });
+    return;
+  }
+  if (audioEl.paused) audioEl.play().catch(() => {});
+  else audioEl.pause();
+});
+audioBack10Btn.addEventListener("click", () => {
+  void seekTo(currentVirtualMs() - 10_000, { play: !audioEl.paused });
+});
+audioFwd10Btn.addEventListener("click", () => {
+  void seekTo(currentVirtualMs() + 10_000, { play: !audioEl.paused });
+});
+audioListBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleMenu(audioListMenu);
+});
+audioListMenu.addEventListener("click", (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLElement>(".audio-clip-item");
+  if (!item?.dataset.i) return;
+  const idx = Number(item.dataset.i);
+  void seekTo(clipStarts[idx], { play: true });
+});
+
+// Scrub track: pointerdown seeks immediately (a plain click), drag previews
+// the position live and commits the seek on release.
+let scrubWasPlaying = false;
+function scrubFractionAt(clientX: number): number {
+  const rect = audioScrubTrack.getBoundingClientRect();
+  return Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+}
+audioScrubTrack.addEventListener("pointerdown", (e) => {
+  if (!audioClips.length) return;
+  audioSeeking = true;
+  scrubWasPlaying = !audioEl.paused;
+  audioScrubTrack.setPointerCapture(e.pointerId);
+  updateScrubUI(scrubFractionAt(e.clientX) * totalMs);
+});
+audioScrubTrack.addEventListener("pointermove", (e) => {
+  if (!audioSeeking) return;
+  updateScrubUI(scrubFractionAt(e.clientX) * totalMs);
+});
+audioScrubTrack.addEventListener("pointerup", (e) => {
+  if (!audioSeeking) return;
+  audioSeeking = false;
+  void seekTo(scrubFractionAt(e.clientX) * totalMs, { play: scrubWasPlaying });
+});
+
 // ── Open ─────────────────────────────────────────────────────────────────────
 async function openFile(): Promise<void> {
   const selected = await open({ multiple: false, filters: [{ name: "Samsung Notes", extensions: ["sdocx"] }] });
@@ -662,6 +988,7 @@ async function openFile(): Promise<void> {
 async function loadDocument(selected: string): Promise<void> {
   meta = await invoke<DocMeta>("open_document", { path: selected });
   sizes = await invoke<[number, number][]>("get_page_sizes");
+  resetAudioState();
   sceneCache.clear();
   for (const b of mediaCache.values()) b?.close();
   mediaCache.clear();
@@ -716,7 +1043,7 @@ zoomInput.addEventListener("keydown", (e) => {
 zoomInput.addEventListener("blur", commitZoomInput);
 
 // Dropdown menus (zoom presets/fit + export stub). Only one open at a time.
-function closeMenus(): void { zoomMenu.hidden = true; exportMenu.hidden = true; }
+function closeMenus(): void { zoomMenu.hidden = true; exportMenu.hidden = true; audioListMenu.hidden = true; }
 function toggleMenu(menu: HTMLElement): void {
   const willOpen = menu.hidden;
   closeMenus();
@@ -747,8 +1074,6 @@ viewmodeBtn.addEventListener("click", () => {
   updateVisible();
   updateNav();
 });
-// Audio is a placeholder for now — the behaviour spec lands in a later session.
-audioBtn.addEventListener("click", () => {});
 // Dismiss any open menu on an outside click.
 window.addEventListener("click", closeMenus);
 

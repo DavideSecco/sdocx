@@ -117,6 +117,80 @@ body {
 .menu-item:disabled { opacity: 0.45; cursor: default; }
 .menu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 
+/* Audio sub-bar (record/speed/transport/scrub/clip-list) ---------------- */
+.audio-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.audio-bar[hidden] { display: none; }
+.speedbtn { width: auto; padding: 0 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.audio-time { min-width: 38px; text-align: center; flex: 0 0 auto; }
+.audio-scrub { flex: 1 1 auto; display: flex; align-items: center; min-width: 60px; }
+.audio-scrub-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  cursor: pointer;
+}
+.audio-scrub-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.audio-scrub-dots { position: absolute; inset: 0; pointer-events: none; }
+.audio-scrub-dot {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  transform: translate(-50%, -50%);
+}
+.audio-scrub-handle {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.audio-list-menu { min-width: 220px; max-height: 320px; overflow-y: auto; }
+.audio-clip-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.audio-clip-item:hover { background: var(--btn-hover); }
+.audio-clip-item.current { background: var(--btn-hover); }
+.audio-clip-name { font-size: 13px; }
+.audio-clip-meta { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
 /* Workspace = thumbnail panel + stage, side by side under the toolbar. */
 .workspace {
   flex: 1 1 auto;
