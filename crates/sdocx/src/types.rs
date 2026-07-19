@@ -45,6 +45,30 @@ pub struct DocumentMetadata {
     /// host page and a page-local bbox. Document-level like [`Self::note_tables`]
     /// (decoded from note.note, not a page object tree). See `note_doc`.
     pub note_inline_images: Vec<NoteInlineImage>,
+    /// Voice recordings attached to the note (`note.note` field_flags bit 13,
+    /// `voice_data`). Document-level, not anchored to any page. See `note_doc`.
+    pub note_voice_clips: Vec<NoteVoiceClip>,
+}
+
+/// One voice recording attached to the note (`note.note` field_flags bit 13
+/// entry; see `note_doc::note_voice_clips`). The audio bytes themselves live
+/// as a separate archive media member, keyed by `file_id`.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NoteVoiceClip {
+    /// Archive media index (the `<index>@` prefix of the media member's
+    /// basename) that the recording's audio bytes live under — same currency
+    /// as [`MediaAsset::archive_index`].
+    pub file_id: u32,
+    /// Clip label, e.g. "Voice 001" or a user-renamed label.
+    pub name: String,
+    /// Authoritative duration in milliseconds (`precise_duration_ms`).
+    pub duration_ms: i64,
+    /// Raw `HH:MM:SS` duration string, kept as a fallback when `duration_ms`
+    /// is non-positive.
+    pub duration_str: String,
+    /// Recording timestamp in microseconds since the Unix epoch.
+    pub created_time_us: i64,
 }
 
 /// An imported image anchored inline in the typed-note body (`note.note`),

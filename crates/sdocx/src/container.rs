@@ -32,6 +32,7 @@ pub fn parse_from_reader<R: Read + Seek>(reader: R) -> Result<Document> {
         // Page index is section-based and unclamped here; clamped to the real
         // page count once the pages are known (below).
         metadata.note_inline_images = crate::note_doc::note_inline_images(&buf);
+        metadata.note_voice_clips = crate::note_doc::note_voice_clips(&buf);
         note_text = parse_note_text(&buf);
     }
 
@@ -188,6 +189,14 @@ fn mime_for(name: &str) -> &'static str {
         "image/png"
     } else if lower.ends_with(".webp") {
         "image/webp"
+    } else if lower.ends_with(".m4a") {
+        "audio/mp4"
+    } else if lower.ends_with(".aac") {
+        "audio/aac"
+    } else if lower.ends_with(".mp3") {
+        "audio/mpeg"
+    } else if lower.ends_with(".wav") {
+        "audio/wav"
     } else {
         "image/jpeg"
     }
@@ -647,6 +656,7 @@ impl<R: Read + Seek> Reader<R> {
             metadata.tables = parse_tables(&buf);
             metadata.note_tables = crate::note_doc::note_tables(&buf);
             metadata.note_inline_images = crate::note_doc::note_inline_images(&buf);
+            metadata.note_voice_clips = crate::note_doc::note_voice_clips(&buf);
             note_text = parse_note_text(&buf);
         }
         if let Ok(mut entry) = archive.by_name("pageIdInfo.dat") {
@@ -907,5 +917,41 @@ mod tests {
         let media: Vec<usize> = inline.iter().map(|i| i.media_index).collect();
         assert_eq!(media.iter().filter(|&&m| m == 0).count(), 3);
         assert_eq!(media.iter().filter(|&&m| m == 3).count(), 1);
+    }
+
+    /// Voice recordings decode byte-exactly against the pysdocx oracle: 3
+    /// clips, `file_id` 0/1/2 (the renamed third clip keeps decoding despite
+    /// its label no longer matching the `Voice NNN` pattern), and each
+    /// `file_id` resolves to real `.m4a` bytes via `media_bytes`.
+    #[test]
+    fn note_voice_clips_match_pysdocx_oracle() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../samples/MultiAudioNota_260713_213420/note.sdocx");
+        if !path.exists() {
+            eprintln!("skipping: MultiAudioNota sample not present");
+            return;
+        }
+        let mut reader = crate::open(&path).expect("open sample");
+        let clips = reader.metadata().note_voice_clips.clone();
+
+        assert_eq!(clips.len(), 3, "expected 3 voice clips");
+        assert_eq!(clips[0].file_id, 0);
+        assert_eq!(clips[0].name, "Voice 001");
+        assert_eq!(clips[0].duration_ms, 5056);
+        assert_eq!(clips[1].file_id, 1);
+        assert_eq!(clips[1].name, "Voice 002");
+        assert_eq!(clips[1].duration_ms, 8960);
+        assert_eq!(clips[2].file_id, 2);
+        assert_eq!(clips[2].name, "Voice 003  - Rinominata");
+        assert_eq!(clips[2].duration_ms, 7275);
+
+        for clip in &clips {
+            let bytes = reader.media_bytes(clip.file_id as usize).expect("media bytes");
+            assert!(bytes.len() > 8, "file_id {}: audio bytes too short", clip.file_id);
+            // ISO-BMFF/MP4 box layout: [u32 box_size]['f','t','y','p'].
+            assert_eq!(&bytes[4..8], b"ftyp", "file_id {}: not an MP4 container", clip.file_id);
+            let asset = reader.media_asset(clip.file_id as usize).expect("media asset");
+            assert_eq!(asset.mime_type, "audio/mp4");
+        }
     }
 }

@@ -23,8 +23,8 @@
 
 use crate::types::{
     Alignment, BoundingBox, Color, ColorRun, FontSizeRun, ListItem, NoteInlineImage, NoteTable,
-    NoteTableCell, ParagraphInfo, ParagraphStyle, Point, RichTextBox, RichTextRun, TableBorder,
-    TableCellSpan,
+    NoteTableCell, NoteVoiceClip, ParagraphInfo, ParagraphStyle, Point, RichTextBox, RichTextRun,
+    TableBorder, TableCellSpan,
 };
 
 /// Inline objects appear in Common frames only from this format version on
@@ -83,6 +83,9 @@ impl<'a> Cur<'a> {
     }
     fn u32(&mut self) -> R<u32> {
         Ok(u32::from_le_bytes(self.bytes(4)?.try_into().unwrap()))
+    }
+    fn i32(&mut self) -> R<i32> {
+        Ok(i32::from_le_bytes(self.bytes(4)?.try_into().unwrap()))
     }
     fn i64(&mut self) -> R<i64> {
         Ok(i64::from_le_bytes(self.bytes(8)?.try_into().unwrap()))
@@ -754,13 +757,19 @@ struct NoteHeader {
     format_version: u32,
     body_off: usize,
     body_size: usize,
+    /// Absolute offset of the field_flags-gated flex-field region (pysdocx
+    /// `flex_offset`). Everything from `body_off + body_size` up to here is a
+    /// gap of unhandled/unknown bytes (usually 0, sometimes 8).
+    flex_offset: usize,
+    /// Bitfield gating which flex fields are present (pysdocx `field_flags`).
+    field_flags: u32,
 }
 
 fn parse_note_doc_header(note: &[u8]) -> R<NoteHeader> {
     let mut cur = Cur::new(note, 0, note.len());
-    let _flex_offset = cur.u32()?;
+    let flex_offset = cur.u32()? as usize;
     let _property_flags = cur.bitfield()?;
-    let _field_flags = cur.bitfield()?;
+    let field_flags = cur.bitfield()?;
     let format_version = cur.u32()?;
     let _id = cur.short_utf16()?;
     let _file_revision = cur.u32()?;
@@ -777,7 +786,7 @@ fn parse_note_doc_header(note: &[u8]) -> R<NoteHeader> {
 
     let body_size = cur.u32()? as usize;
     let body_off = cur.pos;
-    Ok(NoteHeader { format_version, body_off, body_size })
+    Ok(NoteHeader { format_version, body_off, body_size, flex_offset, field_flags })
 }
 
 // --- type-22 table object -------------------------------------------------
@@ -1144,6 +1153,138 @@ pub fn note_inline_images(note: &[u8]) -> Vec<NoteInlineImage> {
         });
     }
     out
+}
+
+// --- voice recordings (field_flags bit 13) --------------------------------
+
+/// The maximum field_flags bit `note_voice_clips` walks through to reach bit
+/// 13 (pysdocx `parse_note_doc`, `present(0..=12)` skip chain).
+const MAX_SKIPPED_FIELD_BIT: u32 = 12;
+
+/// Skip one flex field's bytes for bit `b` (pysdocx `parse_note_doc`
+/// `present(b)` branches, bits 0-12). Bit 12 (`compatible_last_pen_info`) is
+/// the only un-prefixed variable-length field in this range and must be
+/// matched byte-for-byte or every later bit misreads.
+fn skip_flex_field(cur: &mut Cur, bit: u32) -> R<()> {
+    match bit {
+        0 => {
+            cur.short_utf16()?; // app_name
+        }
+        1 => {
+            cur.u32()?; // app_version.major
+            cur.u32()?; // app_version.minor
+            cur.short_utf16()?; // app_version.patch_name
+        }
+        2 => {
+            cur.short_utf16()?; // author_info.strings[0]
+            cur.short_utf16()?; // author_info.strings[1]
+            cur.short_utf16()?; // author_info.strings[2]
+            cur.u32()?; // author_info.image_id
+        }
+        3 => {
+            cur.f64()?; // latitude
+            cur.f64()?; // longitude
+        }
+        6 => {
+            cur.short_utf16()?; // template_uri
+        }
+        7 => {
+            cur.u32()?; // last_edited_page_index
+        }
+        9 => {
+            cur.i32()?; // last_edited_page_image_id
+            cur.i64()?; // last_edited_page_time_us
+        }
+        10 => {
+            // string_registry: [u32 size][u16 count][(u32 key, short_utf16)*]
+            let size = cur.u32()? as usize;
+            cur.bytes(size)?;
+        }
+        11 => {
+            cur.i32()?; // body_text_font_size_delta
+        }
+        12 => {
+            // compatible_last_pen_info (_parse_pen_info_simple): un-prefixed.
+            cur.short_utf16()?; // name
+            cur.f32()?; // size
+            cur.bytes(4)?; // color
+            cur.u32()?; // is_curvable
+            cur.short_utf16()?; // advanced_settings
+            cur.u32()?; // is_eraser_enabled
+            cur.u32()?; // size_level
+            cur.u32()?; // particle_density
+            cur.f32()?; // ui_color_hsv.h
+            cur.f32()?; // ui_color_hsv.s
+            cur.f32()?; // ui_color_hsv.v
+            cur.u32()?; // ui_color_info
+        }
+        _ => return Err("skip_flex_field: bit not in 0..=12"),
+    }
+    Ok(())
+}
+
+/// One length-prefixed voice-recording record (pysdocx `_parse_voice_recording`).
+fn parse_voice_recording(cur: &mut Cur) -> R<NoteVoiceClip> {
+    let size = cur.u32()? as usize;
+    let mut win = cur.sub(size)?;
+    let file_id = win.u32()?;
+    let name = win.short_utf16()?;
+    let duration_str = win.short_utf16()?;
+    let created_time_us = win.i64()?;
+    let event_count = win.u32()?;
+    ensure(event_count <= 100_000, "voice event count implausible")?;
+    for _ in 0..event_count {
+        win.u32()?; // action
+        win.i64()?; // time_us
+    }
+    let duration_ms = win.i64()?;
+    ensure_eof(&win, "voice_recording")?;
+    Ok(NoteVoiceClip { file_id, name, duration_ms, duration_str, created_time_us })
+}
+
+/// Decode every voice recording attached to the note (`note.note` field_flags
+/// bit 13, `voice_data`; pysdocx `parse_note_doc` `present(13)`). Returns an
+/// empty vec if the note carries no voice recordings or the flex-field walk
+/// fails to reach bit 13 cleanly.
+pub fn note_voice_clips(note: &[u8]) -> Vec<NoteVoiceClip> {
+    let Ok(header) = parse_note_doc_header(note) else {
+        return Vec::new();
+    };
+    if header.field_flags >> 13 & 1 == 0 {
+        return Vec::new();
+    }
+    let body_end = header.body_off + header.body_size;
+    if body_end > note.len() || header.flex_offset > note.len() || header.flex_offset < body_end
+    {
+        return Vec::new();
+    }
+    let mut cur = Cur::new(note, body_end, note.len());
+    // Skip the gap between the body blob and the flex-field region.
+    if cur.bytes(header.flex_offset - body_end).is_err() {
+        return Vec::new();
+    }
+    for bit in 0..=MAX_SKIPPED_FIELD_BIT {
+        if header.field_flags >> bit & 1 == 0 {
+            continue;
+        }
+        if skip_flex_field(&mut cur, bit).is_err() {
+            return Vec::new();
+        }
+    }
+    let Ok(count) = cur.u32() else {
+        return Vec::new();
+    };
+    if count > 10_000 {
+        return Vec::new();
+    }
+    let mut clips = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+        match parse_voice_recording(&mut cur) {
+            Ok(clip) => clips.push(clip),
+            Err(_) => return Vec::new(),
+        }
+    }
+    clips
 }
 
 #[cfg(test)]
