@@ -4,8 +4,10 @@
   --border: #d9d9de;
   --stage: #e9e9ec;
   --btn: #ffffff;
+  --btn-hover: #e8eefc;
   --fg: #1a1a1a;
   --muted: #666;
+  --accent: #396cd8;
 }
 
 * { box-sizing: border-box; }
@@ -24,31 +26,135 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 6px 10px;
   background: var(--bar);
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
 
-.toolbar button {
+/* Icon buttons ---------------------------------------------------------- */
+.iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.iconbtn:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--border); }
+.iconbtn:active:not(:disabled) { background: var(--btn-hover); border-color: var(--accent); }
+.iconbtn:disabled { opacity: 0.35; cursor: default; }
+.iconbtn.active { background: var(--btn-hover); border-color: var(--accent); }
+.iconbtn.caret { width: 22px; }
+.icon { width: 18px; height: 18px; display: block; pointer-events: none; }
+
+/* Three-section layout: equal-flex left/right sections push the centre group
+   to the true middle of the bar regardless of side widths (Okular-style). */
+.tb-left, .tb-right { flex: 1 1 0; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tb-right { justify-content: flex-end; }
+.tb-center { flex: 0 0 auto; display: flex; align-items: center; }
+
+/* Groups & separators --------------------------------------------------- */
+.group { display: flex; align-items: center; gap: 4px; }
+.sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+
+/* Numeric boxes (page & zoom) ------------------------------------------- */
+.numbox {
   font: inherit;
-  font-size: 14px;
-  padding: 6px 12px;
+  font-size: 13px;
+  height: 30px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--btn);
   color: var(--fg);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.numbox:focus { outline: none; border-color: var(--accent); }
+.numbox:disabled { opacity: 0.4; }
+.nav .numbox { width: 44px; }
+.of { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Zoom / export combo (input/button + dropdown popover) ----------------- */
+.combo { position: relative; display: flex; align-items: center; }
+.zoombox { width: 62px; border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 0; }
+.combo .caret { border-top-left-radius: 0; border-bottom-left-radius: 0; height: 30px; border: 1px solid var(--border); border-left: 0; }
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 150px;
+  background: var(--btn);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+  padding: 4px;
+  z-index: 20;
+}
+.menu.menu-right { left: auto; right: 0; }
+.menu[hidden] { display: none; }
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
   cursor: pointer;
 }
-.toolbar button:hover:not(:disabled) { border-color: #396cd8; }
-.toolbar button:disabled { opacity: 0.4; cursor: default; }
+.menu-item:hover:not(:disabled) { background: var(--btn-hover); }
+.menu-item:disabled { opacity: 0.45; cursor: default; }
+.menu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 
-.nav { display: flex; align-items: center; gap: 8px; }
-.nav #page-label { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 54px; text-align: center; }
+/* Workspace = thumbnail panel + stage, side by side under the toolbar. */
+.workspace {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
 
-.spacer { flex: 1; }
-.stat { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.thumbs {
+  flex: 0 0 auto;
+  width: 176px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 14px;
+  background: var(--bar);
+  border-right: 1px solid var(--border);
+}
+.thumbs[hidden] { display: none; }
+
+.thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+.thumb-canvas {
+  width: 100%;
+  display: block;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+.thumb:hover .thumb-canvas { border-color: var(--accent); }
+.thumb.current .thumb-canvas { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.thumb-num { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.thumb.current .thumb-num { color: var(--accent); font-weight: 600; }
 
 .stage {
   flex: 1 1 auto;
@@ -76,6 +182,9 @@ body {
   font-size: 15px;
   pointer-events: none;
 }
+/* `display: grid` above would otherwise beat the UA [hidden] rule, so the empty
+   hint stayed painted under the pages once a document was open. */
+.empty[hidden] { display: none; }
 .empty code { background: rgba(0, 0, 0, 0.06); padding: 1px 5px; border-radius: 4px; }
 
 
@@ -85,8 +194,10 @@ body {
     --border: #38383c;
     --stage: #141416;
     --btn: #2c2c30;
+    --btn-hover: #33384a;
     --fg: #ededed;
     --muted: #9a9a9f;
+    --accent: #5b82e0;
   }
   .empty code { background: rgba(255, 255, 255, 0.1); }
 }

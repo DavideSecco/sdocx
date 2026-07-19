@@ -30,6 +30,9 @@ let meta: DocMeta | null = null;
 let sizes: [number, number][] = []; // per-page [w, h] in page units
 let zoom = 1; // page units -> CSS px
 let pageTop: number[] = []; // CSS-px top of each page within #doc
+let pageLeft: number[] = []; // CSS-px left of each page within #doc
+let rows: number[][] = []; // page indices grouped into layout rows (1 or 2 wide)
+let viewMode: "single" | "facing" = "single";
 let docWidth = 0;
 let docHeight = 0;
 // Bumped whenever the layout/zoom changes, so in-flight renders for the old
@@ -69,11 +72,23 @@ function scheduleVisible(): void {
 const stage = document.querySelector<HTMLElement>("#stage")!;
 const docEl = document.querySelector<HTMLElement>("#doc")!;
 const emptyEl = document.querySelector<HTMLElement>("#empty")!;
-const stat = document.querySelector<HTMLElement>("#stat")!;
-const pageLabel = document.querySelector<HTMLElement>("#page-label")!;
 const prevBtn = document.querySelector<HTMLButtonElement>("#prev-btn")!;
 const nextBtn = document.querySelector<HTMLButtonElement>("#next-btn")!;
-const fitBtn = document.querySelector<HTMLButtonElement>("#fit-btn")!;
+const pageInput = document.querySelector<HTMLInputElement>("#page-input")!;
+const pageCount = document.querySelector<HTMLElement>("#page-count")!;
+const zoomOut = document.querySelector<HTMLButtonElement>("#zoom-out")!;
+const zoomIn = document.querySelector<HTMLButtonElement>("#zoom-in")!;
+const zoomInput = document.querySelector<HTMLInputElement>("#zoom-input")!;
+const zoomMenuBtn = document.querySelector<HTMLButtonElement>("#zoom-menu-btn")!;
+const zoomMenu = document.querySelector<HTMLElement>("#zoom-menu")!;
+const audioBtn = document.querySelector<HTMLButtonElement>("#audio-btn")!;
+const exportBtn = document.querySelector<HTMLButtonElement>("#export-btn")!;
+const exportMenu = document.querySelector<HTMLElement>("#export-menu")!;
+const sidebarBtn = document.querySelector<HTMLButtonElement>("#sidebar-btn")!;
+const thumbsEl = document.querySelector<HTMLElement>("#thumbs")!;
+const viewmodeBtn = document.querySelector<HTMLButtonElement>("#viewmode-btn")!;
+// Controls enabled only while a document is open (mirrors the old prev/next/fit).
+const docControls = [prevBtn, nextBtn, pageInput, zoomOut, zoomIn, zoomInput, zoomMenuBtn, audioBtn, exportBtn, sidebarBtn, viewmodeBtn];
 
 // ── Render worker ────────────────────────────────────────────────────────────
 let jobSeq = 0;
@@ -233,26 +248,71 @@ async function resolveTemplateBitmap(scene: PageScene, scale: number): Promise<I
 }
 
 // ── Layout ───────────────────────────────────────────────────────────────────
+// Group pages into layout rows: one page per row in single mode, pairs
+// [0,1],[2,3],… in facing mode (a trailing odd page sits alone).
+function buildRows(): void {
+  rows = [];
+  if (viewMode === "facing") {
+    for (let i = 0; i < sizes.length; i += 2) {
+      rows.push(i + 1 < sizes.length ? [i, i + 1] : [i]);
+    }
+  } else {
+    for (let i = 0; i < sizes.length; i++) rows.push([i]);
+  }
+}
+// The pages sharing curPage's row (used by the fit helpers).
+function curRowPages(): number[] {
+  if (!sizes.length) return [];
+  if (viewMode === "facing") {
+    const start = curPage - (curPage % 2);
+    return start + 1 < sizes.length ? [start, start + 1] : [start];
+  }
+  return [Math.min(Math.max(curPage, 0), sizes.length - 1)];
+}
 function computeLayout(): void {
-  let y = GAP;
-  let maxW = 1;
+  buildRows();
   pageTop = [];
-  for (let i = 0; i < sizes.length; i++) {
-    pageTop[i] = y;
-    y += sizes[i][1] * zoom + GAP;
-    maxW = Math.max(maxW, sizes[i][0] * zoom);
+  pageLeft = [];
+  // Row CSS width = summed page widths + inter-page gaps; docWidth centres the
+  // widest row (or fills the stage, whichever is larger).
+  const rowW = rows.map((r) => r.reduce((s, i) => s + sizes[i][0] * zoom, 0) + GAP * (r.length - 1));
+  const maxRowW = rowW.reduce((m, w) => Math.max(m, w), 1);
+  docWidth = Math.max(maxRowW + GAP * 2, stage.clientWidth);
+  let y = GAP;
+  for (let ri = 0; ri < rows.length; ri++) {
+    const r = rows[ri];
+    let rowH = 0;
+    for (const i of r) rowH = Math.max(rowH, sizes[i][1] * zoom);
+    let x = Math.round((docWidth - rowW[ri]) / 2);
+    for (const i of r) {
+      pageLeft[i] = x;
+      pageTop[i] = y;
+      x += sizes[i][0] * zoom + GAP;
+    }
+    y += rowH + GAP;
   }
   docHeight = y;
-  docWidth = Math.max(maxW + GAP * 2, stage.clientWidth);
   docEl.style.width = `${docWidth}px`;
   docEl.style.height = `${docHeight}px`;
 }
-function pageX(i: number): number {
-  return Math.round((docWidth - sizes[i][0] * zoom) / 2);
-}
+// Fit the current row's width to the stage (a spread of two in facing mode).
 function fitZoom(): void {
-  const w = sizes[0]?.[0] ?? 1;
-  zoom = (stage.clientWidth - 4 * GAP) / w;
+  const r = curRowPages();
+  const sumW = r.reduce((s, i) => s + sizes[i][0], 0) || 1;
+  const gaps = GAP * (r.length - 1);
+  zoom = (stage.clientWidth - 4 * GAP - gaps) / sumW;
+  if (!isFinite(zoom) || zoom <= 0) zoom = 1;
+}
+// Fit the whole current row (both dimensions) within the stage viewport.
+function fitPageZoom(): void {
+  const r = curRowPages();
+  if (!r.length) { zoom = 1; return; }
+  const sumW = r.reduce((s, i) => s + sizes[i][0], 0);
+  const maxH = r.reduce((m, i) => Math.max(m, sizes[i][1]), 1);
+  const gaps = GAP * (r.length - 1);
+  const zw = (stage.clientWidth - 4 * GAP - gaps) / sumW;
+  const zh = (stage.clientHeight - 2 * GAP) / maxH;
+  zoom = Math.min(zw, zh);
   if (!isFinite(zoom) || zoom <= 0) zoom = 1;
 }
 
@@ -338,7 +398,7 @@ function ensureSlot(i: number, scale: number): void {
     slots.set(i, slot);
   }
   // Position/size the element (cheap, never clears the drawn bitmap).
-  slot.canvas.style.left = `${pageX(i)}px`;
+  slot.canvas.style.left = `${pageLeft[i]}px`;
   slot.canvas.style.top = `${pageTop[i]}px`;
   slot.canvas.style.width = `${cssW}px`;
   slot.canvas.style.height = `${cssH}px`;
@@ -404,13 +464,172 @@ function relayout(): void {
   updateVisible();
 }
 
+// ── Thumbnail side-panel ─────────────────────────────────────────────────────
+// A left panel of one small canvas per page, reusing the same scene→worker
+// pipeline as the main viewer at a tiny scale. Built lazily (only once the panel
+// is first opened) and virtualized (only thumbs near the panel viewport hold a
+// rendered bitmap) so a long document stays cheap.
+const THUMB_W = 148; // target raster width in CSS px (displayed at 100% of the box)
+const THUMB_MAX_INFLIGHT = 2; // keep the shared worker mostly free for the main viewer
+interface ThumbSlot { canvas: HTMLCanvasElement; bitmap: ImageBitmap | null }
+const thumbEls: HTMLDivElement[] = [];
+const thumbSlots = new Map<number, ThumbSlot>();
+const thumbInflight = new Set<number>();
+let thumbInFlight = 0;
+let thumbTop: number[] = []; // CSS-px offsetTop of each thumb within the panel
+let thumbH: number[] = [];
+let sidebarOpen = false;
+let thumbBuilt = false;
+let activeThumb = -1;
+let thumbRaf = 0;
+
+function scheduleThumbs(): void {
+  if (thumbRaf) return;
+  thumbRaf = window.setTimeout(() => { thumbRaf = 0; updateThumbs(); }, 0);
+}
+
+function clearThumbs(): void {
+  for (const s of thumbSlots.values()) s.bitmap?.close();
+  thumbSlots.clear();
+  thumbInflight.clear();
+  thumbEls.length = 0;
+  thumbTop = [];
+  thumbH = [];
+  thumbsEl.replaceChildren();
+  thumbBuilt = false;
+  activeThumb = -1;
+}
+
+function buildThumbs(): void {
+  if (!meta) return;
+  thumbsEl.replaceChildren();
+  thumbEls.length = 0;
+  for (let i = 0; i < sizes.length; i++) {
+    const div = document.createElement("div");
+    div.className = "thumb";
+    div.dataset.i = String(i);
+    const canvas = document.createElement("canvas");
+    canvas.className = "thumb-canvas";
+    // Reserve the box height up-front (page aspect ratio) so scroll offsets are
+    // stable before any bitmap is drawn.
+    canvas.style.aspectRatio = `${sizes[i][0]} / ${sizes[i][1]}`;
+    const num = document.createElement("span");
+    num.className = "thumb-num";
+    num.textContent = String(i + 1);
+    div.append(canvas, num);
+    thumbsEl.appendChild(div);
+    thumbEls.push(div);
+  }
+  measureThumbs();
+  thumbBuilt = true;
+  if (curPage >= 0) setActiveThumb(curPage);
+}
+
+function measureThumbs(): void {
+  thumbTop = thumbEls.map((el) => el.offsetTop);
+  thumbH = thumbEls.map((el) => el.offsetHeight);
+}
+
+function updateThumbs(): void {
+  if (!sidebarOpen || !meta || !thumbBuilt) return;
+  const top = thumbsEl.scrollTop;
+  const vh = thumbsEl.clientHeight;
+  const margin = vh; // a screenful of over-render each side
+  const lo = top - margin;
+  const hi = top + vh + margin;
+  for (let i = 0; i < thumbEls.length; i++) {
+    const y0 = thumbTop[i];
+    const y1 = thumbTop[i] + thumbH[i];
+    const near = y1 >= lo && y0 <= hi;
+    if (near) renderThumb(i);
+    else if (thumbSlots.has(i)) evictThumb(i); // free bitmaps well off-screen
+  }
+}
+
+function evictThumb(i: number): void {
+  const s = thumbSlots.get(i);
+  if (!s) return;
+  s.bitmap?.close();
+  s.canvas.width = 0;
+  s.canvas.height = 0;
+  thumbSlots.delete(i);
+}
+
+async function renderThumb(i: number): Promise<void> {
+  if (thumbSlots.has(i) || thumbInflight.has(i)) return;
+  if (thumbInFlight >= THUMB_MAX_INFLIGHT) return; // a later pass will kick it
+  thumbInflight.add(i);
+  thumbInFlight++;
+  const dpr = window.devicePixelRatio || 1;
+  const scale = (THUMB_W / sizes[i][0]) * dpr;
+  try {
+    const scene = await getScene(i);
+    if (!sidebarOpen) return;
+    const images = await resolveImages(scene);
+    if (!sidebarOpen) return;
+    const tpl = await resolveTemplateBitmap(scene, scale);
+    if (!sidebarOpen) return;
+    const bitmap = await renderViaWorker(scene, scale, images, tpl);
+    if (!bitmap) return;
+    const el = thumbEls[i];
+    if (!sidebarOpen || !el) { bitmap.close(); return; }
+    const canvas = el.querySelector<HTMLCanvasElement>("canvas.thumb-canvas");
+    if (!canvas) { bitmap.close(); return; }
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
+    // Keep the bitmap alive until eviction — closing right after drawImage can
+    // race WebKitGTK's deferred paint and blank the canvas (same as the viewer).
+    thumbSlots.set(i, { canvas, bitmap });
+  } catch {
+    /* transient — a later pass retries */
+  } finally {
+    thumbInflight.delete(i);
+    thumbInFlight--;
+    scheduleThumbs();
+  }
+}
+
+function setActiveThumb(i: number): void {
+  if (!thumbBuilt || i === activeThumb) return;
+  thumbEls[activeThumb]?.classList.remove("current");
+  const el = thumbEls[i];
+  if (el) {
+    el.classList.add("current");
+    if (sidebarOpen) el.scrollIntoView({ block: "nearest" });
+  }
+  activeThumb = i;
+}
+
+function toggleSidebar(): void {
+  sidebarOpen = !sidebarOpen;
+  thumbsEl.hidden = !sidebarOpen;
+  sidebarBtn.classList.toggle("active", sidebarOpen);
+  if (sidebarOpen && meta) {
+    if (!thumbBuilt) buildThumbs();
+    else measureThumbs();
+    setActiveThumb(curPage);
+    updateThumbs();
+  }
+  // The stage width changed (panel took/returned space): re-centre & re-render.
+  if (meta) relayout();
+}
+
+thumbsEl.addEventListener("scroll", scheduleThumbs);
+thumbsEl.addEventListener("click", (e) => {
+  const el = (e.target as HTMLElement).closest<HTMLElement>(".thumb");
+  if (el?.dataset.i) scrollToPage(Number(el.dataset.i));
+});
+
 function updateNav(): void {
   if (!meta) return;
-  pageLabel.textContent = `${curPage + 1} / ${meta.page_count}`;
+  setActiveThumb(curPage);
+  // Don't clobber the boxes while the user is typing into them.
+  if (document.activeElement !== pageInput) pageInput.value = String(curPage + 1);
+  pageCount.textContent = `/ ${meta.page_count}`;
+  if (document.activeElement !== zoomInput) zoomInput.value = `${(zoom * 100).toFixed(0)}%`;
   prevBtn.disabled = curPage <= 0;
   nextBtn.disabled = curPage >= meta.page_count - 1;
-  fitBtn.disabled = false;
-  stat.textContent = `pag ${curPage + 1}/${meta.page_count} · zoom ${(zoom * 100).toFixed(0)}%`;
 }
 
 function scrollToPage(i: number): void {
@@ -450,11 +669,14 @@ async function loadDocument(selected: string): Promise<void> {
   pdfDocCache.clear();
   for (const r of templateRasterCache.values()) r.bitmap.close();
   templateRasterCache.clear();
+  clearThumbs();
   curPage = 0;
   emptyEl.hidden = true;
+  for (const c of docControls) c.disabled = false;
   fitZoom();
   stage.scrollTop = 0;
   relayout();
+  if (sidebarOpen) { buildThumbs(); updateThumbs(); }
   updateNav();
 }
 
@@ -464,7 +686,71 @@ document.querySelector("#open-btn")!.addEventListener("click", () => {
 });
 prevBtn.addEventListener("click", () => scrollToPage(curPage - 1));
 nextBtn.addEventListener("click", () => scrollToPage(curPage + 1));
-fitBtn.addEventListener("click", () => { if (meta) { fitZoom(); setZoom(zoom); } });
+
+// Editable current-page box: commit on Enter/blur, revert on Escape.
+function commitPageInput(): void {
+  const n = parseInt(pageInput.value, 10);
+  if (Number.isFinite(n)) scrollToPage(n - 1);
+  updateNav(); // normalize the box back to the clamped current page
+}
+pageInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); pageInput.blur(); }
+  else if (e.key === "Escape") { updateNav(); pageInput.blur(); }
+});
+pageInput.addEventListener("blur", commitPageInput);
+
+// Zoom −/+ (mirror the Ctrl +/- keyboard steps).
+zoomOut.addEventListener("click", () => setZoom(zoom / 1.1));
+zoomIn.addEventListener("click", () => setZoom(zoom * 1.1));
+
+// Typeable zoom %: commit on Enter/blur, revert on Escape.
+function commitZoomInput(): void {
+  const n = parseFloat(zoomInput.value.replace("%", "").replace(",", "."));
+  if (Number.isFinite(n) && n > 0) setZoom(n / 100);
+  else updateNav();
+}
+zoomInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); zoomInput.blur(); }
+  else if (e.key === "Escape") { updateNav(); zoomInput.blur(); }
+});
+zoomInput.addEventListener("blur", commitZoomInput);
+
+// Dropdown menus (zoom presets/fit + export stub). Only one open at a time.
+function closeMenus(): void { zoomMenu.hidden = true; exportMenu.hidden = true; }
+function toggleMenu(menu: HTMLElement): void {
+  const willOpen = menu.hidden;
+  closeMenus();
+  menu.hidden = !willOpen;
+}
+zoomMenuBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleMenu(zoomMenu); });
+zoomMenu.addEventListener("click", (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLElement>(".menu-item");
+  if (!item || !meta) return;
+  const v = item.dataset.zoom!;
+  if (v === "fit-width") { fitZoom(); setZoom(zoom); }
+  else if (v === "fit-page") { fitPageZoom(); setZoom(zoom); }
+  else setZoom(parseFloat(v) / 100);
+  closeMenus();
+});
+exportBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleMenu(exportMenu); });
+sidebarBtn.addEventListener("click", toggleSidebar);
+// Single ↔ facing (continuous two-column). Re-fit to the new mode's width and
+// keep the current page in view; single-mode layout stays byte-identical.
+viewmodeBtn.addEventListener("click", () => {
+  if (!meta) return;
+  viewMode = viewMode === "single" ? "facing" : "single";
+  viewmodeBtn.classList.toggle("active", viewMode === "facing");
+  viewmodeBtn.title = viewMode === "facing" ? "Pagina singola" : "Pagine affiancate";
+  fitZoom();
+  relayout();
+  stage.scrollTop = Math.max(0, pageTop[curPage] - GAP);
+  updateVisible();
+  updateNav();
+});
+// Audio is a placeholder for now — the behaviour spec lands in a later session.
+audioBtn.addEventListener("click", () => {});
+// Dismiss any open menu on an outside click.
+window.addEventListener("click", closeMenus);
 
 stage.addEventListener("scroll", scheduleVisible);
 
@@ -494,7 +780,11 @@ for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
   window.addEventListener(type, (e) => e.preventDefault(), { passive: false, capture: true });
 }
 
-window.addEventListener("resize", () => { if (meta) relayout(); });
+window.addEventListener("resize", () => {
+  if (!meta) return;
+  relayout();
+  if (sidebarOpen && thumbBuilt) { measureThumbs(); updateThumbs(); }
+});
 window.addEventListener("keydown", (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && (e.key === "=" || e.key === "+")) { e.preventDefault(); setZoom(zoom * 1.1); return; }
