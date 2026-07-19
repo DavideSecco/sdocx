@@ -28,11 +28,53 @@ type-specific.
 - The media index maps to a `media/<index>@…` archive member (and a
   [`mediaInfo.dat`](../mediaInfo.md) record). Placement markers: `01 00 04 20`
   with a `u16` media index just before and a 4×`f64` on-page bbox just after.
-- `sdocx2pdf` exposes a broader Image flex schema (crop/original/border fields).
-  Our current diagnostic confirms that the already-decoded media reference is
-  present as a `u32` in every image object blob (15/15), but does **not** yet
-  isolate which flex field corresponds to `original_image_bind_id` or the crop
-  fields. See `spec/tools/analyze_sdocx2pdf_leads.py`.
+- **Decoded — placed-frame affine (rotation + scale):** the
+  [payload-geometry wrapper](./payload-geometry.md) decoded for every image
+  stores four points that are the placed frame's **edge midpoints**, in order
+  `[top, right, bottom, left]` — the **same convention as text-box frames**, not
+  corners. `pysdocx.page._derive_affine_transform` reconstructs the placed
+  rectangle's corners from the midpoints (`center = ½(top+bottom)`, half-width
+  vector `= right − center`, half-height `= top − center`), then solves the
+  affine mapping the axis-aligned bbox corners onto them (`x' = a·x + c·y + e`,
+  `y' = b·x + d·y + f`); the 4th reconstructed corner is a closure check. Images
+  without a valid quad fall back to angle-only rendering.
+  - On `samples/ImagesAllTrasnsformations_260713_221310` the derived matrices are
+    pure rotations relative to the bbox: the 45° image →
+    `a=d=0.707, b=0.707, c=-0.707` (cos/sin 45°), the 270° image → `a=d=0,
+    b=-1, c=1`, and every `angle=0` image → identity. Size differences between
+    placements are carried by the bbox itself, not by scale in the matrix.
+  - **Correction (2026-07-18):** an earlier version of this note claimed the quad
+    proved shear/skew — citing "unequal half-diagonal magnitudes (66.08 vs
+    231.05)" on object idx=51. That was a misread: those are the half-**height**
+    and half-**width** of a non-square (462×132) image's edge midpoints, not
+    diagonals. Treating the midpoints as corners silently produced a spurious
+    ~45° "inscribed diamond" shear (an angle=0 image derived a heavy shear and
+    still passed the closure check, because a parallelogram's edge midpoints also
+    form a parallelogram). No shear is present in the corpus.
+- **Decoded — crop rect.** In the flex fields after the media ref, a field-flag
+  byte's `0x40` bit marks a **cropped** image; when set, a `4×f64` rect gives
+  where the **full (uncropped) image would sit on the page** (its aspect equals
+  the source image's). The placement bbox is the cropped window inside that rect,
+  so the visible source sub-rect is the placement bbox normalized into it —
+  exposed as a normalized `crop {x,y,w,h}` (source fractions) by
+  `pysdocx.page._image_crop` / Rust `page::image_crop`, and drawn as an
+  image source-rect. Offsets (`IMAGE_CROP_FLAG_FWD=57`, `IMAGE_CROP_RECT_FWD=90`
+  after the media ref) are calibrated on the two cropped images in
+  `ImagesAllTrasnsformations` (a page-object crop, aspect 3.076, and a note.note
+  inline crop of the top-right corner, aspect 2.786); the derived crops reproduce
+  those aspects and match the "CROPPA su X e Y" / "CROP dell'angolo" ground truth.
+  Applies to note.note [inline images](../note-note/inline-images.md) too. The
+  crop flex is Kaitai-gated by
+  [`spec/ksy/sdocx_image_object.ksy`](../../../../spec/ksy/sdocx_image_object.ksy)
+  (`validate_image_object.py`, 69/69 image records, the crop bit clear on all 67
+  uncropped — zero counterexamples).
+- `sdocx2pdf` exposes a still-broader Image flex schema (original rect, border,
+  ratio, `original_image_bind_id`); those remain **Unknown**. See
+  `spec/tools/analyze_sdocx2pdf_leads.py`.
+- **Inline (typed-note) images:** the identical `01 00 04 20` record also appears
+  in `note.note`, for images anchored in the body text rather than a page object
+  tree — these are invisible to the page object walk. See
+  [note-note/inline-images.md](../note-note/inline-images.md).
 
 ## Drawings — `raw_type` 14
 

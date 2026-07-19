@@ -46,6 +46,13 @@ struct SceneImage {
     w: f64,
     h: f64,
     media_index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    angle_deg: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    affine: Option<[f64; 6]>,
+    /// Normalized source crop `[x, y, w, h]` when the image is cropped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    crop: Option<[f64; 4]>,
 }
 
 /// One uniform-style piece of a text line. The worker measures and wraps these
@@ -1051,12 +1058,21 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
     for el in &page.elements {
         match el {
             sdocx::PageElement::Shape(s) => shapes.push(build_scene_shape(s)),
-            sdocx::PageElement::Image { bbox, media_index } => images.push(SceneImage {
+            sdocx::PageElement::Image {
+                bbox,
+                media_index,
+                angle_deg,
+                affine_transform,
+                crop,
+            } => images.push(SceneImage {
                 x: bbox.x_min,
                 y: bbox.y_min,
                 w: bbox.x_max - bbox.x_min,
                 h: bbox.y_max - bbox.y_min,
                 media_index: *media_index,
+                angle_deg: *angle_deg,
+                affine: affine_transform.map(|a| [a.a, a.b, a.c, a.d, a.e, a.f]),
+                crop: crop.map(|c| [c.x, c.y, c.w, c.h]),
             }),
             sdocx::PageElement::TextBox(tb) => {
                 texts.push(build_scene_text(tb, page.width as f64))
@@ -1217,7 +1233,7 @@ fn find_typed_text_anchor(
 #[tauri::command]
 async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<PageScene, String> {
     let typed_text_anchor = *state.typed_text_anchor.lock().unwrap();
-    let (bytes, note_text, pagination, tables) = {
+    let (bytes, note_text, pagination, tables, inline_images) = {
         let mut guard = state.reader.lock().unwrap();
         let reader = guard.as_mut().ok_or("no document loaded")?;
         let bytes = reader.page_bytes(index).map_err(|e| e.to_string())?;
@@ -1249,12 +1265,30 @@ async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<Page
             .filter(|t| t.page_index() == index)
             .cloned()
             .collect();
-        (bytes, note_text, pagination, tables)
+        // Inline images live in note.note (not a page object tree); each resolves
+        // to a host page (section→page heuristic) + a page-local bbox.
+        let inline_images: Vec<SceneImage> = meta
+            .note_inline_images
+            .iter()
+            .filter(|im| im.page_index == index)
+            .map(|im| SceneImage {
+                x: im.bbox.x_min,
+                y: im.bbox.y_min,
+                w: im.bbox.x_max - im.bbox.x_min,
+                h: im.bbox.y_max - im.bbox.y_min,
+                media_index: im.media_index,
+                angle_deg: None,
+                affine: None,
+                crop: im.crop.map(|c| [c.x, c.y, c.w, c.h]),
+            })
+            .collect();
+        (bytes, note_text, pagination, tables, inline_images)
     };
     // Media indices in the parsed page are the decoded `<index>@` archive indices
     // (the parser's one media currency, same as pysdocx); `get_media` resolves them.
     let page = sdocx::parse_page(&bytes).map_err(|e| e.to_string())?;
     let mut scene = build_page_scene(&page);
+    scene.images.extend(inline_images);
     if let (Some(text), Some((slot, band_height))) = (note_text, pagination) {
         let mut st = build_scene_text(&text, page.width as f64);
         st.paginate = Some(ScenePaginate {

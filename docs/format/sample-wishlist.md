@@ -174,10 +174,15 @@ derive the linear advance, though they would remain useful counterexamples.
 
 ## Open — Priority C: text/objects
 
-5. **Text-box wrap heuristic**: `TextboxAllAngles` proved geometry but its
-   4-character text is too short to calibrate wrapping. Need a **long
-   identical string in identical-size boxes at 0/90/180/270°** — same text,
-   same box dimensions, only rotation varies.
+5. **DONE — Text-box wrap heuristic**: `TextboxAllAnglesLarge` (2026-07-18)
+   has 8 rotated boxes (0°/45°/90°/135°/180°/225°/270°/315°) with identical
+   44-character text and bbox size. Ground truth provided: Samsung export
+   photo shows identical 3-line break (`"Text Long to test"` / `"qualcosa che
+   non ho"` / `"capito"`) at all 8 angles. Current heuristic
+   (`pysdocx/render.py:_text_box_layout`, `TEXT_BOX_FRAME_WRAP_INSET=18.0`,
+   near-vertical special-casing) reproduces this break exactly across all
+   angles. **Calibration complete.** See `docs/format/heuristics.md`
+   "Rotated text-box wrapping" for the confirmed model.
 6. **PARTIAL — `Mathsolver&Hyperlink`:** the hyperlink is an inline Web object
    type 13, not span type 9; Math Solver emits ordinary styled text plus
    per-stroke `RecogUIFeature_MathStrokeUuidStringArray`, not formula span 23.
@@ -188,11 +193,24 @@ derive the linear advance, though they would remain useful counterexamples.
 8. **DONE — Web object:** `Mathsolver&Hyperlink` contains inline object type 13
    anchored in the body text, its URL/preview payload, and an `@web_*.jpg`
    thumbnail. Corrected: this is a text-inline object, not a page object.
-9. **Audio variants**: multi-recording note, a renamed recording, and one
-   where the audio widget is visibly placed on the page → settles whether
-   page object type 10 (Audio) ever appears in exports.
+9. **Audio variants**: PARTIAL — `MultiAudioNota` (2026-07-18) has 3
+   recordings, the 3rd renamed (`"Voice 003  - Rinominata"`), all decodable
+   via structural parser (`note_doc.py`'s `voice_data` field) with file_id
+   resolution against `mediaInfo.dat`. **Multi-recording + renamed: CLOSED**.
+   Sub-question remaining: whether an audio widget (page object type 10) is
+   ever visibly placed on a page in exports. This sample has none (both pages
+   are stroke-only); **that sub-question is still OPEN** and requires a
+   dedicated new sample.
 10. **Image inserted then deleted**, and one **image reused twice** in the
    same note → `mediaInfo.dat` `ref_count` / `is_attached` edge semantics.
+   PARTIAL (2026-07-18): `ImagesAllTrasnsformations` reuses one image 9× (media 0,
+   `ref_count=9`). This surfaced that image **detection** was incomplete: 4 of its
+   10 placements are **inline images in `note.note`** (anchored in the typed-note
+   flow), which the page object walk never reaches. Now decoded + enumerated (6
+   page + 4 inline = 10/10, media 0,0,3,0), gated corpus-wide — see
+   [container/note-note/inline-images.md](./container/note-note/inline-images.md).
+   Still OPEN: the inline-image → **page placement** map (document-flow `y` → page)
+   for rendering, and the `is_attached` / deleted-image edge semantics.
 
 ## Open — Priority D: existing campaigns
 

@@ -129,7 +129,13 @@ fn render_element(
     media_assets: &[MediaAsset],
 ) {
     match element {
-        PageElement::Image { bbox, media_index } => {
+        PageElement::Image {
+            bbox,
+            media_index,
+            angle_deg: _,
+            affine_transform: _,
+            crop: _,
+        } => {
             // media_index is the decoded `<index>@` archive index (the parser's one
             // media currency, same as pysdocx) — resolve it against each asset's
             // own archive index, not its position in the list.

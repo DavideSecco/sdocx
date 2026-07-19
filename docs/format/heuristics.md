@@ -154,11 +154,27 @@ is a decoded fact, not a heuristic — it comes from user-handwritten labels on
 ## Rotated text-box wrapping
 
 Rotated in-page text-box **geometry** is decoded (`frame_midpoints`), but the
-**line-breaking** inside a rotated box is heuristic: `_text_box_layout` projects
-onto the frame midpoints and applies a calibrated inner-wrap inset (`18.0`) for
-non-vertical boxes, plus a "move whole styled run to the next line" rule. No
-decoded inner-padding field has been found — see
-[unknowns.md](./unknowns.md#note-note) and `future_todo.md`.
+**line-breaking** inside a rotated box is heuristic. The model is calibrated
+(`pysdocx/render.py:_text_box_layout`): projects the rotated frame onto local
+axes, applies an inner-wrap inset (`18.0`) for non-vertical boxes, and uses a
+"move whole styled run to the next line" rule. This model was validated against
+`samples/TextboxAllAnglesLarge_260713_214254` (8-angle ground-truth photo from
+Samsung Notes) and matches the GT wrap breaks exactly at 0°/45°/90°/135°
+/180°/225°/270°/315°. No decoded inner-padding field exists — the heuristic
+value (`18.0`) is the inferred wrap margin. See [unknowns.md](./unknowns.md#note-note) for any remaining open questions.
+
+## Inline-image placement
+
+note.note inline images ([inline-images](./container/note-note/inline-images.md))
+are **decoded** byte-exactly (media ref + page-local bbox), but which **page**
+each renders on is a heuristic: the body text's `sections` are treated as page
+bands and the image's host page is the section index containing its U+FFFC anchor
+char (clamped to the page count). Calibrated on `ImagesAllTrasnsformations` — it
+reproduces the ground-truth 1-image/3-image split across the two content pages —
+in the same family as the typed-text page anchor above (the note body carries no
+hard page reference). A different note whose sections do not line up 1:1 with
+physical pages (cf. the `Mathsolver&Hyperlink` typed-text counterexample) would
+need an anchor offset; not yet observed for inline images.
 
 ## Stroke rendering
 

@@ -5,7 +5,16 @@ import { open } from "@tauri-apps/plugin-dialog";
 type RGB = [number, number, number];
 interface DocMeta { page_count: number; dark_mode: boolean; background: RGB | null }
 interface Stroke { points: [number, number][]; color: RGB | null; width: number; tapered: boolean; tool_id: number | null; pressures?: number[] }
-interface SImage { x: number; y: number; w: number; h: number; media_index: number }
+interface SImage {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  media_index: number;
+  angle_deg?: number;
+  affine?: [number, number, number, number, number, number];
+  crop?: [number, number, number, number];
+}
 interface SText { anchor: [number, number]; wrap_width: number; angle_deg: number; lines: unknown[] }
 // Only the fields the main thread acts on; the full style payload (pitches/colors) is consumed
 // by the worker (see render.worker.ts STemplate). kind==="pdf" carries the embedded-PDF link.

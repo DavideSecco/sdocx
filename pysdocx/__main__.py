@@ -26,6 +26,7 @@ from pysdocx.note_doc import (
     note_doc_common_frames,
     note_doc_tables,
     parse_note_doc,
+    scan_note_inline_images,
 )
 from pysdocx.page import parse_page
 
@@ -281,6 +282,20 @@ def cmd_objects(args: argparse.Namespace) -> None:
                 f"type_tag={placement.get('type_tag')} bbox={_fmt_optional_bbox(placement.get('bbox'))} "
                 f"off=0x{placement['off']:x} keys={placement.get('keys', [])}"
             )
+
+    if not args.page:
+        note = load_note(args.file)
+        inline = scan_note_inline_images(note) if note else []
+        if inline:
+            print(
+                f"note.note inline images: {len(inline)} "
+                f"(anchored in the typed-note flow, not a page object tree)"
+            )
+            for im in inline:
+                print(
+                    f"     inline_image media={im['media_index']} "
+                    f"bbox={_fmt_bbox(im['bbox'])} off=0x{im['off']:x}"
+                )
 
     _print_attachments(attachments)
 

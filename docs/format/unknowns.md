@@ -54,6 +54,15 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   width-constraint semantics; merged cells are not exposed by the current UI.
 - **Rotated text-box** inner text padding / logical frame (currently
   [heuristic](./heuristics.md#rotated-text-box-wrapping)).
+- **Inline-image → page placement:** RESOLVED as a heuristic (2026-07-18). The
+  inline image's host page is the body `sections` band containing its U+FFFC
+  anchor char; the stored bbox is page-local. This reproduces the
+  `ImagesAllTrasnsformations` 1-on-page-1 / 3-on-page-2 ground truth and now
+  renders in pysdocx + the app. Calibrated on one sample and in the typed-text
+  page-anchor heuristic family — see
+  [heuristics.md](./heuristics.md#inline-image-placement) and
+  `container/note-note/inline-images.md`. A section-vs-physical-page offset (cf.
+  Mathsolver typed text) is possible but unobserved for inline images.
 
 ## `.page`
 - **Header preamble — field sequence Decoded; `content_bbox` gate Decoded;
@@ -154,6 +163,14 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   still Unknown. First observed in `Shared Notebook1_260710_000433.sdocx`.
 
 ## `end_tag.bin`
+- **Password hash — Decoded (2026-07-18):** a password-protected note carries a
+  SHA-256 password hash as a 64-char UTF-16LE hex string at a fixed `0x40` (128
+  bytes), present only when the footer is longer than `0x40 + 128 + 22`. Decoded
+  by `parse_end_tag` and now Kaitai-modeled (`sdocx_end_tag.ksy` `password_hash`
+  instance, gated by `is_password_protected`) — 36/36. The `created_time_*`
+  aliases were also fixed from fixed `pos:` offsets to `value:` references, since
+  the inserted hash shifts every later field. See
+  [project-password-encryption memory] and `spec/ksy/sdocx_end_tag.ksy`.
 - **`is_landscape` (negative result, 2026-07-11):** `property_flags` bit 1
   stays `0` even in `Importedlandscape_260711_153103.sdocx`, whose page is
   genuinely landscape (1600×928, via a builtin "Landscape Grid" PDF

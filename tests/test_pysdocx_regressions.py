@@ -175,6 +175,59 @@ class MathSolverWebRegressionTest(unittest.TestCase):
         self.assertTrue(any(p["expression"] == "A^{T}1k\\mid SOCUr=R" for p in chains))
 
 
+class NoteInlineImageTest(unittest.TestCase):
+    """Images placed inline in the typed-note body (`note.note`) — the same
+    `01 00 04 20` record as page objects, but outside any page object tree.
+    Zero-counterexample gate: only these two samples carry inline images, and
+    every other corpus note.note must scan to zero (no spurious marker matches).
+    """
+
+    # {sample dir: [expected media_index per inline image, in file order]}
+    EXPECTED = {
+        "ImagesAllTrasnsformations_260713_221310": [0, 0, 3, 0],
+        "quiz": [7],
+    }
+
+    def _inline_media(self, note_sdocx: Path) -> list[int]:
+        from pysdocx.note_doc import scan_note_inline_images
+        with zipfile.ZipFile(note_sdocx) as z:
+            if "note.note" not in z.namelist():
+                return []
+            note = z.read("note.note")
+        return [im["media_index"] for im in scan_note_inline_images(note)]
+
+    def test_expected_samples_enumerate_their_inline_images(self) -> None:
+        for name, expected in self.EXPECTED.items():
+            path = SAMPLES / name / "note.sdocx"
+            require_sample(path)
+            self.assertEqual(self._inline_media(path), expected, name)
+
+    def test_no_other_sample_reports_inline_images(self) -> None:
+        require_sample(SAMPLES)
+        for note_sdocx in sorted(SAMPLES.glob("*/note.sdocx")):
+            if note_sdocx.parent.name in self.EXPECTED:
+                continue
+            self.assertEqual(self._inline_media(note_sdocx), [], note_sdocx.parent.name)
+
+    def test_inline_images_resolve_to_pages(self) -> None:
+        """Placement: the anchor-char section maps each inline image to a page.
+        `ImagesAllTrasnsformations` splits 1 on page 0 / 3 on page 1 (the user's
+        ground-truth annotations), and `quiz`'s single image clamps to page 0."""
+        from collections import Counter
+        from pysdocx.container import list_pages
+        from pysdocx.note_doc import note_inline_image_placements
+
+        cases = {"ImagesAllTrasnsformations_260713_221310": {0: 1, 1: 3}, "quiz": {0: 1}}
+        for name, expected in cases.items():
+            path = SAMPLES / name / "note.sdocx"
+            require_sample(path)
+            with zipfile.ZipFile(path) as z:
+                note = z.read("note.note")
+            placements = note_inline_image_placements(note, len(list_pages(path)))
+            dist = dict(Counter(p["page_index"] for p in placements))
+            self.assertEqual(dist, expected, name)
+
+
 class TextBoxLayoutRegressionTest(unittest.TestCase):
     def test_rotated_text_box_wrapping(self) -> None:
         require_sample(ONLY_TEXT_SQUARED)

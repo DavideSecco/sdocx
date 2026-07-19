@@ -22,8 +22,9 @@
 //! fill). Validated against pysdocx `note_doc_tables` by `tests/note_tables.rs`.
 
 use crate::types::{
-    Alignment, BoundingBox, Color, ColorRun, FontSizeRun, ListItem, NoteTable, NoteTableCell,
-    ParagraphInfo, ParagraphStyle, Point, RichTextBox, RichTextRun, TableBorder, TableCellSpan,
+    Alignment, BoundingBox, Color, ColorRun, FontSizeRun, ListItem, NoteInlineImage, NoteTable,
+    NoteTableCell, ParagraphInfo, ParagraphStyle, Point, RichTextBox, RichTextRun, TableBorder,
+    TableCellSpan,
 };
 
 /// Inline objects appear in Common frames only from this format version on
@@ -34,6 +35,7 @@ const SPAN_BASE_SIZE: usize = 16;
 /// u32 paragraph_type + u32 start + u32 end.
 const PARAGRAPH_BASE_SIZE: usize = 12;
 const TABLE_OBJECT_TYPE: u32 = 22;
+const IMAGE_OBJECT_TYPE: u32 = 3;
 
 /// `01 00 02 00 00` — serialization preamble (Marker).
 const T5: [u8; 5] = [0x01, 0x00, 0x02, 0x00, 0x00];
@@ -157,12 +159,14 @@ struct FrameSpan {
     value: u32,
 }
 
-/// One type-22 inline object entry inside a Common frame.
+/// One inline object entry inside a Common frame (type 22 = table, 3 = image, …).
 struct InlineObject {
     obj_size: usize,
     object_type: u32,
     /// Offset of the object body within the blob passed to `parse_common_frame`.
     body_off: usize,
+    /// Anchor character position in the frame text (the U+FFFC index).
+    position: u32,
 }
 
 /// One decoded structural paragraph record within a Common frame (pysdocx
@@ -183,6 +187,9 @@ struct CommonFrame {
     text: String,
     spans: Vec<FrameSpan>,
     paragraphs: Vec<FrameParagraph>,
+    /// `(char_start, char_length)` sections that track page bands (used to place
+    /// inline images: an image's page = the section containing its anchor char).
+    sections: Vec<(u32, u32)>,
     inline_objects: Vec<InlineObject>,
 }
 
@@ -245,9 +252,11 @@ fn parse_common_frame(blob: &[u8], off: usize, format_version: u32) -> R<CommonF
     if section_count > win.remaining() / 8 {
         return Err("section count too large");
     }
+    let mut sections = Vec::with_capacity(section_count);
     for _ in 0..section_count {
-        win.u32()?;
-        win.u32()?;
+        let start = win.u32()?;
+        let length = win.u32()?;
+        sections.push((start, length));
     }
 
     let mut inline_objects = Vec::new();
@@ -266,14 +275,14 @@ fn parse_common_frame(blob: &[u8], off: usize, format_version: u32) -> R<CommonF
                 let object_type = obj_win.u32()?;
                 let body_off = obj_win.pos;
                 obj_win.bytes(obj_size)?;
-                let _position = obj_win.u32()?;
+                let position = obj_win.u32()?;
                 // trailing 8 bytes of Unknown semantics are left unconsumed here.
-                inline_objects.push(InlineObject { obj_size, object_type, body_off });
+                inline_objects.push(InlineObject { obj_size, object_type, body_off, position });
             }
         }
     }
 
-    Ok(CommonFrame { frame_size, text, spans, paragraphs, inline_objects })
+    Ok(CommonFrame { frame_size, text, spans, paragraphs, sections, inline_objects })
 }
 
 /// All offsets in `blob` where a complete Common frame parses cleanly (pysdocx
@@ -1065,6 +1074,76 @@ pub fn note_tables(note: &[u8]) -> Vec<NoteTable> {
         }
     }
     tables
+}
+
+/// The 0-based index of the `sections` interval containing `position` (chars past
+/// the last section fall back to the last section index) — the note-body page
+/// band an inline image anchors into. Mirrors pysdocx `section_of`.
+fn section_of(sections: &[(u32, u32)], position: u32) -> usize {
+    for (i, &(start, length)) in sections.iter().enumerate() {
+        if position >= start && position < start + length {
+            return i;
+        }
+    }
+    sections.len().saturating_sub(1)
+}
+
+/// Decode every inline image (object_type 3) in `note.note`'s body frame,
+/// resolved to a host page (the section containing its anchor char) and a
+/// page-local bbox. Port of pysdocx `note_inline_image_placements`; the page
+/// index is NOT clamped here (the caller clamps to the real page count).
+/// Reuses the page-object image-marker helpers in `page.rs`.
+pub fn note_inline_images(note: &[u8]) -> Vec<NoteInlineImage> {
+    let Ok(header) = parse_note_doc_header(note) else {
+        return Vec::new();
+    };
+    let body_end = header.body_off + header.body_size;
+    if body_end > note.len() {
+        return Vec::new();
+    }
+    let body = &note[header.body_off..body_end];
+    // Reach the body Common frame structurally (ObjectBase -> ShapeBase -> Shape),
+    // the same path pysdocx's `note_doc_common_frames` uses — the exhaustive
+    // `find_common_frames` scan is for nested table cells, not the body itself.
+    let Some(body_frame) = parse_text_wrapper(body, 0).ok().and_then(|w| w.common) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for obj in &body_frame.inline_objects {
+        if obj.object_type != IMAGE_OBJECT_TYPE {
+            continue;
+        }
+        let end = (obj.body_off + obj.obj_size).min(body.len());
+        if obj.body_off >= end {
+            continue;
+        }
+        let obj_body = &body[obj.body_off..end];
+        let Some(marker) = crate::page::find_sub(obj_body, crate::page::IMAGE_MARKER) else {
+            continue;
+        };
+        let bbox_off = marker + crate::page::IMAGE_BBOX_FWD;
+        if bbox_off + 32 > obj_body.len() {
+            continue;
+        }
+        let mut cur = Cur::new(obj_body, bbox_off, obj_body.len());
+        let (Ok(x_min), Ok(y_min), Ok(x_max), Ok(y_max)) =
+            (cur.f64(), cur.f64(), cur.f64(), cur.f64())
+        else {
+            continue;
+        };
+        let Some(media_index) = crate::page::image_media_index(obj_body) else {
+            continue;
+        };
+        let bbox = BoundingBox { x_min, y_min, x_max, y_max };
+        out.push(NoteInlineImage {
+            media_index,
+            page_index: section_of(&body_frame.sections, obj.position),
+            bbox,
+            crop: crate::page::image_crop(obj_body, bbox),
+        });
+    }
+    out
 }
 
 #[cfg(test)]

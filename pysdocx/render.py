@@ -34,6 +34,7 @@ from pysdocx.ink import color_hex
 from pysdocx.note import parse_tables, parse_typed_text  # noqa: F401 (legacy corroborator)
 from pysdocx.note_doc import (
     note_doc_tables,
+    note_inline_image_placements,
     note_table_grid,
     parse_note_doc,
     table_cell_style,
@@ -497,17 +498,34 @@ def render_page(ax, strokes, bg_color, title=None, shapes=(), images=(), text_bo
         # channel those out-of-bounds samples render as opaque black. RGBA makes them transparent
         # instead, so the page background shows through the corners as expected.
         pic = np.asarray(Image.open(io.BytesIO(im["data"])).convert("RGBA"))
+        # Cropped image: show only the decoded source sub-rect (normalized x/y/w/h,
+        # y from the top). Slicing the array keeps the placement extent, so the
+        # crop fills the placement bbox — see _image_crop.
+        crop = im.get("crop")
+        if crop:
+            h_src, w_src = pic.shape[0], pic.shape[1]
+            cx0 = max(0, min(w_src, round(crop["x"] * w_src)))
+            cx1 = max(cx0 + 1, min(w_src, round((crop["x"] + crop["w"]) * w_src)))
+            cy0 = max(0, min(h_src, round(crop["y"] * h_src)))
+            cy1 = max(cy0 + 1, min(h_src, round((crop["y"] + crop["h"]) * h_src)))
+            pic = pic[cy0:cy1, cx0:cx1]
         artist = ax.imshow(pic, extent=(x0, x1, y0, y1), origin="lower", aspect="auto", zorder=1)
-        angle_deg = im.get("angle_deg") or 0.0
-        if angle_deg:
-            # angle_deg is clockwise-positive on screen (see pysdocx.page.IMAGE_ANGLE_OFFSET).
-            # rotate_deg_around is counterclockwise-positive in data space, but the y-axis is
-            # inverted for the whole page (set_ylim(height, 0) below), which flips the apparent
-            # rotation sense back to clockwise on screen — so the raw decoded angle is used as-is.
-            # Pivot is the placement bbox's own center: bbox is the pre-rotation reference rect
-            # (verified: its width/height match this same source image's unrotated placements).
-            cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-            artist.set_transform(mtransforms.Affine2D().rotate_deg_around(cx, cy, angle_deg) + ax.transData)
+
+        # Apply transform: prefer full affine (rotation+scale+shear) if available, else rotation-only.
+        affine = im.get("affine_transform")
+        if affine:
+            # Full affine transform derived from payload_geometry quad. Coefficients are already
+            # in page space (from parsed geometry), so we apply them directly as the data transform.
+            # Note: y-axis inversion (page renders top-down but matplotlib is bottom-up) is handled
+            # by the caller's set_ylim(height, 0) at the page level, not here.
+            a, b, c, d, e, f = affine["a"], affine["b"], affine["c"], affine["d"], affine["e"], affine["f"]
+            artist.set_transform(mtransforms.Affine2D([[a, c, e], [b, d, f], [0, 0, 1]]) + ax.transData)
+        else:
+            # Fallback: pure rotation around bbox center.
+            angle_deg = im.get("angle_deg") or 0.0
+            if angle_deg:
+                cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+                artist.set_transform(mtransforms.Affine2D().rotate_deg_around(cx, cy, angle_deg) + ax.transData)
 
     for s in strokes:
         pts = s["points"]
@@ -1369,6 +1387,9 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
     # host-page index (`page_index`), so — unlike typed text — no placement guess is
     # needed. `table_page` (1-based) still forces all tables onto one page if given.
     tables = [structural_table_render_model(t) for t in note_doc_tables(note, parse_note_doc(note))] if note else []
+    # Inline images live in note.note (not a page object tree); each resolves to a
+    # page (section->page heuristic) + page-local bbox — see note_inline_image_placements.
+    inline_placements = note_inline_image_placements(note, len(all_pages)) if note else []
     typed_text_target = _typed_text_target_page(typed_text)
     raster_indices = raster_media_indices(path)
 
@@ -1400,6 +1421,16 @@ def render_document(path, *, out=None, fmt="png", bg=None, page=None,
             media = load_media_by_index(path, pl["media_index"])
             if media is not None:
                 images.append({"bbox": pl["bbox"], "data": media[1], "angle_deg": pl.get("angle_deg", 0.0)})
+        # note.note inline images assigned to this page (0-based page_index vs 1-based idx).
+        for pl in inline_placements:
+            if pl["page_index"] != idx - 1:
+                continue
+            media = load_media_by_index(path, pl["media_index"])
+            if media is not None:
+                images.append({
+                    "bbox": pl["bbox"], "data": media[1], "angle_deg": 0.0,
+                    "crop": pl.get("crop"),
+                })
 
         # Embedded PDF/custom-image template: resolve the referenced media and composite it as the
         # full-page background. Custom images are matched by the basename stored in template_uri.

@@ -1184,3 +1184,98 @@ def common_frame_paragraphs(frame: dict) -> list[dict]:
                 if value in PARAGRAPH_STYLES:
                     p["style"] = PARAGRAPH_STYLES[value]
     return paragraphs
+
+
+def scan_note_inline_images(note: bytes) -> list[dict]:
+    """Imported images placed *inline* in the typed-note body (`note.note`).
+
+    These carry the exact same on-disk record as page-object images — the
+    `01 00 04 20` marker, a 4xf64 bbox at marker+11, the media reference via the
+    `06 00 3e 00 00 00 02 00` ref-marker, and an edge-midpoint geometry block —
+    but live in the note-doc flow instead of a `.page` object tree, so neither
+    the page object walk nor `scan_images_from_objects` ever reaches them. They
+    account for the placements `mediaInfo.dat`'s `ref_count` counts beyond the
+    page objects (e.g. `ImagesAllTrasnsformations`: 6 page + 4 inline == 10).
+
+    We reuse `pysdocx.page.scan_images` verbatim, bounded by the note-doc's own
+    `width`/`height` (a tall document-flow canvas, e.g. 1600x9153). Each result is
+    tagged `source="note_inline"`. Returns `[]` when there is no decodable note
+    header (the bounds are unknown) or no marker is present.
+
+    NB: the bbox is in note-doc-flow coordinates; mapping it onto a specific
+    rendered page is an open question (see docs/format/unknowns.md) and is
+    deliberately not attempted here — this is enumeration, not placement.
+    """
+    from .page import scan_images  # lazy: page.py imports note_doc lazily too
+
+    try:
+        doc = parse_note_doc(note)
+        width, height = doc["width"], doc["height"]
+    except (NoteDocParseError, UnicodeDecodeError, struct.error, KeyError):
+        return []
+    if not (0 < width <= 1 << 20) or not (0 < height <= 1 << 24):
+        return []
+
+    images = scan_images(note, width, height)
+    for im in images:
+        im["source"] = "note_inline"
+    return images
+
+
+def note_inline_image_placements(note: bytes, page_count: int | None = None) -> list[dict]:
+    """Inline images resolved to a **page** and a **page-local bbox** for rendering.
+
+    Unlike `scan_note_inline_images` (pure enumeration), this pairs each inline
+    image with its anchor character in the body Common frame and derives which
+    page it belongs on. Returns `[{media_index, page_index, bbox}]` (bbox already
+    page-local; note-doc coords are page-local, aligned with the page-object
+    coordinate origin — top inline `y=44` == the page-object top image `y=44`).
+
+    Placement model (HEURISTIC, calibrated on `ImagesAllTrasnsformations` — see
+    docs/format/heuristics.md): the body text is split into `sections` that track
+    page bands; an inline image's page is the index of the section containing its
+    anchor char (chars past the last section fall back to the last section), then
+    clamped to `[0, page_count-1]` when `page_count` is known. This reproduces the
+    ground-truth 1-image/3-image split across the two content pages.
+
+    Returns `[]` when the note has no decodable body frame.
+    """
+    from .page import IMAGE_MARKER, IMAGE_BBOX_FWD, _image_media_index, _image_crop
+
+    try:
+        doc = parse_note_doc(note)
+        body = note_doc_common_frames(note, doc)["body"]
+    except (NoteDocParseError, UnicodeDecodeError, struct.error, KeyError):
+        return []
+    if not body:
+        return []
+
+    sections = body.get("sections") or []
+    body_off = doc["body_off"]
+
+    def section_of(position: int) -> int:
+        for i, (start, length) in enumerate(sections):
+            if start <= position < start + length:
+                return i
+        return max(0, len(sections) - 1)  # past the last section (e.g. quiz)
+
+    placements = []
+    for obj in body.get("inline", {}).get("objects", []):
+        if obj.get("object_type") != 3:
+            continue
+        blob = note[body_off + obj["body_off"] : body_off + obj["body_off"] + obj["obj_size"]]
+        marker = blob.find(IMAGE_MARKER)
+        if marker < 0 or marker + IMAGE_BBOX_FWD + 32 > len(blob):
+            continue
+        bbox = struct.unpack_from("<4d", blob, marker + IMAGE_BBOX_FWD)
+        media_index, _, _ = _image_media_index(blob, marker, len(blob))
+        page_index = section_of(obj["position"])
+        if page_count is not None:
+            page_index = min(page_index, max(0, page_count - 1))
+        placements.append({
+            "media_index": media_index,
+            "page_index": page_index,
+            "bbox": bbox,
+            "crop": _image_crop(blob, marker, bbox, len(blob)),
+        })
+    return placements

@@ -11,7 +11,16 @@ interface Stroke {
   /** Per-point pressure quantized 0..255; present only on tapered strokes. */
   pressures?: number[];
 }
-interface SImage { x: number; y: number; w: number; h: number; media_index: number }
+interface SImage {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  media_index: number;
+  angle_deg?: number;
+  affine?: [number, number, number, number, number, number];
+  crop?: [number, number, number, number];
+}
 // Rich text: layout (anchor/wrap/rotation/line advances) and styling come fully
 // resolved from the Rust Scene builder; only glyph measurement — and thus the
 // actual wrap points — happens here, since Rust has no font metrics.
@@ -619,7 +628,32 @@ function renderJob(job: Job): void {
   const imgMap = new Map(images.map((i) => [i.index, i.bitmap]));
   for (const im of scene.images) {
     const b = imgMap.get(im.media_index);
-    if (b) c.drawImage(b, im.x, im.y, im.w, im.h);
+    if (!b) continue;
+
+    // Cropped image: source sub-rect in image pixels (normalized crop × dims);
+    // otherwise the full source. `draw(dx,dy,dw,dh)` respects it.
+    const sx = im.crop ? im.crop[0] * b.width : 0;
+    const sy = im.crop ? im.crop[1] * b.height : 0;
+    const sw = im.crop ? im.crop[2] * b.width : b.width;
+    const sh = im.crop ? im.crop[3] * b.height : b.height;
+    const draw = (dx: number, dy: number, dw: number, dh: number) =>
+      c.drawImage(b, sx, sy, sw, sh, dx, dy, dw, dh);
+
+    c.save();
+    if (im.affine) {
+      const [a, b_, c_, d, e, f] = im.affine;
+      c.transform(a, b_, c_, d, e, f);
+      draw(im.x, im.y, im.w, im.h);
+    } else if (im.angle_deg) {
+      const cx = im.x + im.w / 2;
+      const cy = im.y + im.h / 2;
+      c.translate(cx, cy);
+      c.rotate((im.angle_deg * Math.PI) / 180);
+      draw(-im.w / 2, -im.h / 2, im.w, im.h);
+    } else {
+      draw(im.x, im.y, im.w, im.h);
+    }
+    c.restore();
   }
 
   c.lineJoin = "round";

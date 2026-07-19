@@ -29,6 +29,9 @@ pub fn parse_from_reader<R: Read + Seek>(reader: R) -> Result<Document> {
         parse_note_note(&buf, &mut metadata);
         metadata.tables = parse_tables(&buf);
         metadata.note_tables = crate::note_doc::note_tables(&buf);
+        // Page index is section-based and unclamped here; clamped to the real
+        // page count once the pages are known (below).
+        metadata.note_inline_images = crate::note_doc::note_inline_images(&buf);
         note_text = parse_note_text(&buf);
     }
 
@@ -71,6 +74,15 @@ pub fn parse_from_reader<R: Read + Seek>(reader: R) -> Result<Document> {
     }
     metadata.note_text = note_text;
 
+    // Clamp inline-image host pages to the real page count (the note-doc section
+    // count can exceed the exported page count, e.g. the single-page `quiz`).
+    if !pages.is_empty() {
+        let last = pages.len() - 1;
+        for img in &mut metadata.note_inline_images {
+            img.page_index = img.page_index.min(last);
+        }
+    }
+
     Ok(Document { pages, metadata })
 }
 
@@ -83,6 +95,25 @@ fn parse_end_tag(data: &[u8], metadata: &mut DocumentMetadata) {
     let modified = i64::from_le_bytes(data[0x50..0x58].try_into().unwrap());
     metadata.created_ms = Some(created);
     metadata.modified_ms = Some(modified);
+
+    // Extract password hash if present (276-byte end_tag.bin variant).
+    // Offset 0x40, 128 bytes, UTF-16LE encoded 64-char hex SHA-256 digest.
+    if data.len() >= 0xc0 {
+        if let Ok(utf16_bytes) = <&[u8; 128]>::try_from(&data[0x40..0xc0]) {
+            if let Ok(utf16_str) = String::from_utf16(
+                utf16_bytes
+                    .chunks_exact(2)
+                    .map(|b| u16::from_le_bytes([b[0], b[1]]))
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            ) {
+                let trimmed = utf16_str.trim_end_matches('\0');
+                if trimmed.len() == 64 && trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
+                    metadata.password_hash = Some(trimmed.to_string());
+                }
+            }
+        }
+    }
 }
 
 /// Extract background color and page dimensions from `note.note`.
@@ -615,6 +646,7 @@ impl<R: Read + Seek> Reader<R> {
             parse_note_note(&buf, &mut metadata);
             metadata.tables = parse_tables(&buf);
             metadata.note_tables = crate::note_doc::note_tables(&buf);
+            metadata.note_inline_images = crate::note_doc::note_inline_images(&buf);
             note_text = parse_note_text(&buf);
         }
         if let Ok(mut entry) = archive.by_name("pageIdInfo.dat") {
@@ -634,6 +666,14 @@ impl<R: Read + Seek> Reader<R> {
             return Err(Error::Format("no .page files found in archive".into()));
         }
         let page_names = order_pages(&metadata.page_ids, &mut present);
+
+        // Clamp inline-image host pages to the real page count (see parse_from_reader).
+        if !page_names.is_empty() {
+            let last = page_names.len() - 1;
+            for img in &mut metadata.note_inline_images {
+                img.page_index = img.page_index.min(last);
+            }
+        }
 
         let (media_names, media_assets) = media_manifest(&mut archive);
         metadata.media_assets = media_assets;
@@ -839,5 +879,33 @@ mod tests {
         }
         // The raw indices themselves — byte-identical to what pysdocx decodes.
         assert_eq!(pdf_indices, [0u32, 2u32].into_iter().collect());
+    }
+
+    /// note.note inline images resolve to a host page + page-local bbox that
+    /// match the pysdocx oracle: 4 images, 1 on page 0 and 3 on page 1 (the
+    /// 1/3 split the user's ground-truth annotations confirm).
+    #[test]
+    fn note_inline_images_resolve_to_pages() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../samples/ImagesAllTrasnsformations_260713_221310/note.sdocx");
+        if !path.exists() {
+            eprintln!("skipping: ImagesAllTrasnsformations sample not present");
+            return;
+        }
+        let reader = crate::open(&path).expect("open sample");
+        let inline = &reader.metadata().note_inline_images;
+
+        assert_eq!(inline.len(), 4, "expected 4 inline images");
+        let mut per_page = [0usize; 2];
+        for img in inline {
+            assert!(img.page_index < 2, "page_index {} out of range", img.page_index);
+            per_page[img.page_index] += 1;
+        }
+        assert_eq!(per_page, [1, 3], "1 image on page 0, 3 on page 1");
+
+        // media indices 0,0,3,0 (media 3 is the sticker-edited one on page 1).
+        let media: Vec<usize> = inline.iter().map(|i| i.media_index).collect();
+        assert_eq!(media.iter().filter(|&&m| m == 0).count(), 3);
+        assert_eq!(media.iter().filter(|&&m| m == 3).count(), 1);
     }
 }

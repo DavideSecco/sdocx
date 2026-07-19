@@ -120,6 +120,17 @@ IMAGE_MARKER = b"\x01\x00\x04\x20"
 IMAGE_MEDIA_INDEX_BACK = 6  # u16 media index this many bytes before the marker
 IMAGE_BBOX_FWD = 11  # 4 x f64 bbox this many bytes after the marker
 IMAGE_MEDIA_REF_MARKER = b"\x06\x00\x3e\x00\x00\x00\x02\x00"
+# Image crop, in the flex fields after the media reference. Relative to the byte
+# after the media-ref marker + its u32 media index: a field-flag byte whose bit
+# 0x40 marks "cropped", and (when set) a 4 x f64 rect = the FULL (uncropped)
+# image's placement rectangle on the page (its aspect == the source image's).
+# The placement bbox is the cropped window inside that rect, so the visible
+# source sub-rect = normalize(placement bbox within the full rect). Offsets
+# calibrated on the two cropped images in ImagesAllTrasnsformations (page-object
+# aspect 3.076 + note.note-inline aspect 2.786); see docs object-types.md.
+IMAGE_CROP_FLAG_FWD = 57  # field-flag byte after the media ref
+IMAGE_CROP_FLAG_BIT = 0x40
+IMAGE_CROP_RECT_FWD = 90  # 4 x f64 full-image page rect after the media ref
 
 # A rotated image object carries a `field_flags` bit (0x1, alongside 0x40000 — both newly set
 # vs. an unrotated placement's 0xe000) and, right at the common header's `attributes_offset`
@@ -1637,6 +1648,94 @@ def _image_media_index(data: bytes, marker: int, limit: int) -> tuple[int, int, 
     return struct.unpack_from("<H", data, off)[0], off, 2
 
 
+def _image_crop(data: bytes, marker: int, bbox: tuple[float, float, float, float],
+                limit: int) -> dict | None:
+    """The image's crop as normalized source fractions, or None if uncropped.
+
+    Reads the crop flex (see IMAGE_CROP_* offsets): when the crop-flag bit is set,
+    a 4 x f64 rect gives where the FULL image would sit on the page; the placement
+    `bbox` is the cropped window inside it, so the visible source sub-rect is the
+    placement bbox normalized into that full rect. Returns
+    `{x, y, w, h}` in [0,1] source coordinates (directly usable as an image
+    source-rect for rendering), or None when the crop bit is clear or the rect is
+    degenerate.
+    """
+    ref = data.find(IMAGE_MEDIA_REF_MARKER, marker, min(limit, marker + 180))
+    if ref < 0:
+        return None
+    flex = ref + len(IMAGE_MEDIA_REF_MARKER) + 4
+    flag_off = flex + IMAGE_CROP_FLAG_FWD
+    rect_off = flex + IMAGE_CROP_RECT_FWD
+    if flag_off >= limit or rect_off + 32 > limit:
+        return None
+    if not (data[flag_off] & IMAGE_CROP_FLAG_BIT):
+        return None
+    x0, y0, x1, y1 = struct.unpack_from("<4d", data, rect_off)
+    if not all(math.isfinite(v) for v in (x0, y0, x1, y1)) or x1 <= x0 or y1 <= y0:
+        return None
+    px0, py0, px1, py1 = bbox
+    fx = (px0 - x0) / (x1 - x0)
+    fy = (py0 - y0) / (y1 - y0)
+    fw = (px1 - px0) / (x1 - x0)
+    fh = (py1 - py0) / (y1 - y0)
+    return {"x": fx, "y": fy, "w": fw, "h": fh}
+
+
+def _derive_affine_transform(bbox: tuple[float, float, float, float], quad_points: list[tuple[float, float]]) -> dict | None:
+    """Derive a 2D affine transform from the placed frame's edge midpoints.
+
+    The payload_geometry quad stores the placed rectangle's four EDGE MIDPOINTS in order
+    [top, right, bottom, left] — the same convention as text-box frames — NOT its corners.
+    We first reconstruct the placed rectangle's corners from the midpoints, then solve for the
+    affine matrix that maps the axis-aligned bbox corners onto them. Returns a dict with
+    'a', 'b', 'c', 'd', 'e', 'f' (coefficients of x' = ax + cy + e, y' = bx + dy + f), or None
+    if the reconstruction doesn't close to a valid parallelogram.
+
+    NB: an earlier version treated the four points as corners directly. Because the edge
+    midpoints of a parallelogram also form a parallelogram, its closure check still passed,
+    silently producing a spurious ~45°-shear "inscribed diamond" transform for every image
+    (proven wrong by ImagesAllTrasnsformations: an angle=0 image derived a heavy shear and an
+    angle=45 image reconstructs to a pure 45° rotation once the midpoints are handled).
+    """
+    if len(quad_points) < 4:
+        return None
+
+    x_min, y_min, x_max, y_max = bbox
+    if abs(x_max - x_min) < 1e-10 or abs(y_max - y_min) < 1e-10:
+        return None
+
+    # Reconstruct the placed rectangle's corners from its edge midpoints.
+    m_top, m_right, m_bottom, _m_left = quad_points[0], quad_points[1], quad_points[2], quad_points[3]
+    cx = (m_top[0] + m_bottom[0]) / 2.0  # center = midpoint of top/bottom edge midpoints
+    cy = (m_top[1] + m_bottom[1]) / 2.0
+    wx, wy = m_right[0] - cx, m_right[1] - cy  # half-width vector (center -> right edge)
+    hx, hy = m_top[0] - cx, m_top[1] - cy      # half-height vector (center -> top edge)
+
+    # Placed corner that each bbox corner maps to:
+    # (x_min,y_min)=TL, (x_max,y_min)=TR, (x_max,y_max)=BR, (x_min,y_max)=BL.
+    tl = (cx - wx + hx, cy - wy + hy)
+    tr = (cx + wx + hx, cy + wy + hy)
+    br = (cx + wx - hx, cy + wy - hy)
+    bl = (cx - wx - hx, cy - wy - hy)
+
+    # Solve the affine from TL/TR/BR; the shared-row system collapses to plain differences
+    # over the source-rect extents. BL is the closure check.
+    a = (tr[0] - tl[0]) / (x_max - x_min)
+    c = (br[0] - tr[0]) / (y_max - y_min)
+    e = tl[0] - a * x_min - c * y_min
+    b = (tr[1] - tl[1]) / (x_max - x_min)
+    d = (br[1] - tr[1]) / (y_max - y_min)
+    f = tl[1] - b * x_min - d * y_min
+
+    # Parallelogram closure: BL (from x_min,y_max) must land where the transform predicts.
+    bl_pred_x = a * x_min + c * y_max + e
+    bl_pred_y = b * x_min + d * y_max + f
+    if abs(bl_pred_x - bl[0]) > 1.0 or abs(bl_pred_y - bl[1]) > 1.0:
+        return None
+
+    return {"a": float(a), "b": float(b), "c": float(c), "d": float(d), "e": float(e), "f": float(f)}
+
+
 def _image_rotation_deg(header: dict | None, blob: bytes) -> float:
     """Rotation angle in degrees (clockwise-positive on screen, 0..360) for an image object.
 
@@ -1674,13 +1773,20 @@ def scan_images_from_objects(data: bytes, width: int, height: int, layers: list[
                 media_index, media_index_off, media_index_size = _image_media_index(data, i, obj["end"])
                 bbox = struct.unpack_from("<4d", data, i + IMAGE_BBOX_FWD)
                 x_min, y_min, x_max, y_max = bbox
+                # Allow negative coords (image rotated partly off-page), but keep sanity checks:
+                # must be finite, have min size, and reasonable bounds (not garbage values far off).
                 if (
                     all(math.isfinite(v) for v in bbox)
-                    and 0 <= x_min < x_max <= width + 5
-                    and 0 <= y_min < y_max <= height + 5
+                    and x_min < x_max <= width + 500
+                    and y_min < y_max <= height + 500
                     and x_max - x_min > 20
                     and y_max - y_min > 20
                 ):
+                    affine_transform = None
+                    pg = obj.get("payload_geometry")
+                    if pg and "points" in pg:
+                        affine_transform = _derive_affine_transform(bbox, pg["points"])
+
                     images.append({
                         "media_index": media_index,
                         "media_index_off": media_index_off,
@@ -1690,7 +1796,9 @@ def scan_images_from_objects(data: bytes, width: int, height: int, layers: list[
                         "object_idx": obj["idx"],
                         "object_off": obj["off"],
                         "angle_deg": angle_deg,
-                        "payload_geometry": obj.get("payload_geometry"),
+                        "payload_geometry": pg,
+                        "affine_transform": affine_transform,
+                        "crop": _image_crop(data, i, bbox, obj["end"]),
                     })
     return images
 

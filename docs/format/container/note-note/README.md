@@ -97,6 +97,13 @@ The old "tail records" nomenclature (tail sentinel, pen preload paths, preload
 parameter hints, pen style tails, voice clip records, tail hash block) maps
 onto these flex fields one-for-one — see [tail-records](./tail-records.md).
 
+## Inline images — Decoded (enumeration)
+
+Imported images can be placed **inline in the body text**, using the same
+`01 00 04 20` record as page-object images but living in the note-doc stream.
+Decoded byte-exactly (media ref + bbox); their page placement is Unknown. See
+[inline-images](./inline-images.md).
+
 ## Trailing hash — Decoded
 
 The last 32 bytes of `note.note` are the SHA-256 digest of every preceding

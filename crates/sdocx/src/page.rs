@@ -652,9 +652,6 @@ fn is_builtin_template_id(id: u32) -> bool {
     id != 0 && id <= 0xFFFF
 }
 
-/// Upper bound on an object record so `parse_text_box_record`/`looks_like_image_record`
-/// never scan into the next object (or the whole rest of a multi-MB page).
-const MAX_OBJECT_RECORD_LEN: usize = 16 * 1024;
 
 fn parse_page_elements(
     data: &[u8],
@@ -675,13 +672,33 @@ fn parse_page_elements(
         // pysdocx `_classify_page_object` precedence: an image placement marker
         // claims the object even when its media index fails to decode — never
         // text- or shape-scan those blobs.
-        if find_sub(blob, IMAGE_MARKER).is_some() {
-            if let Some(uuid_off) = find_uuid_in(data, obj.blob_off, obj.blob_off + 96)
-                && let Some(bbox) = find_object_bbox(data, uuid_off, width, height) {
-                    let record_end = obj.blob_end.min(uuid_off + MAX_OBJECT_RECORD_LEN);
-                    if let Some(media_index) = image_media_index(&data[uuid_off..record_end]) {
-                        elements.push(PageElement::Image { bbox, media_index });
+        if let Some(marker) = find_sub(blob, IMAGE_MARKER) {
+            // Read the placement bbox at the decoded field offset (marker+11),
+            // mirroring pysdocx `scan_images_from_objects` — this ALLOWS negative
+            // coords (an image rotated partly off the left/top edge), unlike the
+            // `find_object_bbox`/`plausible_bbox` scan which rejects `x_min < 1`
+            // and so dropped the 270° image. See docs object-types.md.
+            if let Some(bbox) = read_image_bbox(blob, marker + IMAGE_BBOX_FWD, width, height)
+                && let Some(media_index) = image_media_index(blob) {
+                    let mut angle_deg = None;
+                    let mut affine_transform = None;
+                    if let Some(header) = parse_object_header(blob) {
+                        let bbox_cx = (bbox.x_min + bbox.x_max) / 2.0;
+                        let bbox_cy = (bbox.y_min + bbox.y_max) / 2.0;
+                        angle_deg = object_rotation_degrees(blob, header.field_flags);
+                        if let Some(points_off) = payload_geometry_4_points(blob, &header)
+                            && let Some(quad) = read_geometry_quad(blob, points_off, bbox_cx, bbox_cy)
+                        {
+                            affine_transform = derive_affine_transform(bbox, quad);
+                        }
                     }
+                    elements.push(PageElement::Image {
+                        bbox,
+                        media_index,
+                        angle_deg,
+                        affine_transform,
+                        crop: image_crop(blob, bbox),
+                    });
                 }
             continue;
         }
@@ -709,69 +726,86 @@ fn parse_page_elements(
     elements
 }
 
-/// First ascii UUID starting in `[start, end)` (the UUID may extend past `end`).
-fn find_uuid_in(data: &[u8], start: usize, end: usize) -> Option<usize> {
-    let last = end.min(data.len().saturating_sub(36));
-    (start..last).find(|&off| is_ascii_uuid(&data[off..off + 36]))
-}
-
-fn is_ascii_uuid(bytes: &[u8]) -> bool {
-    bytes.len() == 36
-        && bytes.iter().enumerate().all(|(i, &b)| match i {
-            8 | 13 | 18 | 23 => b == b'-',
-            _ => b.is_ascii_hexdigit(),
-        })
-}
-
-fn find_object_bbox(data: &[u8], uuid_off: usize, width: u32, height: u32) -> Option<BoundingBox> {
-    let search_end = (uuid_off + 128).min(data.len().saturating_sub(32));
-    for offset in uuid_off + 36..=search_end {
-        let bbox = BoundingBox {
-            x_min: read_f64(data, offset)?,
-            y_min: read_f64(data, offset + 8)?,
-            x_max: read_f64(data, offset + 16)?,
-            y_max: read_f64(data, offset + 24)?,
-        };
-        if plausible_bbox(bbox, width, height) {
-            return Some(bbox);
-        }
-    }
-
-    None
-}
-
-fn plausible_bbox(bbox: BoundingBox, width: u32, height: u32) -> bool {
-    bbox.x_min.is_finite()
+/// Read the 4×f64 image placement bbox at `off` with pysdocx
+/// `scan_images_from_objects`' sanity checks — which **allow negative
+/// `x_min`/`y_min`** (an image rotated partly off the page edge), unlike
+/// [`plausible_bbox`]. Only requires finiteness, `min < max`, a min size, and a
+/// generous upper bound.
+fn read_image_bbox(blob: &[u8], off: usize, width: u32, height: u32) -> Option<BoundingBox> {
+    let bbox = BoundingBox {
+        x_min: read_f64(blob, off)?,
+        y_min: read_f64(blob, off + 8)?,
+        x_max: read_f64(blob, off + 16)?,
+        y_max: read_f64(blob, off + 24)?,
+    };
+    (bbox.x_min.is_finite()
         && bbox.y_min.is_finite()
         && bbox.x_max.is_finite()
         && bbox.y_max.is_finite()
-        && bbox.x_min >= 1.0
-        && bbox.y_min >= 1.0
-        && bbox.x_max > bbox.x_min
-        && bbox.y_max > bbox.y_min
-        && bbox.x_max <= width as f64 * 1.25
-        && bbox.y_max <= height as f64 * 1.25
-        && bbox.x_max - bbox.x_min > 8.0
-        && bbox.y_max - bbox.y_min > 8.0
+        && bbox.x_min < bbox.x_max
+        && bbox.y_min < bbox.y_max
+        && bbox.x_max - bbox.x_min > 20.0
+        && bbox.y_max - bbox.y_min > 20.0
+        && bbox.x_max <= width as f64 + 500.0
+        && bbox.y_max <= height as f64 + 500.0)
+        .then_some(bbox)
 }
 
 /// Imported-image placement marker inside an object record (see pysdocx
 /// `scan_images`: `01 00 04 20`, u16 media index 6 bytes before, 4 x f64 bbox
 /// 11 bytes after).
-const IMAGE_MARKER: &[u8] = b"\x01\x00\x04\x20";
+pub(crate) const IMAGE_MARKER: &[u8] = b"\x01\x00\x04\x20";
+/// 4×f64 placement bbox this many bytes after the image marker (pysdocx
+/// `IMAGE_BBOX_FWD`). Shared with the note.note inline-image decode.
+pub(crate) const IMAGE_BBOX_FWD: usize = 11;
 /// Preferred media reference: a u32 archive index right after this marker,
 /// searched within 180 bytes of the placement marker (pysdocx
 /// `_image_media_index`).
 const IMAGE_MEDIA_REF_MARKER: &[u8] = b"\x06\x00\x3e\x00\x00\x00\x02\x00";
+/// Image crop flex, relative to the byte after the media-ref marker + its u32
+/// media index (pysdocx `IMAGE_CROP_*`): a field-flag byte whose `0x40` bit
+/// marks "cropped", then a 4×f64 rect = the full (uncropped) image's page
+/// placement. Offsets calibrated on the two cropped ImagesAllTrasnsformations
+/// images (page-object + note.note inline).
+const IMAGE_CROP_FLAG_FWD: usize = 57;
+const IMAGE_CROP_FLAG_BIT: u8 = 0x40;
+const IMAGE_CROP_RECT_FWD: usize = 90;
 
-fn find_sub(hay: &[u8], needle: &[u8]) -> Option<usize> {
+pub(crate) fn find_sub(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).position(|w| w == needle)
+}
+
+/// Decode the image crop as a normalized source sub-rect (pysdocx `_image_crop`).
+/// When the crop-flag bit is set, a 4×f64 rect gives where the full image would
+/// sit on the page; `bbox` is the cropped window inside it, so the visible source
+/// sub-rect is `bbox` normalized into that rect. `None` when uncropped/degenerate.
+pub(crate) fn image_crop(record: &[u8], bbox: BoundingBox) -> Option<crate::types::CropRect> {
+    let marker = find_sub(record, IMAGE_MARKER)?;
+    let search_end = (marker + 180).min(record.len());
+    let rel = find_sub(&record[marker..search_end], IMAGE_MEDIA_REF_MARKER)?;
+    let flex = marker + rel + IMAGE_MEDIA_REF_MARKER.len() + 4;
+    let flag_off = flex + IMAGE_CROP_FLAG_FWD;
+    let rect_off = flex + IMAGE_CROP_RECT_FWD;
+    if rect_off + 32 > record.len() || record[flag_off] & IMAGE_CROP_FLAG_BIT == 0 {
+        return None;
+    }
+    let f = |o: usize| f64::from_le_bytes(record[o..o + 8].try_into().unwrap());
+    let (x0, y0, x1, y1) = (f(rect_off), f(rect_off + 8), f(rect_off + 16), f(rect_off + 24));
+    if ![x0, y0, x1, y1].iter().all(|v| v.is_finite()) || x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    Some(crate::types::CropRect {
+        x: (bbox.x_min - x0) / (x1 - x0),
+        y: (bbox.y_min - y0) / (y1 - y0),
+        w: (bbox.x_max - bbox.x_min) / (x1 - x0),
+        h: (bbox.y_max - bbox.y_min) / (y1 - y0),
+    })
 }
 
 /// Decode the GLOBAL media archive index referenced by an image record — the
 /// `<index>@` prefix of the media member's basename. Returns `None` when the
 /// record has no image placement marker (i.e. it is not an image record).
-fn image_media_index(record: &[u8]) -> Option<usize> {
+pub(crate) fn image_media_index(record: &[u8]) -> Option<usize> {
     let marker = find_sub(record, IMAGE_MARKER)?;
     let search_end = (marker + 180).min(record.len());
     if let Some(rel) = find_sub(&record[marker..search_end], IMAGE_MEDIA_REF_MARKER) {
@@ -882,33 +916,103 @@ const PAYLOAD_GEOMETRY_TAG: u16 = 6;
 const PAYLOAD_GEOMETRY_OPCODE: [u8; 4] = [0x01, 0x00, 0x01, 0x0C];
 const PAYLOAD_GEOMETRY_HEADER_LEN: usize = 18;
 
+/// Read and validate a 4-point quad from blob at given offset, checking that
+/// the centroid is within 1.0 of the bbox center (pysdocx `_text_box_frame_midpoints`
+/// inner closure, extracted for reuse by both text boxes and images).
+fn read_geometry_quad(
+    blob: &[u8],
+    start: usize,
+    bbox_cx: f64,
+    bbox_cy: f64,
+) -> Option<[Point; 4]> {
+    let mut pts = [Point { x: 0.0, y: 0.0 }; 4];
+    for (i, pt) in pts.iter_mut().enumerate() {
+        pt.x = read_f64(blob, start + i * 16)?;
+        pt.y = read_f64(blob, start + i * 16 + 8)?;
+        if !pt.x.is_finite() || !pt.y.is_finite() {
+            return None;
+        }
+    }
+    let cx = pts.iter().map(|p| p.x).sum::<f64>() / 4.0;
+    let cy = pts.iter().map(|p| p.y).sum::<f64>() / 4.0;
+    ((cx - bbox_cx).abs() <= 1.0 && (cy - bbox_cy).abs() <= 1.0).then_some(pts)
+}
+
+/// Derive a 2D affine transformation from a source bbox and the placed frame's
+/// four **edge midpoints** (port of pysdocx `_derive_affine_transform`). The
+/// payload-geometry quad stores edge midpoints in order `[top, right, bottom,
+/// left]` (the same convention as text-box frames), NOT corners. We first
+/// reconstruct the placed rectangle's four corners from the midpoints, then
+/// solve for the affine that maps the axis-aligned bbox corners onto them.
+/// Coefficients follow `x' = a·x + c·y + e`, `y' = b·x + d·y + f`.
+fn derive_affine_transform(
+    bbox: BoundingBox,
+    midpoints: [Point; 4],
+) -> Option<crate::types::AffineTransform> {
+    let x_min = bbox.x_min;
+    let y_min = bbox.y_min;
+    let x_max = bbox.x_max;
+    let y_max = bbox.y_max;
+
+    let dx = x_max - x_min;
+    let dy = y_max - y_min;
+    if dx.abs() < 1e-10 || dy.abs() < 1e-10 {
+        return None;
+    }
+
+    // Reconstruct the placed rectangle's corners from its edge midpoints.
+    // center = midpoint of the top/bottom (== left/right) edge midpoints;
+    // half-width vector w = right-mid − center; half-height vector h = top-mid − center.
+    let m_top = midpoints[0];
+    let m_right = midpoints[1];
+    let m_bottom = midpoints[2];
+    let cx = (m_top.x + m_bottom.x) / 2.0;
+    let cy = (m_top.y + m_bottom.y) / 2.0;
+    let wx = m_right.x - cx;
+    let wy = m_right.y - cy;
+    let hx = m_top.x - cx;
+    let hy = m_top.y - cy;
+
+    // Corner that each bbox corner maps to (page space):
+    // (x_min,y_min)=TL, (x_max,y_min)=TR, (x_max,y_max)=BR, (x_min,y_max)=BL.
+    let tl = Point { x: cx - wx + hx, y: cy - wy + hy };
+    let tr = Point { x: cx + wx + hx, y: cy + wy + hy };
+    let br = Point { x: cx + wx - hx, y: cy + wy - hy };
+    let bl = Point { x: cx - wx - hx, y: cy - wy - hy };
+
+    // Solve the affine from TL/TR/BR (the shared-row system collapses to plain
+    // differences over the source-rect extents); BL is the closure check.
+    let a = (tr.x - tl.x) / dx;
+    let c = (br.x - tr.x) / dy;
+    let e = tl.x - a * x_min - c * y_min;
+    let b = (tr.y - tl.y) / dx;
+    let d = (br.y - tr.y) / dy;
+    let f = tl.y - b * x_min - d * y_min;
+
+    // Parallelogram closure: BL (from x_min,y_max) must land where the transform predicts.
+    let bl_expected_x = a * x_min + c * y_max + e;
+    let bl_expected_y = b * x_min + d * y_max + f;
+    if (bl.x - bl_expected_x).abs() > 1.0 || (bl.y - bl_expected_y).abs() > 1.0 {
+        return None;
+    }
+
+    Some(crate::types::AffineTransform { a, b, c, d, e, f })
+}
+
 /// The 4 stored edge-midpoints of a text-box frame, accepted only when their
 /// centroid matches the header bbox center (pysdocx `_text_box_frame_midpoints`):
 /// preferred source is the payload-geometry wrapper (4 points); the raw scan at
 /// `total_size + 0x12` is the fallback for rotated boxes without one.
 fn text_box_frame_midpoints(blob: &[u8], header: &ObjectHeader) -> Option<[Point; 4]> {
-    let read4 = |start: usize| -> Option<[Point; 4]> {
-        let mut pts = [Point { x: 0.0, y: 0.0 }; 4];
-        for (i, pt) in pts.iter_mut().enumerate() {
-            pt.x = read_f64(blob, start + i * 16)?;
-            pt.y = read_f64(blob, start + i * 16 + 8)?;
-            if !pt.x.is_finite() || !pt.y.is_finite() {
-                return None;
-            }
-        }
-        let cx = pts.iter().map(|p| p.x).sum::<f64>() / 4.0;
-        let cy = pts.iter().map(|p| p.y).sum::<f64>() / 4.0;
-        let bbox_cx = (header.bbox.x_min + header.bbox.x_max) / 2.0;
-        let bbox_cy = (header.bbox.y_min + header.bbox.y_max) / 2.0;
-        ((cx - bbox_cx).abs() <= 1.0 && (cy - bbox_cy).abs() <= 1.0).then_some(pts)
-    };
+    let bbox_cx = (header.bbox.x_min + header.bbox.x_max) / 2.0;
+    let bbox_cy = (header.bbox.y_min + header.bbox.y_max) / 2.0;
 
     if let Some(points_off) = payload_geometry_4_points(blob, header)
-        && let Some(pts) = read4(points_off) {
+        && let Some(pts) = read_geometry_quad(blob, points_off, bbox_cx, bbox_cy) {
             return Some(pts);
         }
     if header.field_flags & ANGLE_FIELD_FLAG != 0 {
-        return read4(header.total_size as usize + 0x12);
+        return read_geometry_quad(blob, header.total_size as usize + 0x12, bbox_cx, bbox_cy);
     }
     None
 }
@@ -1353,7 +1457,7 @@ fn parse_attachment_property_bag(
 #[cfg(test)]
 mod tests {
     use super::{bbox_of, looks_like_flat_synthetic_line, parse_page, within_page_bounds};
-    use crate::types::{BoundingBox, Color, PageTemplate, PageTemplateSource, Point, Stroke};
+    use crate::types::{BoundingBox, Color, PageElement, PageTemplate, PageTemplateSource, Point, Stroke};
 
     fn stroke_with(bbox: BoundingBox, points: Vec<Point>) -> Stroke {
         Stroke {
@@ -1662,5 +1766,108 @@ mod tests {
         let page = parse_page(&data).unwrap();
 
         assert_eq!(page.template, None);
+    }
+
+    #[test]
+    fn image_affine_transform_parses_on_rotated_images() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../samples/ImagesAllTrasnsformations_260713_221310/note.sdocx");
+        if !path.exists() {
+            eprintln!("skipping: ImagesAllTrasnsformations sample not present");
+            return;
+        }
+        let mut reader = crate::open(&path).expect("open sample");
+        let page = reader.page(0).expect("page 0");
+
+        // Locate the 45°-rotated image by its axis-aligned bbox. Its four
+        // payload-geometry edge midpoints reconstruct to a pure 45° rotation
+        // (cos45 ≈ sin45 ≈ 0.707): a=cosθ, b=sinθ, c=-sinθ, d=cosθ.
+        let img = page
+            .elements
+            .iter()
+            .find_map(|el| match el {
+                PageElement::Image {
+                    bbox,
+                    affine_transform: Some(affine),
+                    ..
+                } if (bbox.x_min - 254.1).abs() < 1.0 && (bbox.y_min - 813.4).abs() < 1.0 => {
+                    Some(affine)
+                }
+                _ => None,
+            })
+            .expect("45° image with affine transform");
+
+        assert!((img.a - 0.707).abs() < 0.02, "a = {}", img.a);
+        assert!((img.b - 0.707).abs() < 0.02, "b = {}", img.b);
+        assert!((img.c - (-0.707)).abs() < 0.02, "c = {}", img.c);
+        assert!((img.d - 0.707).abs() < 0.02, "d = {}", img.d);
+    }
+
+    #[test]
+    fn image_with_negative_bbox_is_kept_with_rotation_affine() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../samples/ImagesAllTrasnsformations_260713_221310/note.sdocx");
+        if !path.exists() {
+            eprintln!("skipping: ImagesAllTrasnsformations sample not present");
+            return;
+        }
+        let mut reader = crate::open(&path).expect("open sample");
+        let page = reader.page(0).expect("page 0");
+
+        // All 5 page-object images are present (the 270° one has x_min≈-77.6,
+        // which the old plausible_bbox scan rejected — regression guard).
+        let images: Vec<_> = page
+            .elements
+            .iter()
+            .filter_map(|el| match el {
+                PageElement::Image { bbox, affine_transform, .. } => Some((bbox, affine_transform)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(images.len(), 5, "expected 5 page-object images on page 0");
+
+        let (_, aff) = images
+            .iter()
+            .find(|(bbox, _)| bbox.x_min < 0.0)
+            .expect("the 270° image has a negative x_min");
+        let aff = aff.as_ref().expect("270° image has an affine");
+        // Pure 270° rotation: a≈0, b≈-1, c≈1, d≈0.
+        assert!(aff.a.abs() < 0.02, "a = {}", aff.a);
+        assert!((aff.b + 1.0).abs() < 0.02, "b = {}", aff.b);
+        assert!((aff.c - 1.0).abs() < 0.02, "c = {}", aff.c);
+        assert!(aff.d.abs() < 0.02, "d = {}", aff.d);
+    }
+
+    #[test]
+    fn image_crop_decodes_on_the_cropped_page_object() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../samples/ImagesAllTrasnsformations_260713_221310/note.sdocx");
+        if !path.exists() {
+            eprintln!("skipping: ImagesAllTrasnsformations sample not present");
+            return;
+        }
+        let mut reader = crate::open(&path).expect("open sample");
+        let page = reader.page(0).expect("page 0");
+
+        // Exactly one page-object image is cropped ("CROPPA SIA SU X che SU Y",
+        // bbox x_min≈82); the other four are full. Crop matches the pysdocx oracle.
+        let crops: Vec<_> = page
+            .elements
+            .iter()
+            .filter_map(|el| match el {
+                PageElement::Image { bbox, crop, .. } => Some((bbox, crop)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(crops.iter().filter(|(_, c)| c.is_some()).count(), 1);
+        let (bbox, crop) = crops
+            .iter()
+            .find_map(|(bbox, c)| c.map(|crop| (bbox, crop)))
+            .expect("one image is cropped");
+        assert!(bbox.x_min > 80.0 && bbox.x_min < 84.0, "cropped bbox x_min = {}", bbox.x_min);
+        assert!((crop.x - 0.065).abs() < 0.01, "x = {}", crop.x);
+        assert!((crop.y - 0.156).abs() < 0.01, "y = {}", crop.y);
+        assert!((crop.w - 0.475).abs() < 0.01, "w = {}", crop.w);
+        assert!((crop.h - 0.538).abs() < 0.01, "h = {}", crop.h);
     }
 }

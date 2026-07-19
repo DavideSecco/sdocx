@@ -16,6 +16,10 @@ pub struct DocumentMetadata {
     pub created_ms: Option<i64>,
     /// Last modification timestamp in milliseconds since the Unix epoch.
     pub modified_ms: Option<i64>,
+    /// SHA-256 password hash (hex digest) for password-protected notes,
+    /// stored in end_tag.bin at offset 0x40 as UTF-16LE. Present only when
+    /// the note is locked with a password.
+    pub password_hash: Option<String>,
     /// Background color of the document.
     pub background_color: Option<Color>,
     /// Whether Samsung Notes dark-mode compatibility is enabled.
@@ -37,6 +41,27 @@ pub struct DocumentMetadata {
     /// bboxes, column widths, per-cell fill, border blocks, and nested-frame
     /// text. Document-level like [`Self::tables`] (no page reference).
     pub note_tables: Vec<NoteTable>,
+    /// Images placed inline in the typed-note body (`note.note`), resolved to a
+    /// host page and a page-local bbox. Document-level like [`Self::note_tables`]
+    /// (decoded from note.note, not a page object tree). See `note_doc`.
+    pub note_inline_images: Vec<NoteInlineImage>,
+}
+
+/// An imported image anchored inline in the typed-note body (`note.note`),
+/// resolved to a host page. The page is a heuristic (the section containing the
+/// image's anchor char — see `note_doc::note_inline_images`); the bbox is
+/// page-local, aligned with the page-object coordinate origin.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NoteInlineImage {
+    /// Archive media index (the `<index>@` prefix of the media member's basename).
+    pub media_index: usize,
+    /// 0-based host page index this image renders on.
+    pub page_index: usize,
+    /// Placement box in page-local coordinates.
+    pub bbox: BoundingBox,
+    /// Crop sub-rectangle of the source image (normalized), when cropped.
+    pub crop: Option<CropRect>,
 }
 
 /// A table reconstructed from `note.note`'s cell records (ported from pysdocx
@@ -305,6 +330,41 @@ impl MediaAsset {
     }
 }
 
+/// An image crop as a normalized source sub-rectangle (all in `[0,1]`, `y` from
+/// the top). Directly usable as an image source-rect for rendering. Decoded from
+/// the image record's crop flex (see `page::image_crop`).
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CropRect {
+    /// Left edge as a fraction of source width.
+    pub x: f64,
+    /// Top edge as a fraction of source height.
+    pub y: f64,
+    /// Width as a fraction of source width.
+    pub w: f64,
+    /// Height as a fraction of source height.
+    pub h: f64,
+}
+
+/// A 2D affine transformation matrix (rotation + scale + shear), derived from
+/// the payload-geometry quad points of an image or text-box frame.
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct AffineTransform {
+    /// Matrix coefficient a: x' = a·x + c·y + e
+    pub a: f64,
+    /// Matrix coefficient b: y' = b·x + d·y + f
+    pub b: f64,
+    /// Matrix coefficient c: x' = a·x + c·y + e
+    pub c: f64,
+    /// Matrix coefficient d: y' = b·x + d·y + f
+    pub d: f64,
+    /// Translation x: x' = a·x + c·y + e
+    pub e: f64,
+    /// Translation y: y' = b·x + d·y + f
+    pub f: f64,
+}
+
 /// A non-stroke page element.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -315,6 +375,16 @@ pub enum PageElement {
         bbox: BoundingBox,
         /// Index into `DocumentMetadata::media_assets`.
         media_index: usize,
+        /// Rotation angle in degrees (clockwise-positive on screen), if set via
+        /// the object header's field_flags `0x1` bit.
+        angle_deg: Option<f64>,
+        /// Full 2D affine transformation (rotation + scale + shear), derived from
+        /// the payload-geometry quad points when they form a valid parallelogram.
+        /// Takes precedence over `angle_deg` if both are present.
+        affine_transform: Option<AffineTransform>,
+        /// Crop sub-rectangle of the source image (normalized), when the image
+        /// is cropped; `None` shows the full source.
+        crop: Option<CropRect>,
     },
     /// A rich text object.
     TextBox(RichTextBox),
