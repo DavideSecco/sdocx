@@ -140,17 +140,33 @@ instances:
     type: u4
     doc: Back-compat alias for min_format_version.
   created_time_a:
-    pos: 72
-    type: s8
-    doc: Back-compat alias for display_created_time.
+    value: display_created_time
+    doc: |
+      Back-compat alias for display_created_time. Must reference the
+      sequentially-parsed field (not a fixed pos:72) — a password-protected note
+      inserts a 128-byte hash at 0x40 that shifts every later field, so a fixed
+      offset would read into the hash region.
   created_time_b:
-    pos: 80
-    type: s8
+    value: display_modified_time
     doc: Back-compat alias for display_modified_time.
   extra_time_candidate:
-    pos: 88
-    type: s8
+    value: last_recognised_data_modified_time
     doc: Back-compat alias for last_recognised_data_modified_time.
+  is_password_protected:
+    value: _io.size > 0x40 + 128 + 22
+    doc: |
+      A password-protected note carries a SHA-256 password hash and so is longer
+      than the plain footer (0x40 + 128-byte hash + the 22-byte signature).
+  password_hash:
+    pos: 0x40
+    size: 128
+    type: str
+    encoding: UTF-16LE
+    if: is_password_protected
+    doc: |
+      SHA-256 password hash as a 64-char UTF-16LE hex string (128 bytes) at a
+      fixed 0x40, present only on password-protected notes. Device-enforced; no
+      flag in note.note announces it. See docs project-password-encryption.
   signature:
     pos: _io.size - 22
     size: 22

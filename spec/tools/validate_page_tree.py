@@ -103,7 +103,7 @@ def _tree_diffs(data: bytes) -> list[str]:
 
 def main() -> int:
     ok = failures = pages = objects = 0
-    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
+    for sample in sorted(list((ROOT / "samples").glob("*.sdocx")) + list((ROOT / "samples").glob("*/note.sdocx"))):
         with zipfile.ZipFile(sample) as z:
             for name in sorted(n for n in z.namelist() if n.endswith(".page")):
                 data = z.read(name)

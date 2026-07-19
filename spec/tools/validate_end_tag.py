@@ -52,6 +52,7 @@ FIELDS = [
     "new_orientation",
     "min_unknown_version",
     "app_custom_data",
+    "password_hash",
 ]
 
 
@@ -93,12 +94,14 @@ def kaitai_fields(data: bytes) -> dict:
         "new_orientation": k.new_orientation,
         "min_unknown_version": k.min_unknown_version,
         "app_custom_data": getattr(k, "app_custom_data", ""),
+        # None (uncropped/absent) normalized to "" to match pysdocx's default.
+        "password_hash": getattr(k, "password_hash", None) or "",
         "signature": k.signature,
     }
 
 
 def main() -> int:
-    samples = sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx"))
+    samples = sorted(list((ROOT / "samples").glob("*.sdocx")) + list((ROOT / "samples").glob("*/note.sdocx")))
     ok = 0
     failures = 0
     for sample in samples:

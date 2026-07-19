@@ -79,24 +79,16 @@ class SdocxEndTag(KaitaiStruct):
         if self._io.pos() < self._io.size() - 22:
             pass
 
-        _ = self.created_time_a
-        if hasattr(self, '_m_created_time_a'):
-            pass
-
-        _ = self.created_time_b
-        if hasattr(self, '_m_created_time_b'):
-            pass
-
-        _ = self.extra_time_candidate
-        if hasattr(self, '_m_extra_time_candidate'):
-            pass
-
         _ = self.format_version_dup
         if hasattr(self, '_m_format_version_dup'):
             pass
 
         _ = self.page_width
         if hasattr(self, '_m_page_width'):
+            pass
+
+        _ = self.password_hash
+        if hasattr(self, '_m_password_hash'):
             pass
 
         _ = self.signature
@@ -106,14 +98,15 @@ class SdocxEndTag(KaitaiStruct):
 
     @property
     def created_time_a(self):
-        """Back-compat alias for display_created_time."""
+        """Back-compat alias for display_created_time. Must reference the
+        sequentially-parsed field (not a fixed pos:72) — a password-protected note
+        inserts a 128-byte hash at 0x40 that shifts every later field, so a fixed
+        offset would read into the hash region.
+        """
         if hasattr(self, '_m_created_time_a'):
             return self._m_created_time_a
 
-        _pos = self._io.pos()
-        self._io.seek(72)
-        self._m_created_time_a = self._io.read_s8le()
-        self._io.seek(_pos)
+        self._m_created_time_a = self.display_created_time
         return getattr(self, '_m_created_time_a', None)
 
     @property
@@ -122,10 +115,7 @@ class SdocxEndTag(KaitaiStruct):
         if hasattr(self, '_m_created_time_b'):
             return self._m_created_time_b
 
-        _pos = self._io.pos()
-        self._io.seek(80)
-        self._m_created_time_b = self._io.read_s8le()
-        self._io.seek(_pos)
+        self._m_created_time_b = self.display_modified_time
         return getattr(self, '_m_created_time_b', None)
 
     @property
@@ -134,10 +124,7 @@ class SdocxEndTag(KaitaiStruct):
         if hasattr(self, '_m_extra_time_candidate'):
             return self._m_extra_time_candidate
 
-        _pos = self._io.pos()
-        self._io.seek(88)
-        self._m_extra_time_candidate = self._io.read_s8le()
-        self._io.seek(_pos)
+        self._m_extra_time_candidate = self.last_recognised_data_modified_time
         return getattr(self, '_m_extra_time_candidate', None)
 
     @property
@@ -153,6 +140,17 @@ class SdocxEndTag(KaitaiStruct):
         return getattr(self, '_m_format_version_dup', None)
 
     @property
+    def is_password_protected(self):
+        """A password-protected note carries a SHA-256 password hash and so is longer
+        than the plain footer (0x40 + 128-byte hash + the 22-byte signature).
+        """
+        if hasattr(self, '_m_is_password_protected'):
+            return self._m_is_password_protected
+
+        self._m_is_password_protected = self._io.size() > (64 + 128) + 22
+        return getattr(self, '_m_is_password_protected', None)
+
+    @property
     def page_width(self):
         """Low 16 bits of note_width; equals the page header width on the current corpus."""
         if hasattr(self, '_m_page_width'):
@@ -163,6 +161,24 @@ class SdocxEndTag(KaitaiStruct):
         self._m_page_width = self._io.read_u2le()
         self._io.seek(_pos)
         return getattr(self, '_m_page_width', None)
+
+    @property
+    def password_hash(self):
+        """SHA-256 password hash as a 64-char UTF-16LE hex string (128 bytes) at a
+        fixed 0x40, present only on password-protected notes. Device-enforced; no
+        flag in note.note announces it. See docs project-password-encryption.
+        """
+        if hasattr(self, '_m_password_hash'):
+            return self._m_password_hash
+
+        if self.is_password_protected:
+            pass
+            _pos = self._io.pos()
+            self._io.seek(64)
+            self._m_password_hash = (self._io.read_bytes(128)).decode(u"UTF-16LE")
+            self._io.seek(_pos)
+
+        return getattr(self, '_m_password_hash', None)
 
     @property
     def signature(self):

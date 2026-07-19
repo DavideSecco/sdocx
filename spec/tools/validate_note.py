@@ -173,7 +173,7 @@ def diffs_for(data: bytes) -> list[str]:
 
 def main() -> int:
     ok = failures = 0
-    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
+    for sample in sorted(list((ROOT / "samples").glob("*.sdocx")) + list((ROOT / "samples").glob("*/note.sdocx"))):
         with zipfile.ZipFile(sample) as z:
             if "note.note" not in z.namelist():
                 print(f"SKIP  {sample.name}: no note.note")

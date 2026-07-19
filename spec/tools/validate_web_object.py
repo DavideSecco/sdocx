@@ -45,7 +45,7 @@ def diffs_for(raw: bytes) -> list[str]:
 
 
 def iter_web_objects():
-    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
+    for sample in sorted(list((ROOT / "samples").glob("*.sdocx")) + list((ROOT / "samples").glob("*/note.sdocx"))):
         with zipfile.ZipFile(sample) as z:
             if "note.note" not in z.namelist():
                 continue

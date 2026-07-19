@@ -67,3 +67,5 @@ Expected validator output:
 | `.page` payload geometry | `ksy/sdocx_payload_geometry.ksy` | `tools/validate_payload_geometry.py` | 490/490 wrappers ✅ |
 | `note.note` type-22 table object | `ksy/sdocx_table_object.ksy` | `tools/validate_table_object.py` | 20/20 tables, 260 cells ✅ |
 | Text/Shape wrapper (note title/body + page text boxes) | `ksy/sdocx_text_wrapper.ksy` | `tools/validate_text_wrapper.py` | 72/72 wrappers ✅ |
+| Web inline object (note.note type-13) | `ksy/sdocx_web_object.ksy` | `tools/validate_web_object.py` | 1/1 ✅ |
+| Imported-image crop flex (page-object + note.note inline) | `ksy/sdocx_image_object.ksy` | `tools/validate_image_object.py` | 69/69 image records ✅ |

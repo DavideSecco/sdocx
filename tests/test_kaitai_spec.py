@@ -122,6 +122,13 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
             ):
                 self.assertEqual(ref[f], getattr(k, f), f"{sample.name}: {f}")
             self.assertEqual(ref["app_custom_data"], getattr(k, "app_custom_data", ""), f"{sample.name}: app_custom_data")
+            # Password hash: present (64-char hex) only on password-protected notes;
+            # kaitai returns None when absent, pysdocx "" — normalize.
+            self.assertEqual(
+                ref.get("password_hash", "") or "",
+                getattr(k, "password_hash", None) or "",
+                f"{sample.name}: password_hash",
+            )
             self.assertEqual(k.signature, "Document for S-Pen SDK", sample.name)
             note = _member(sample, "note.note")
             if note is not None:
@@ -205,6 +212,24 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                 continue
             self.assertEqual(diffs_for(data), [], sample.name)
             checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_image_object(self) -> None:
+        """The image-object crop spec must agree with pysdocx on every image.
+
+        `spec.tools.validate_image_object.diffs_for_sample` feeds each image
+        record (page-object + note.note inline) from its media reference to the
+        Kaitai parser and checks the media index, the crop-present flag, and the
+        normalized crop derived from the full-image rect — a zero-counterexample
+        gate (every non-cropped image's crop bit must read clear).
+        """
+        from spec.tools.validate_image_object import diffs_for_sample
+
+        checked = 0
+        for sample in _samples():
+            for label, diffs in diffs_for_sample(sample):
+                self.assertEqual(diffs, [], f"{sample.name} {label}")
+                checked += 1
         self.assertGreater(checked, 0)
 
     def test_object_header(self) -> None:

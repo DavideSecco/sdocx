@@ -16,7 +16,7 @@ from pysdocx.note_doc import parse_note_doc, parse_text_wrapper  # noqa: E402
 
 
 def iter_wrappers():
-    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
+    for sample in sorted(list((ROOT / "samples").glob("*.sdocx")) + list((ROOT / "samples").glob("*/note.sdocx"))):
         with zipfile.ZipFile(sample) as z:
             note = z.read("note.note")
             doc = parse_note_doc(note)

@@ -159,7 +159,7 @@ def diffs_for_note(note: bytes) -> list[tuple[int, list[str]]]:
 
 def main() -> int:
     ok = failures = 0
-    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
+    for sample in sorted(list((ROOT / "samples").glob("*.sdocx")) + list((ROOT / "samples").glob("*/note.sdocx"))):
         note = load_note(sample)
         if note is None:
             continue

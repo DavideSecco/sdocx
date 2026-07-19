@@ -19,7 +19,7 @@ from pysdocx.page import parse_page  # noqa: E402
 
 def main() -> int:
     ok = failures = pages = 0
-    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
+    for sample in sorted(list((ROOT / "samples").glob("*.sdocx")) + list((ROOT / "samples").glob("*/note.sdocx"))):
         with zipfile.ZipFile(sample) as z:
             manifest = parse_page_id_info(z.read("pageIdInfo.dat")) if "pageIdInfo.dat" in z.namelist() else None
             manifest_hash = {r["uuid"]: r["page_hash"] for r in (manifest or {}).get("records", ())}

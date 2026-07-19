@@ -17,7 +17,7 @@ from pysdocx.container import parse_page_id_info  # noqa: E402
 
 def main() -> int:
     ok = failures = 0
-    for sample in sorted((ROOT / "samples").glob("*.sdocx") + ((ROOT / "samples").glob("*/note.sdocx")):
+    for sample in sorted(list((ROOT / "samples").glob("*.sdocx")) + list((ROOT / "samples").glob("*/note.sdocx"))):
         with zipfile.ZipFile(sample) as z:
             if "pageIdInfo.dat" not in z.namelist():
                 print(f"SKIP  {sample.name}: no pageIdInfo.dat")
