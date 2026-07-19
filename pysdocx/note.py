@@ -431,7 +431,12 @@ def _duration_to_ms(text: str) -> int | None:
 
 
 def _scan_voice_clip_metadata(note_bytes: bytes) -> list[dict]:
-    """Infer voice-clip descriptors from adjacent length-prefixed UTF-16 strings."""
+    """Infer voice-clip descriptors from adjacent length-prefixed UTF-16 strings.
+
+    Matches a pair of strings where the second matches the HH:MM:SS duration format.
+    The first string is treated as a label (e.g., "Voice 001", or "Voice 003  - Rinominata"
+    if the clip was renamed). The regex check on label was too strict (it broke on renames),
+    so we rely on the duration match as the primary discriminator."""
     clips: list[dict] = []
     off = 0
     while off + 8 <= len(note_bytes):
@@ -440,9 +445,7 @@ def _scan_voice_clip_metadata(note_bytes: bytes) -> list[dict]:
             off += 2
             continue
         label, after_label = first
-        if not VOICE_LABEL_RE.fullmatch(label):
-            off += 2
-            continue
+        # Check second string to see if it's a duration; if so, treat first as a clip label
         second = _read_u16_len_prefixed_utf16(note_bytes, after_label)
         if second is None:
             off += 2
