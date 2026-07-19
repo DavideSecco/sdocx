@@ -593,43 +593,87 @@ changes needed for viewer-UX work.
   PDF/image/SVG, client-side from the worker's per-page `ImageBitmap` is the natural
   path, would need a Tauri file-save command + capability entry).
 
-- **TODO — speed up thumbnail previews on fast scroll.** Symptom: scrolling the
-  thumbnail sidebar fast, previews don't keep up. **Cause:** each thumb goes through
-  the *full* scene→worker pipeline (`getScene` → `resolveImages` →
-  `resolveTemplateBitmap` → `renderViaWorker`, same as a real page render, just at
-  a small scale ~148px), shares the **one** render worker with the main viewer, and
-  is throttled to `THUMB_MAX_INFLIGHT = 2`. See `renderThumb`/`updateThumbs`/
-  `evictThumb` in [`main.ts`](./opensdocx/src/main.ts). Options, cheapest first:
-  1. **Don't evict thumbnail bitmaps** — `evictThumb` currently frees off-screen
-     thumb bitmaps, so scroll-back re-renders. They're tiny (~148×209×4 ≈ 124 KB;
-     66 pages ≈ 8 MB total). Keeping them all makes scroll-back instant. Highest
-     value / lowest risk.
-  2. **Render only on scroll settle** (debounce): skip the intermediate viewports a
-     fast scroll flies through; render the range once it stops. Avoids queueing
-     renders for pages already scrolled past.
-  3. **Dedicated worker for thumbnails** so they don't contend with the main viewer
-     (or bump `THUMB_MAX_INFLIGHT`). More code; do only if 1+2 aren't enough.
-  4. Placeholder is already handled — each thumb reserves its box via
-     `canvas.style.aspectRatio`, so the panel never reflows as bitmaps arrive.
-  Recommended starting point: **1 + 2** (≈90% of the benefit, minimal risk).
-
-- **BUG — thumbnails reload when toggling single ↔ facing.** Switching view mode
-  drops the already-rendered sidebar thumbnails and re-renders them for no reason
-  (thumbs don't depend on the main viewer's `viewMode`/`zoom`/layout at all). Likely
-  the `relayout()` + `setActiveThumb → scrollIntoView` in the view-mode toggle nudges
-  the panel and `evictThumb` frees off-screen bitmaps, forcing a re-render on
-  scroll-back. **Fix is subsumed by option 1 above** (don't evict thumbnail bitmaps —
-  keep them all, ~8 MB): the toggle would then never re-rasterize. See the view-mode
-  handler and `evictThumb`/`updateThumbs` in [`main.ts`](./opensdocx/src/main.ts).
+- **DONE (2026-07-19): thumbnail sidebar performance pass — real improvement,
+  user not fully satisfied, left open for a future round.** Multi-step session:
+  1. **Scroll-lag fix** (options 1+2 from the original TODO): `updateThumbs()`
+     no longer evicts off-screen thumb bitmaps (`evictThumb` removed — bitmaps
+     are tiny, ~124 KB each, a 66-page doc is ~8 MB total, trivial to keep all),
+     and the sidebar's scroll listener is debounced 150 ms
+     (`scheduleThumbsOnScroll`) so a fast fly-through doesn't queue renders for
+     pages already scrolled past. Confirmed by the user: old lag gone.
+  2. **Unrelated bug found + fixed while testing**: toggling single ↔ facing
+     view jumped the main viewer to an unrelated page. Root cause:
+     `relayout()`'s internal `updateVisible()` recomputed `curPage` off the
+     still-stale `scrollTop` against the *new* layout, and the toggle handler
+     then read that corrupted `curPage` to reposition scroll. Fixed by
+     capturing `curPage` into `targetPage` before `relayout()` runs
+     (`viewmodeBtn` handler in [`main.ts`](./opensdocx/src/main.ts)).
+  3. **Dedicated worker for thumbnails** (option 3): `render.worker.ts`'s
+     `onmessage` handler runs `renderJob()` synchronously, so a single Worker
+     only ever does one raster at a time — sharing one worker between viewer
+     and sidebar meant they always queued behind each other even on multi-core
+     machines. `makeRenderPool()` now gives each its own Worker/job-map/id
+     sequence (`mainRenderPool` / `thumbRenderPool`), running on separate OS
+     threads. `THUMB_MAX_INFLIGHT` raised 2→3 (no longer trades off against
+     the main viewer).
+  4. **Algorithmic audit** (user pushed back on "just bring debug closer to
+     release" as papering over a real inefficiency): checked
+     `crates/sdocx/src/page.rs` `parse_page` and `opensdocx/src-tauri/src/lib.rs`
+     `build_page_scene` — no waste found. `Reader::metadata()` is computed once
+     at `open()` and cached (`container.rs:716`), `page_bytes()` is a plain zip
+     extraction, `build_page_scene` is a linear O(n) DTO transform. The one
+     double-work spot (`page.rs:348-349`, two layout hypotheses decoded per
+     stroke) is intentional format-disambiguation logic validated
+     zero-counterexample across the corpus — **do not touch it for perf**, out
+     of scope, protected by the RE discipline above. Conclusion: the
+     debug/release gap here is unoptimized-codegen overhead (no inlining, live
+     bounds checks), not a hidden algorithmic bug. A `[profile.dev] opt-level =
+     1` in `opensdocx/src-tauri/Cargo.toml` was proposed as a zero-extra-disk
+     way to close much of that gap (same `target/debug/`, no `target/release`)
+     but **was not applied** — the user wanted the JS/cache angle explored
+     first; revisit this if a future round wants it.
+  5. **Real bug found in the scene cache**: `getScene()`'s eviction
+     (`main.ts`) was keyed only to the main viewer's `curPage`, which the
+     sidebar never updates — scrolling the sidebar far from `curPage` caused
+     its just-fetched scenes to be evicted almost immediately (cache cap was
+     24), forcing a re-fetch loop while the user was still looking at them.
+     Fixed: eviction now protects a radius around **both** `curPage` and a new
+     `thumbCentrePage()` (sidebar viewport centre, same calc style as
+     `updateVisible`'s `curPage`), and the cap was raised 24→200 (`SCENE_CACHE_MAX`
+     — heuristic, not measured: scenes are structured data, not bitmaps, so
+     much cheaper to keep; still bounded per the user's explicit request re:
+     documents with thousands of pages).
+  6. **New: idle-priority background scene warmer** (`scheduleWarm`/
+     `warmStep`). After interactive rendering settles (`inFlight === 0 &&
+     thumbInFlight === 0`), walks the whole document once (page 0 → last)
+     filling the scene cache, so a cold jump anywhere — especially in the
+     sidebar, which has no prefetch of its own — is more likely already warm.
+     Single bounded sweep (doesn't re-chase pages the cap later evicts);
+     `warmGen` invalidates a still-running sweep when a new document opens
+     mid-warm (same stale-async-state pattern as `layoutGen`).
+  **Net result, user's own words**: real improvement, old bugs gone, but
+  "non sono particolarmente contento" — jumping to unexplored sidebar
+  territory in a **debug** build still isn't as snappy as release. Parked
+  here rather than pushed further this round; candidates for a future pass if
+  revisited: the deferred `opt-level = 1` profile tweak (item 4), and/or
+  auditing `resolveTemplateBitmap`'s scale-keyed PDF-template raster cache
+  (noted mid-session: thumb-scale and full-view-scale each trigger their own
+  from-scratch `pdf.js` rasterization for PDF-backed templates — only matters
+  for Academic/Notebook/Planner-style documents, not investigated further).
 
 - **TODO — resource/RAM (measured 2026-07-19, debug build, 66-page doc, sidebar
-  open):** ~556 MB PSS total (main `opensdocx` 254 MB — inflated by the 252 MB
-  *debug* binary being mapped; `WebKitWebProcess` 275 MB; net process 28 MB). The
-  app's own data (page/thumb bitmaps + scene cache ≤24) is small and **bounded by
-  virtualization** — it does not grow with page count. Realistic **release**
-  footprint ≈250-350 MB, dominated by WebKitGTK's own baseline (unavoidable for a
-  webview app; still lighter than Electron since Tauri uses the system WebKit).
-  Quick win when it matters: build `--release` + strip (debug bin 252 MB → ~15-20 MB).
+  open, before the round above):** ~556 MB PSS total (main `opensdocx` 254 MB —
+  inflated by the 252 MB *debug* binary being mapped; `WebKitWebProcess` 275 MB;
+  net process 28 MB). The app's own data was small and bounded by
+  virtualization at the time of measurement; note the scene-cache cap is now
+  200 instead of 24 (item 5 above) — still small (structured data, not
+  bitmaps) but not re-measured, worth a sanity check if this is revisited.
+  Realistic **release** footprint ≈250-350 MB, dominated by WebKitGTK's own
+  baseline (unavoidable for a webview app; still lighter than Electron since
+  Tauri uses the system WebKit). Quick win when it matters: build `--release`
+  + strip (debug bin 252 MB → ~15-20 MB) — though the user has flagged that
+  building release locally costs disk space they don't want to spend
+  routinely, so treat this as occasional validation, not a dev-loop step.
 
 ## Lower-priority backlog
 

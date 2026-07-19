@@ -120,53 +120,97 @@ const audioScrubHandle = document.querySelector<HTMLElement>("#audio-scrub-handl
 const audioListBtn = document.querySelector<HTMLButtonElement>("#audio-list-btn")!;
 const audioListMenu = document.querySelector<HTMLElement>("#audio-list-menu")!;
 
-// ── Render worker ────────────────────────────────────────────────────────────
-let jobSeq = 0;
-const jobs = new Map<number, (bmp: ImageBitmap | null) => void>();
-let worker: Worker;
-function createWorker(): void {
-  worker = new Worker(new URL("./render.worker.ts", import.meta.url), { type: "module" });
-  worker.onmessage = (e: MessageEvent<{ id: number; bitmap?: ImageBitmap }>) => {
-    const cb = jobs.get(e.data.id);
-    if (cb) {
-      jobs.delete(e.data.id);
-      cb(e.data.bitmap ?? null);
-    }
+// ── Render workers ───────────────────────────────────────────────────────────
+// Two independent pools (main viewer / thumbnail sidebar), each with its own
+// Worker, job map and id sequence. render.worker.ts's onmessage handler runs
+// renderJob() synchronously, so a single worker only ever does one raster at
+// a time — sharing one pool between the viewer and the sidebar meant every
+// thumbnail queued behind every visible page (and vice versa) even on a
+// multi-core machine. Separate pools give the two real OS-thread parallelism.
+// The worker script has no top-level import/fetch/WASM/font-loading, so a
+// second instance is cheap: just the fixed per-Worker overhead, paid once.
+function makeRenderPool(onRecover: () => void): {
+  render(
+    scene: PageScene,
+    scale: number,
+    images: { index: number; bitmap: ImageBitmap }[],
+    templateBitmap: ImageBitmap | null,
+  ): Promise<ImageBitmap | null>;
+} {
+  let jobSeq = 0;
+  const jobs = new Map<number, (bmp: ImageBitmap | null) => void>();
+  let worker: Worker;
+  function spawn(): void {
+    worker = new Worker(new URL("./render.worker.ts", import.meta.url), { type: "module" });
+    worker.onmessage = (e: MessageEvent<{ id: number; bitmap?: ImageBitmap }>) => {
+      const cb = jobs.get(e.data.id);
+      if (cb) {
+        jobs.delete(e.data.id);
+        cb(e.data.bitmap ?? null);
+      }
+    };
+    worker.onerror = () => {
+      // Worker died (e.g. memory pressure on a big jump): fail everything in
+      // flight so callers retry, respawn, and let the caller resume its work.
+      for (const cb of jobs.values()) cb(null);
+      jobs.clear();
+      spawn();
+      onRecover();
+    };
+  }
+  spawn();
+  return {
+    render(scene, scale, images, templateBitmap) {
+      return new Promise((resolve) => {
+        const id = ++jobSeq;
+        jobs.set(id, resolve);
+        // templateBitmap is NOT transferred (structured clone): the cached copy in
+        // templateRasterCache must survive for the next render at this zoom.
+        worker.postMessage({ id, scene, scale, images, template_bitmap: templateBitmap ?? undefined });
+      });
+    },
   };
-  worker.onerror = () => {
-    // Worker died (e.g. memory pressure on a big jump): fail everything in
-    // flight so slots retry, respawn, and re-render what's visible.
-    for (const cb of jobs.values()) cb(null);
-    jobs.clear();
-    createWorker();
-    if (meta) scheduleVisible();
-  };
-}
-createWorker();
-function renderViaWorker(
-  scene: PageScene,
-  scale: number,
-  images: { index: number; bitmap: ImageBitmap }[],
-  templateBitmap: ImageBitmap | null,
-): Promise<ImageBitmap | null> {
-  return new Promise((resolve) => {
-    const id = ++jobSeq;
-    jobs.set(id, resolve);
-    // templateBitmap is NOT transferred (structured clone): the cached copy in
-    // templateRasterCache must survive for the next render at this zoom.
-    worker.postMessage({ id, scene, scale, images, template_bitmap: templateBitmap ?? undefined });
-  });
 }
 
+const mainRenderPool = makeRenderPool(() => { if (meta) scheduleVisible(); });
+const thumbRenderPool = makeRenderPool(() => { if (meta) scheduleThumbs(); });
+
 // ── Data (cached, on demand) ─────────────────────────────────────────────────
+// Mirrors curPage's "which page is at the viewport centre" calc (updateVisible),
+// but for the thumbnail sidebar's own scroll position — used only to protect
+// scene-cache entries near it from eviction. null when the sidebar isn't in a
+// usable state (closed / not built yet / no layout measured).
+function thumbCentrePage(): number | null {
+  if (!sidebarOpen || !thumbBuilt || !thumbTop.length) return null;
+  const centre = thumbsEl.scrollTop + thumbsEl.clientHeight / 2;
+  let cur = 0;
+  for (let i = 0; i < thumbTop.length; i++) {
+    if (thumbTop[i] <= centre) cur = i;
+    else break;
+  }
+  return cur;
+}
+
+// Heuristic, not measured: scenes are structured data (strokes/text/shapes),
+// not rasterized pixels, so keeping many more of them than the old cap (24)
+// is cheap — but still bounded so a document with thousands of pages can't
+// grow this unboundedly.
+const SCENE_CACHE_MAX = 200;
+const SCENE_CACHE_EVICT_RADIUS = 30; // per anchor (curPage / sidebar centre)
+
 async function getScene(i: number): Promise<PageScene> {
   const cached = sceneCache.get(i);
   if (cached) return cached;
   const s = await invoke<PageScene>("get_page_scene", { index: i });
   sceneCache.set(i, s);
-  if (sceneCache.size > 24) {
+  if (sceneCache.size > SCENE_CACHE_MAX) {
+    const anchors = [curPage];
+    const thumbCentre = thumbCentrePage();
+    if (thumbCentre !== null) anchors.push(thumbCentre);
     for (const k of [...sceneCache.keys()]) {
-      if (Math.abs(k - curPage) > 12) sceneCache.delete(k);
+      if (anchors.every((a) => Math.abs(k - a) > SCENE_CACHE_EVICT_RADIUS)) {
+        sceneCache.delete(k);
+      }
     }
   }
   return s;
@@ -416,6 +460,38 @@ async function prefetchScenes(lo: number, hi: number): Promise<void> {
   }
 }
 
+// Idle-priority: after interactive work settles, walk the whole document
+// once warming the (lightweight) scene cache — so a later jump anywhere,
+// especially in the sidebar (which has no prefetch of its own, see
+// thumbCentrePage's eviction protection), is more likely to already be
+// cached. Never competes with interactive rendering: each step only fires
+// once both render pools are fully idle. A single sweep only — doesn't
+// re-chase pages the cap/eviction later drops.
+let warmGen = 0;
+let warmCursor = 0;
+let warmTimer = 0;
+const WARM_IDLE_DELAY_MS = 200;
+
+function scheduleWarm(): void {
+  if (warmTimer || !meta) return;
+  warmTimer = window.setTimeout(warmStep, WARM_IDLE_DELAY_MS);
+}
+
+async function warmStep(): Promise<void> {
+  warmTimer = 0;
+  const gen = warmGen;
+  if (!meta || inFlight > 0 || thumbInFlight > 0) {
+    scheduleWarm();
+    return;
+  }
+  while (warmCursor < meta.page_count && sceneCache.has(warmCursor)) warmCursor++;
+  if (warmCursor >= meta.page_count) return; // one full sweep done
+  const i = warmCursor++;
+  await getScene(i).catch(() => {});
+  if (gen !== warmGen) return; // a new document loaded meanwhile — stop this chain
+  scheduleWarm();
+}
+
 function ensureSlot(i: number, scale: number): void {
   const cssW = sizes[i][0] * zoom;
   const cssH = sizes[i][1] * zoom;
@@ -453,7 +529,7 @@ async function renderSlot(i: number, slot: Slot, scale: number): Promise<void> {
     if (stale()) return;
     const tplBitmap = await resolveTemplateBitmap(scene, eff);
     if (stale()) return;
-    const bitmap = await renderViaWorker(scene, eff, images, tplBitmap);
+    const bitmap = await mainRenderPool.render(scene, eff, images, tplBitmap);
     if (stale()) {
       bitmap?.close();
       return;
@@ -500,7 +576,10 @@ function relayout(): void {
 // is first opened) and virtualized (only thumbs near the panel viewport hold a
 // rendered bitmap) so a long document stays cheap.
 const THUMB_W = 148; // target raster width in CSS px (displayed at 100% of the box)
-const THUMB_MAX_INFLIGHT = 2; // keep the shared worker mostly free for the main viewer
+// Own dedicated worker (thumbRenderPool) now, so this no longer trades off
+// against the main viewer; kept as a small budget purely to keep more
+// requests queued and ready as each render finishes during a fast scroll.
+const THUMB_MAX_INFLIGHT = 3;
 interface ThumbSlot { canvas: HTMLCanvasElement; bitmap: ImageBitmap | null }
 const thumbEls: HTMLDivElement[] = [];
 const thumbSlots = new Map<number, ThumbSlot>();
@@ -516,6 +595,22 @@ let thumbRaf = 0;
 function scheduleThumbs(): void {
   if (thumbRaf) return;
   thumbRaf = window.setTimeout(() => { thumbRaf = 0; updateThumbs(); }, 0);
+}
+
+// Debounced scroll handler: a fast fly-through re-fires on every scroll event,
+// so wait for scrolling to settle before kicking new renders — otherwise pages
+// only briefly "near" the viewport steal the shared render budget from the
+// page the user actually stops on. Bitmaps are never evicted (see
+// updateThumbs), so this only affects *when* new renders start, not what's
+// already on screen.
+const THUMB_SCROLL_SETTLE_MS = 150;
+let thumbScrollTimer = 0;
+function scheduleThumbsOnScroll(): void {
+  if (thumbScrollTimer) clearTimeout(thumbScrollTimer);
+  thumbScrollTimer = window.setTimeout(() => {
+    thumbScrollTimer = 0;
+    updateThumbs();
+  }, THUMB_SCROLL_SETTLE_MS);
 }
 
 function clearThumbs(): void {
@@ -572,17 +667,7 @@ function updateThumbs(): void {
     const y1 = thumbTop[i] + thumbH[i];
     const near = y1 >= lo && y0 <= hi;
     if (near) renderThumb(i);
-    else if (thumbSlots.has(i)) evictThumb(i); // free bitmaps well off-screen
   }
-}
-
-function evictThumb(i: number): void {
-  const s = thumbSlots.get(i);
-  if (!s) return;
-  s.bitmap?.close();
-  s.canvas.width = 0;
-  s.canvas.height = 0;
-  thumbSlots.delete(i);
 }
 
 async function renderThumb(i: number): Promise<void> {
@@ -599,7 +684,7 @@ async function renderThumb(i: number): Promise<void> {
     if (!sidebarOpen) return;
     const tpl = await resolveTemplateBitmap(scene, scale);
     if (!sidebarOpen) return;
-    const bitmap = await renderViaWorker(scene, scale, images, tpl);
+    const bitmap = await thumbRenderPool.render(scene, scale, images, tpl);
     if (!bitmap) return;
     const el = thumbEls[i];
     if (!sidebarOpen || !el) { bitmap.close(); return; }
@@ -645,7 +730,7 @@ function toggleSidebar(): void {
   if (meta) relayout();
 }
 
-thumbsEl.addEventListener("scroll", scheduleThumbs);
+thumbsEl.addEventListener("scroll", scheduleThumbsOnScroll);
 thumbsEl.addEventListener("click", (e) => {
   const el = (e.target as HTMLElement).closest<HTMLElement>(".thumb");
   if (el?.dataset.i) scrollToPage(Number(el.dataset.i));
@@ -990,6 +1075,8 @@ async function loadDocument(selected: string): Promise<void> {
   sizes = await invoke<[number, number][]>("get_page_sizes");
   resetAudioState();
   sceneCache.clear();
+  warmGen++; // invalidate any still-running warm sweep from the previous document
+  warmCursor = 0;
   for (const b of mediaCache.values()) b?.close();
   mediaCache.clear();
   for (const p of pdfDocCache.values()) p.then((d) => void d?.destroy().catch(() => {}));
@@ -1005,6 +1092,7 @@ async function loadDocument(selected: string): Promise<void> {
   relayout();
   if (sidebarOpen) { buildThumbs(); updateThumbs(); }
   updateNav();
+  scheduleWarm();
 }
 
 // ── Wiring ───────────────────────────────────────────────────────────────────
@@ -1065,12 +1153,17 @@ sidebarBtn.addEventListener("click", toggleSidebar);
 // keep the current page in view; single-mode layout stays byte-identical.
 viewmodeBtn.addEventListener("click", () => {
   if (!meta) return;
+  // Captured before relayout(): its internal updateVisible() call runs against
+  // the still-stale scrollTop (relative to the old layout) combined with the
+  // new pageTop values, which can walk curPage off to an unrelated page as a
+  // side effect. Reading the live curPage after relayout() would pick that up.
+  const targetPage = curPage;
   viewMode = viewMode === "single" ? "facing" : "single";
   viewmodeBtn.classList.toggle("active", viewMode === "facing");
   viewmodeBtn.title = viewMode === "facing" ? "Pagina singola" : "Pagine affiancate";
   fitZoom();
   relayout();
-  stage.scrollTop = Math.max(0, pageTop[curPage] - GAP);
+  stage.scrollTop = Math.max(0, pageTop[targetPage] - GAP);
   updateVisible();
   updateNav();
 });
