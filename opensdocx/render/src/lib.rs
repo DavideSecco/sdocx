@@ -8,6 +8,11 @@
 
 use serde::Serialize;
 
+pub mod png;
+pub mod svg;
+pub use png::svg_to_png;
+pub use svg::{render_page_svg, MediaResolver};
+
 #[derive(Serialize)]
 pub struct SceneStroke {
     pub points: Vec<[f64; 2]>,
