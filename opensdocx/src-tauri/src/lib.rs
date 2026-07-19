@@ -23,6 +23,20 @@ struct DocMeta {
     page_count: usize,
     dark_mode: bool,
     background: Option<[u8; 3]>,
+    audio: Vec<AudioClip>,
+}
+
+/// One voice recording attached to the note, surfaced at document-load time so
+/// the frontend can gate the toolbar audio button and build the clip list
+/// without a round trip. `file_id` is the archive `<index>@` currency `get_media`
+/// already resolves (images, PDF templates) — no dedicated audio-bytes command.
+#[derive(Serialize)]
+struct AudioClip {
+    file_id: usize,
+    name: String,
+    duration_ms: i64,
+    duration_str: String,
+    created_time_us: i64,
 }
 
 #[derive(Serialize)]
@@ -1187,10 +1201,23 @@ fn build_page_scene(page: &sdocx::Page) -> PageScene {
 async fn open_document(path: String, state: State<'_, AppState>) -> Result<DocMeta, String> {
     let mut reader = sdocx::open(&path).map_err(|e| e.to_string())?;
     let typed_text_anchor = find_typed_text_anchor(&mut reader)?;
+    let audio = reader
+        .metadata()
+        .note_voice_clips
+        .iter()
+        .map(|c| AudioClip {
+            file_id: c.file_id as usize,
+            name: c.name.clone(),
+            duration_ms: c.duration_ms,
+            duration_str: c.duration_str.clone(),
+            created_time_us: c.created_time_us,
+        })
+        .collect();
     let meta = DocMeta {
         page_count: reader.page_count(),
         dark_mode: reader.metadata().dark_mode_compatibility.unwrap_or(false),
         background: reader.metadata().background_color.as_ref().map(color_arr),
+        audio,
     };
     *state.reader.lock().unwrap() = Some(reader);
     *state.typed_text_anchor.lock().unwrap() = typed_text_anchor;
