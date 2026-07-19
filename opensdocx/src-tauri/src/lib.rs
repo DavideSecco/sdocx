@@ -105,65 +105,75 @@ fn find_typed_text_anchor(
     Ok(Some(0))
 }
 
-/// Parse and return the lightweight render scene for a single page (on demand).
-///
-/// The Reader mutex is held only while extracting the page's bytes from the ZIP;
-/// the parse itself runs outside the lock, so concurrent page requests (scroll,
-/// prefetch) parse in parallel instead of queueing on one page at a time.
-#[tauri::command]
-async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<PageScene, String> {
-    let typed_text_anchor = *state.typed_text_anchor.lock().unwrap();
-    let (bytes, note_text, pagination, tables, inline_images) = {
-        let mut guard = state.reader.lock().unwrap();
-        let reader = guard.as_mut().ok_or("no document loaded")?;
-        let bytes = reader.page_bytes(index).map_err(|e| e.to_string())?;
-        // The typed note body is a document-level flow anchored on the first
-        // otherwise-empty page. It is
-        // attached to EVERY page and split into page-height bands by the worker
-        // (pysdocx `paginate_typed_text`), so overflow flows onto later pages
-        // instead of running off the bottom of page 0. Bands use the anchor
-        // anchor page's height uniformly.
-        let pagination = typed_text_anchor
-            .filter(|&anchor| index >= anchor)
-            .map(|anchor| {
-                reader
-                    .page_size(anchor)
-                    .map(|(_, height)| (index - anchor, height as f64))
-            })
-            .transpose()
-            .map_err(|e| e.to_string())?;
-        let note_text = pagination
-            .as_ref()
-            .and_then(|_| reader.metadata().note_text.clone());
-        // Byte-exact structural tables carry their own 0-based host page
-        // (`NoteTable::page_index`, note.note's table→page reference), so each
-        // goes on exactly its page — no placement guess.
-        let meta = reader.metadata();
-        let tables: Vec<sdocx::NoteTable> = meta
-            .note_tables
-            .iter()
-            .filter(|t| t.page_index() == index)
-            .cloned()
-            .collect();
-        // Inline images live in note.note (not a page object tree); each resolves
-        // to a host page (section→page heuristic) + a page-local bbox.
-        let inline_images: Vec<SceneImage> = meta
-            .note_inline_images
-            .iter()
-            .filter(|im| im.page_index == index)
-            .map(|im| SceneImage {
-                x: im.bbox.x_min,
-                y: im.bbox.y_min,
-                w: im.bbox.x_max - im.bbox.x_min,
-                h: im.bbox.y_max - im.bbox.y_min,
-                media_index: im.media_index,
-                angle_deg: None,
-                affine: None,
-                crop: im.crop.map(|c| [c.x, c.y, c.w, c.h]),
-            })
-            .collect();
-        (bytes, note_text, pagination, tables, inline_images)
-    };
+/// Everything about a page that must be read from the `Reader` before it can
+/// be assembled into a `PageScene` — split out of `get_page_scene` so
+/// `export_page` can build the exact same scene without duplicating this
+/// gathering logic.
+type PageInputs = (
+    Vec<u8>,
+    Option<sdocx::RichTextBox>,
+    Option<(usize, f64)>,
+    Vec<sdocx::NoteTable>,
+    Vec<SceneImage>,
+);
+
+fn gather_page_inputs(
+    reader: &mut sdocx::Reader<std::fs::File>,
+    typed_text_anchor: Option<usize>,
+    index: usize,
+) -> Result<PageInputs, String> {
+    let bytes = reader.page_bytes(index).map_err(|e| e.to_string())?;
+    // The typed note body is a document-level flow anchored on the first
+    // otherwise-empty page. It is attached to EVERY page and split into
+    // page-height bands by the worker (pysdocx `paginate_typed_text`), so
+    // overflow flows onto later pages instead of running off the bottom of
+    // page 0. Bands use the anchor page's height uniformly.
+    let pagination = typed_text_anchor
+        .filter(|&anchor| index >= anchor)
+        .map(|anchor| {
+            reader
+                .page_size(anchor)
+                .map(|(_, height)| (index - anchor, height as f64))
+        })
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    let note_text = pagination
+        .as_ref()
+        .and_then(|_| reader.metadata().note_text.clone());
+    // Byte-exact structural tables carry their own 0-based host page
+    // (`NoteTable::page_index`, note.note's table→page reference), so each
+    // goes on exactly its page — no placement guess.
+    let meta = reader.metadata();
+    let tables: Vec<sdocx::NoteTable> = meta
+        .note_tables
+        .iter()
+        .filter(|t| t.page_index() == index)
+        .cloned()
+        .collect();
+    // Inline images live in note.note (not a page object tree); each resolves
+    // to a host page (section→page heuristic) + a page-local bbox.
+    let inline_images: Vec<SceneImage> = meta
+        .note_inline_images
+        .iter()
+        .filter(|im| im.page_index == index)
+        .map(|im| SceneImage {
+            x: im.bbox.x_min,
+            y: im.bbox.y_min,
+            w: im.bbox.x_max - im.bbox.x_min,
+            h: im.bbox.y_max - im.bbox.y_min,
+            media_index: im.media_index,
+            angle_deg: None,
+            affine: None,
+            crop: im.crop.map(|c| [c.x, c.y, c.w, c.h]),
+        })
+        .collect();
+    Ok((bytes, note_text, pagination, tables, inline_images))
+}
+
+/// Assembles the final `PageScene` from `gather_page_inputs`' output — pure,
+/// no `Reader` access, so it runs outside the reader lock.
+fn assemble_page_scene(inputs: PageInputs) -> Result<PageScene, String> {
+    let (bytes, note_text, pagination, tables, inline_images) = inputs;
     // Media indices in the parsed page are the decoded `<index>@` archive indices
     // (the parser's one media currency, same as pysdocx); `get_media` resolves them.
     let page = sdocx::parse_page(&bytes).map_err(|e| e.to_string())?;
@@ -179,6 +189,57 @@ async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<Page
     }
     scene.tables = tables.iter().map(build_scene_table).collect();
     Ok(scene)
+}
+
+/// Parse and return the lightweight render scene for a single page (on demand).
+///
+/// The Reader mutex is held only while extracting the page's bytes from the ZIP;
+/// the parse itself runs outside the lock, so concurrent page requests (scroll,
+/// prefetch) parse in parallel instead of queueing on one page at a time.
+#[tauri::command]
+async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<PageScene, String> {
+    let typed_text_anchor = *state.typed_text_anchor.lock().unwrap();
+    let inputs = {
+        let mut guard = state.reader.lock().unwrap();
+        let reader = guard.as_mut().ok_or("no document loaded")?;
+        gather_page_inputs(reader, typed_text_anchor, index)?
+    };
+    assemble_page_scene(inputs)
+}
+
+/// Render one page to SVG or PNG and write it to `path` (chosen by the
+/// frontend via the save-file dialog). Builds the exact same `PageScene` as
+/// `get_page_scene`, then calls the shared `opensdocx-render` draw functions
+/// — the same ones `opensdocx-cli` calls — so the exported file and the
+/// on-screen render (for the elements this renderer currently covers; rich
+/// text and tables are not yet ported, see `opensdocx-render::svg`) come
+/// from one code path.
+#[tauri::command]
+async fn export_page(
+    index: usize,
+    format: String,
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let typed_text_anchor = *state.typed_text_anchor.lock().unwrap();
+    let mut guard = state.reader.lock().unwrap();
+    let reader = guard.as_mut().ok_or("no document loaded")?;
+    let inputs = gather_page_inputs(reader, typed_text_anchor, index)?;
+    let scene = assemble_page_scene(inputs)?;
+    let mut media = |media_index: usize| -> Option<(String, Vec<u8>)> {
+        let mime = reader.media_asset(media_index)?.mime_type.clone();
+        let bytes = reader.media_bytes(media_index).ok()?;
+        Some((mime, bytes))
+    };
+    let svg = opensdocx_render::render_page_svg(&scene, &mut media);
+    match format.as_str() {
+        "svg" => std::fs::write(&path, svg).map_err(|e| e.to_string()),
+        "png" => {
+            let png = opensdocx_render::svg_to_png(&svg)?;
+            std::fs::write(&path, png).map_err(|e| e.to_string())
+        }
+        other => Err(format!("unsupported export format: {other}")),
+    }
 }
 
 /// Read every page's pixel size cheaply (headers only) for continuous-scroll layout.
@@ -345,7 +406,8 @@ pub fn run() {
             get_page_sizes,
             get_page_scene,
             get_media,
-            get_media_by_name
+            get_media_by_name,
+            export_page
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

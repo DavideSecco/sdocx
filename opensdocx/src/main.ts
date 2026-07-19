@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
 // ── Types mirroring the Rust Scene (src-tauri/src/lib.rs) ────────────────────
 type RGB = [number, number, number];
@@ -1148,6 +1148,27 @@ zoomMenu.addEventListener("click", (e) => {
   closeMenus();
 });
 exportBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleMenu(exportMenu); });
+// SVG/PNG export: same `export_page` Tauri command the CLI (opensdocx-cli)
+// calls, so a file exported from here and one exported from the terminal
+// for the same page come from the identical Rust render function.
+async function exportCurrentPage(format: "svg" | "png"): Promise<void> {
+  if (!meta) return;
+  const ext = format;
+  const path = await save({
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+    defaultPath: `page-${curPage + 1}.${ext}`,
+  });
+  if (!path) return;
+  await invoke("export_page", { index: curPage, format, path });
+}
+exportMenu.addEventListener("click", (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLElement>(".menu-item");
+  const format = item?.dataset.format;
+  closeMenus();
+  if (format === "svg" || format === "png") {
+    exportCurrentPage(format).catch((err) => alert(String(err)));
+  }
+});
 sidebarBtn.addEventListener("click", toggleSidebar);
 // Single ↔ facing (continuous two-column). Re-fit to the new mode's width and
 // keep the current page in view; single-mode layout stays byte-identical.
