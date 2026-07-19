@@ -1,0 +1,12 @@
+[package]
+name = "opensdocx-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "opensdocx-cli"
+path = "src/main.rs"
+
+[dependencies]
+sdocx = { path = "../../crates/sdocx", features = ["serde"] }
+opensdocx-render = { path = "../render" }
