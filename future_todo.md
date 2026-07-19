@@ -573,6 +573,64 @@ object bodies.
   it quickly since the obvious places are now excluded. Don't redo the native
   trace if picking this back up; start from `apk-re/04-ghidra.md`.
 
+## OpenSdocx viewer UI (app UX)
+
+Frontend is vanilla TS + Vite (no framework): [`index.html`](./opensdocx/index.html)
+(toolbar + `#thumbs` panel + `#stage`), [`main.ts`](./opensdocx/src/main.ts) (all
+state/layout/zoom/nav/thumbnails), [`styles.css`](./opensdocx/src/styles.css),
+[`render.worker.ts`](./opensdocx/src/render.worker.ts) (rasterizer). No backend
+changes needed for viewer-UX work.
+
+- **DONE (2026-07-19): Okular-style toolbar + thumbnail sidebar + facing pages.**
+  Icon toolbar (inline SVG, CSP-safe) in 3 flex sections (left = file/zoom/view-mode,
+  centre = page nav, right = audio/export stubs); zoom combo (typeable % + dropdown
+  Fit-width/Fit-page/presets), editable page box, up/down page arrows. Left thumbnail
+  panel (`#thumbs`, toggle `#sidebar-btn`), virtualized, click-to-jump, current-page
+  highlight. Facing-pages view mode (`viewMode`, row-model `computeLayout` →
+  `rows`/`pageLeft`/`pageTop`, continuous two-column scroll; single mode
+  byte-identical). Audio + Export are **placeholder buttons only** — behaviour
+  deferred (Audio: user to supply a Samsung Notes screenshot + spec; Export: formats
+  PDF/image/SVG, client-side from the worker's per-page `ImageBitmap` is the natural
+  path, would need a Tauri file-save command + capability entry).
+
+- **TODO — speed up thumbnail previews on fast scroll.** Symptom: scrolling the
+  thumbnail sidebar fast, previews don't keep up. **Cause:** each thumb goes through
+  the *full* scene→worker pipeline (`getScene` → `resolveImages` →
+  `resolveTemplateBitmap` → `renderViaWorker`, same as a real page render, just at
+  a small scale ~148px), shares the **one** render worker with the main viewer, and
+  is throttled to `THUMB_MAX_INFLIGHT = 2`. See `renderThumb`/`updateThumbs`/
+  `evictThumb` in [`main.ts`](./opensdocx/src/main.ts). Options, cheapest first:
+  1. **Don't evict thumbnail bitmaps** — `evictThumb` currently frees off-screen
+     thumb bitmaps, so scroll-back re-renders. They're tiny (~148×209×4 ≈ 124 KB;
+     66 pages ≈ 8 MB total). Keeping them all makes scroll-back instant. Highest
+     value / lowest risk.
+  2. **Render only on scroll settle** (debounce): skip the intermediate viewports a
+     fast scroll flies through; render the range once it stops. Avoids queueing
+     renders for pages already scrolled past.
+  3. **Dedicated worker for thumbnails** so they don't contend with the main viewer
+     (or bump `THUMB_MAX_INFLIGHT`). More code; do only if 1+2 aren't enough.
+  4. Placeholder is already handled — each thumb reserves its box via
+     `canvas.style.aspectRatio`, so the panel never reflows as bitmaps arrive.
+  Recommended starting point: **1 + 2** (≈90% of the benefit, minimal risk).
+
+- **BUG — thumbnails reload when toggling single ↔ facing.** Switching view mode
+  drops the already-rendered sidebar thumbnails and re-renders them for no reason
+  (thumbs don't depend on the main viewer's `viewMode`/`zoom`/layout at all). Likely
+  the `relayout()` + `setActiveThumb → scrollIntoView` in the view-mode toggle nudges
+  the panel and `evictThumb` frees off-screen bitmaps, forcing a re-render on
+  scroll-back. **Fix is subsumed by option 1 above** (don't evict thumbnail bitmaps —
+  keep them all, ~8 MB): the toggle would then never re-rasterize. See the view-mode
+  handler and `evictThumb`/`updateThumbs` in [`main.ts`](./opensdocx/src/main.ts).
+
+- **TODO — resource/RAM (measured 2026-07-19, debug build, 66-page doc, sidebar
+  open):** ~556 MB PSS total (main `opensdocx` 254 MB — inflated by the 252 MB
+  *debug* binary being mapped; `WebKitWebProcess` 275 MB; net process 28 MB). The
+  app's own data (page/thumb bitmaps + scene cache ≤24) is small and **bounded by
+  virtualization** — it does not grow with page count. Realistic **release**
+  footprint ≈250-350 MB, dominated by WebKitGTK's own baseline (unavoidable for a
+  webview app; still lighter than Electron since Tauri uses the system WebKit).
+  Quick win when it matters: build `--release` + strip (debug bin 252 MB → ~15-20 MB).
+
 ## Lower-priority backlog
 
 - **Rotated in-page text-box wrapping** is still a render *heuristic*
