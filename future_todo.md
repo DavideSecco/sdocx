@@ -675,6 +675,29 @@ changes needed for viewer-UX work.
   building release locally costs disk space they don't want to spend
   routinely, so treat this as occasional validation, not a dev-loop step.
 
+- **TODO — export follow-ups (2026-07-20), no urgency, revisit when there's
+  appetite.** Export (SVG/PNG/PDF, per-page + whole-document PDF) shipped
+  this round; three loose ends flagged by the user, not yet scoped:
+  1. **Evaluate whether other export formats are needed** beyond SVG/PNG/PDF
+     (e.g. something print-shop-friendly, or a lighter web format) — no
+     concrete request yet, just worth periodically asking "is this enough."
+  2. **Whole-document export for SVG/PNG, not just PDF.** Today only PDF
+     exports the entire document in one action (`export_document_pdf` /
+     CLI `export pdf`); SVG/PNG export only the current page
+     (`export_page`). Evaluate adding a whole-document SVG/PNG path too
+     (likely N separate files, mirroring `opensdocx-cli`'s existing
+     no-`--page` per-page-file behavior) — and surface it in the app UI,
+     not just the CLI (today's export menu only exposes per-page SVG/PNG +
+     whole-document PDF).
+  3. **No progress feedback during export.** Clicking an export menu item
+     gives no visual indication anything is happening — no spinner/progress
+     bar, no disabled-state feedback — even though a multi-page PDF export
+     is NOT instant (feels slow in practice, likely worth a real look, not
+     just a spinner slapped on top of the current timing). Needs both a UI
+     affordance (progress indicator, keep the export button disabled/busy
+     mid-export) and an actual perf investigation into why it's slow before
+     assuming a progress bar alone fixes the experience.
+
 ## Lower-priority backlog
 
 - **Rotated in-page text-box wrapping** is still a render *heuristic*
@@ -703,6 +726,14 @@ changes needed for viewer-UX work.
   data/skipped/encryption blocks, true landscape-lock setting), **image/painting flex fields**, and
   **`ext_block.seq`/`counter`**: bounded but still need isolated samples for
   semantic edge cases.
+- **Smooth curve fitting for handwriting strokes** (render-side, not a format
+  gap): we currently render strokes as polylines. Reference project
+  `squ1dd13/sdocx2pdf` (Rust, MIT, active as of 2026-07-18) fits smooth Bézier
+  curves instead — clean events, interpolate+upsample position/pressure,
+  Gaussian-filter the time-domain derivatives, compute curvature to find key
+  vertices/inflection points, then join them with pressure-width "bean"-shaped
+  Bézier fills (see their `sdocx2pdf/src/stroke.rs`). Worth a look if we ever
+  prioritize handwriting-render fidelity over the current polyline approach.
 
 ## Discipline
 
