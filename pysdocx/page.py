@@ -27,6 +27,7 @@ from pysdocx.note import (
     STYLE_MARKER_PREFIX,
     UNDERLINE_TAG,
 )
+from pysdocx.page_header import PageHeaderParseError, parse_page_header
 
 OBJECT_ENTRY_LEN = 7  # raw_type(u8) + child_count(i16) + blob_size(u32)
 OBJECT_BASE_HEADER_LEN = 105
@@ -1558,6 +1559,16 @@ def parse_page(data: bytes) -> dict:
     tree = parse_page_tree(data, width, height, base)
     content_bbox = struct.unpack_from("<4d", data, 0x80) if tree["object_count"] > 0 else None
 
+    # Structural field-flags decode of the same header region (pysdocx/page_header.py,
+    # cross-referenced from squ1dd13/sdocx2pdf, validated with zero counterexamples on the full
+    # corpus — see spec/tools/validate_page_header.py). Best-effort: falls back to None on a page
+    # shape outside our validated corpus rather than failing the whole parse, since callers only
+    # rely on the fixed-offset fields above and the legacy heuristic scanners below.
+    try:
+        header = parse_page_header(data)
+    except PageHeaderParseError:
+        header = None
+
     strokes = []
     attempts = []
     stroke_count = 0
@@ -1598,6 +1609,7 @@ def parse_page(data: bytes) -> dict:
         "attachment_placements": scan_attachment_placements(data, width, height),
         "sticky_notes": scan_sticky_notes(data, width, height),
         "attempts": attempts,
+        "header": header,
     }
 
 
