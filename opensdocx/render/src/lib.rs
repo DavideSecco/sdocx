@@ -8,9 +8,17 @@
 
 use serde::Serialize;
 
+pub mod font;
 pub mod png;
+mod scene_assembly;
 pub mod svg;
+mod table;
+mod text;
 pub use png::svg_to_png;
+pub use scene_assembly::{
+    assemble_page_scene, build_full_page_scene, find_typed_text_anchor, gather_page_inputs,
+    PageInputs,
+};
 pub use svg::{render_page_svg, MediaResolver};
 
 #[derive(Serialize)]

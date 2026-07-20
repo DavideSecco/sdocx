@@ -2,14 +2,13 @@
 //! step of `opensdocx/src/render.worker.ts` 1:1 so exported files match the
 //! on-screen renderer.
 //!
-//! Scope (this pass): background, built-in templates (grid/line/dot/oxford —
-//! PDF/custom-image templates are not yet rasterized here), images, ink
-//! strokes (tapered + plain), shapes, sticky-note placeholders. Rich text and
-//! tables are deliberately NOT ported yet — they depend on real glyph metrics
-//! (`canvas.measureText` in the worker), which needs its own font-shaping
-//! spike before a faithful Rust port is attempted (see the project's export
-//! plan). Pages with text/tables currently render everything else correctly
-//! and simply omit those elements.
+//! Scope: background, built-in templates (grid/line/dot/oxford — PDF/custom-
+//! image templates are not yet rasterized here), images, ink strokes
+//! (tapered + plain), shapes, sticky-note placeholders, rich text
+//! (`crate::text`) and tables (`crate::table`). Rich text/table glyph
+//! metrics come from a bundled font (`crate::font`) rather than the
+//! worker's OS `sans-serif` — a deliberate, accepted divergence for
+//! deterministic export output (see the round-2 export plan).
 
 use crate::{PageScene, SceneOutlineOp, SceneShape, SceneStroke, SceneTemplate};
 use base64::Engine as _;
@@ -30,7 +29,7 @@ impl<F: FnMut(usize) -> Option<(String, Vec<u8>)>> MediaResolver for F {
     }
 }
 
-fn n(v: f64) -> String {
+pub(crate) fn n(v: f64) -> String {
     // Fixed-point, not scientific notation — friendlier to SVG parsers
     // (resvg included) than Rust's default `{}` Display for small floats.
     let s = format!("{v:.3}");
@@ -43,21 +42,21 @@ fn n(v: f64) -> String {
     }
 }
 
-fn css(c: [u8; 3]) -> String {
+pub(crate) fn css(c: [u8; 3]) -> String {
     format!("rgb({},{},{})", c[0], c[1], c[2])
 }
 
 /// Mirrors the worker's `inkFor`: a piece of content draws in its own color
 /// unless that color is absent or equals the paper, in which case it takes
 /// the paper-contrast ink resolved by the Scene builder.
-fn ink_for(color: Option<[u8; 3]>, paper: [u8; 3], default_ink: [u8; 3]) -> String {
+pub(crate) fn ink_for(color: Option<[u8; 3]>, paper: [u8; 3], default_ink: [u8; 3]) -> String {
     match color {
         Some(c) if c != paper => css(c),
         _ => css(default_ink),
     }
 }
 
-fn xml_escape(s: &str) -> String {
+pub(crate) fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
@@ -436,13 +435,49 @@ fn draw_stickies(out: &mut String, scene: &PageScene) {
         );
         let _ = write!(
             out,
-            r##"<text x="{}" y="{}" font-size="{}" font-family="sans-serif" fill="#1a1a1a" dominant-baseline="hanging">{}</text>"##,
+            r##"<text x="{}" y="{}" font-size="{}" font-family="{}" fill="#1a1a1a" dominant-baseline="hanging">{}</text>"##,
             n(st.x + 6.0),
             n(st.y + 6.0),
             n(9.0 * 3.4),
+            crate::font::FONT_FAMILY_NAME,
             xml_escape("sticky")
         );
     }
+}
+
+/// Self-contained `@font-face` block embedding the bundled font as base64
+/// `truetype` data, so the SVG's text still renders correctly in an
+/// external viewer that doesn't have DejaVu Sans installed. Confirmed with
+/// a manual test (round-2 export plan, risk #4): a real headless Chromium,
+/// sandboxed to have realistic system fonts but NOT DejaVu Sans, renders
+/// this block's glyphs correctly (verified by comparing against a
+/// deliberately-corrupted copy of the same SVG, which fell back to a
+/// visibly different font) — so this genuinely achieves self-containment
+/// for the primary "open the exported SVG in a browser" case.
+/// **`resvg` itself does NOT use this block** (confirmed: `png::tests::
+/// resvg_ignores_embedded_font_face_block`) — PNG rasterization instead
+/// registers the bundled font directly into resvg's own `fontdb`
+/// (`crate::font::register_into`), independent of this block entirely.
+/// Gated on the caller only emitting it when the page actually has
+/// text/tables, to avoid ~2.7MB of raw font data (~3.6MB base64'd, 4 styles)
+/// on every text-free (ink/image/shape-only) page.
+fn font_face_block(out: &mut String) {
+    use crate::font::FontStyle;
+    out.push_str("<defs><style>");
+    for (style, weight, italic) in [
+        (FontStyle::Regular, "normal", "normal"),
+        (FontStyle::Bold, "bold", "normal"),
+        (FontStyle::Italic, "normal", "italic"),
+        (FontStyle::BoldItalic, "bold", "italic"),
+    ] {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(crate::font::bytes_for(style));
+        let _ = write!(
+            out,
+            "@font-face{{font-family:'{}';font-weight:{weight};font-style:{italic};src:url(data:font/ttf;base64,{b64}) format('truetype');}}",
+            crate::font::FONT_FAMILY_NAME
+        );
+    }
+    out.push_str("</style></defs>");
 }
 
 /// Renders one page's Scene to a standalone SVG document string. `media`
@@ -452,9 +487,15 @@ pub fn render_page_svg(scene: &PageScene, media: &mut dyn MediaResolver) -> Stri
     let mut out = String::new();
     let _ = write!(
         out,
-        r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{}" height="{}" viewBox="0 0 {} {}">"#,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{}" height="{}" viewBox="0 0 {} {}" xml:space="preserve">"#,
         scene.width, scene.height, scene.width, scene.height
     );
+    // xml:space="preserve" above: SVG/CSS default-collapses whitespace,
+    // which would silently eat the literal spaces the text wrap pass below
+    // relies on (e.g. a wrapped word's trailing space, list-prefix "1. ").
+    if !scene.texts.is_empty() || !scene.tables.is_empty() {
+        font_face_block(&mut out);
+    }
     draw_background(&mut out, scene);
     if let Some(tpl) = &scene.template {
         draw_template(&mut out, scene, tpl);
@@ -462,6 +503,8 @@ pub fn render_page_svg(scene: &PageScene, media: &mut dyn MediaResolver) -> Stri
     draw_images(&mut out, scene, media);
     draw_strokes(&mut out, scene);
     draw_shapes(&mut out, scene);
+    crate::text::draw_texts(&mut out, scene);
+    crate::table::draw_tables(&mut out, scene);
     draw_stickies(&mut out, scene);
     out.push_str("</svg>");
     out
