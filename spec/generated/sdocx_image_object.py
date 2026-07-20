@@ -16,7 +16,7 @@ class SdocxImageObject(KaitaiStruct):
     + 4xf64 bbox + edge-midpoint geometry — is marker-scanned/decoded elsewhere
     (docs/format/container/page/object-types.md); this models only the crop, the
     newly decoded field.
-    
+
     A field-flag byte's `0x40` bit marks a cropped image; when set, a 4xf64 rect
     gives where the FULL (uncropped) image would sit on the page (its aspect equals
     the source image's), and the placement bbox is the cropped window inside it —

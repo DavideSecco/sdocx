@@ -293,6 +293,8 @@ class SdocxTextWrapper(KaitaiStruct):
         def _fetch_instances(self):
             pass
             self.body._fetch_instances()
+
+
     class ObjectHeader(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxTextWrapper.ObjectHeader, self).__init__(_io)
@@ -603,5 +605,6 @@ class SdocxTextWrapper(KaitaiStruct):
         def _fetch_instances(self):
             pass
             self.body._fetch_instances()
+
 
 

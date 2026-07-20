@@ -43,6 +43,7 @@ from pysdocx.page import (  # noqa: E402
     parse_page,
     parse_page_tree,
 )
+from pysdocx.page_header import parse_page_header  # noqa: E402
 
 
 def _samples():
@@ -318,10 +319,10 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                     k = SdocxPage.from_bytes(data)
                     where = f"{sample.name}/{name}"
                     self.assertEqual(k.base, ref["base"], where)
-                    self.assertEqual(k.page_width, ref["width"], where)
-                    self.assertEqual(k.page_height, ref["height"], where)
-                    self.assertEqual(k.uuid, ref["uuid"], where)
-                    kb = getattr(k, "content_bbox", None)
+                    self.assertEqual(k.width, ref["width"], where)
+                    self.assertEqual(k.height, ref["height"], where)
+                    self.assertEqual(k.uuid.value, ref["uuid"], where)
+                    kb = k.drawn_rect if k.has_drawn_rect else None
                     rb = ref["content_bbox"]
                     self.assertEqual(kb is not None, rb is not None, f"{where}: content_bbox presence")
                     if kb is not None:
@@ -335,6 +336,22 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                     # Cross-file linkage: page footer hash IS the pageIdInfo manifest hash.
                     if ref["uuid"] in manifest_hash:
                         self.assertEqual(k.page_hash.hex(), manifest_hash[ref["uuid"]], f"{where}: page_hash!=manifest")
+
+                    # Full field-flags region: the Kaitai spec against pysdocx.page_header's
+                    # structural parse (see spec/tools/validate_page_header.py for the same
+                    # cross-check against the pre-existing marker/heuristic scanners).
+                    header = parse_page_header(data)
+                    self.assertEqual(k.field_flags.value, header["field_flags"], f"{where}: field_flags")
+                    if k.has_template_type:
+                        self.assertEqual(k.template_type, header["fields"]["template_type"], f"{where}: template_type")
+                    if k.has_pdf_data_items:
+                        k_items = [(i.file_id, i.page_index) for i in k.pdf_data_items.items]
+                        r_items = [(i["file_id"], i["page_index"]) for i in header["fields"]["pdf_data_items"]]
+                        self.assertEqual(k_items, r_items, f"{where}: pdf_data_items")
+                    if k.has_custom_objects:
+                        k_uuids = [o.body.uuid.value for o in k.custom_objects.objects]
+                        r_uuids = [o["uuid"] for o in header["fields"]["custom_objects"]]
+                        self.assertEqual(k_uuids, r_uuids, f"{where}: custom_objects")
                     checked += 1
         self.assertGreater(checked, 0)
 
