@@ -97,9 +97,8 @@ async fn get_page_scene(index: usize, state: State<'_, AppState>) -> Result<Page
 /// frontend via the save-file dialog). Builds the exact same `PageScene` as
 /// `get_page_scene`, then calls the shared `opensdocx-render` draw functions
 /// — the same ones `opensdocx-cli` calls — so the exported file and the
-/// on-screen render (for the elements this renderer currently covers; rich
-/// text and tables are not yet ported, see `opensdocx-render::svg`) come
-/// from one code path.
+/// on-screen render come from one code path. Exports only the current page;
+/// for the whole document as one file, see `export_document_pdf`.
 #[tauri::command]
 async fn export_page(
     index: usize,
@@ -126,6 +125,35 @@ async fn export_page(
         }
         other => Err(format!("unsupported export format: {other}")),
     }
+}
+
+/// Render EVERY page into one multi-page PDF and write it to `path`. Unlike
+/// `export_page` (current page only, SVG/PNG), PDF always exports the whole
+/// document — a deliberate product difference (PDF's natural unit is a
+/// multi-page document, not a single image). Holds the reader lock for the
+/// whole loop: this is an explicit, one-shot user action (not a scroll-
+/// driven hot path like `get_page_scene`), so a brief lock on concurrent
+/// page requests during export is an accepted tradeoff, not an oversight —
+/// same shape as `get_page_sizes` below.
+#[tauri::command]
+async fn export_document_pdf(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    let typed_text_anchor = *state.typed_text_anchor.lock().unwrap();
+    let mut guard = state.reader.lock().unwrap();
+    let reader = guard.as_mut().ok_or("no document loaded")?;
+    let n = reader.page_count();
+    let mut svgs = Vec::with_capacity(n);
+    for index in 0..n {
+        let inputs = gather_page_inputs(reader, typed_text_anchor, index)?;
+        let scene = assemble_page_scene(inputs)?;
+        let mut media = |media_index: usize| -> Option<(String, Vec<u8>)> {
+            let mime = reader.media_asset(media_index)?.mime_type.clone();
+            let bytes = reader.media_bytes(media_index).ok()?;
+            Some((mime, bytes))
+        };
+        svgs.push(opensdocx_render::render_page_svg(&scene, &mut media));
+    }
+    let pdf = opensdocx_render::render_document_pdf(&svgs)?;
+    std::fs::write(&path, pdf).map_err(|e| e.to_string())
 }
 
 /// Read every page's pixel size cheaply (headers only) for continuous-scroll layout.
@@ -293,7 +321,8 @@ pub fn run() {
             get_page_scene,
             get_media,
             get_media_by_name,
-            export_page
+            export_page,
+            export_document_pdf
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
