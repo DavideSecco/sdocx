@@ -408,9 +408,58 @@ object bodies.
   choice, paragraph-style/indent calibration, and the calibrated todo minimum
   row height. Commands and evidence are in `docs/format/heuristics.md`; desired
   follow-ups remain in `docs/format/sample-wishlist.md`.
+- **`.page` header preamble — RESOLVED end-to-end as a sequential field-flags
+  structure (2026-07-20, supersedes the 2026-07-11 entry below).** Found via
+  the same `squ1dd13/sdocx2pdf` cross-reference process already used for
+  `note.note`, prompted by the user surfacing a second inkterop/sdocx2pdf
+  link. The whole preamble (bytes `0 .. base`) decodes sequentially: fixed
+  header (`flex_offset`, property/field-flags bitfields, orientation, dims,
+  uuid, timestamps, format version) then a field-flags-gated optional region
+  in bit order (`drawn_rect`, `tags`, `template_uri`, background
+  id/mode/colour/width/rotation, `pdf_data_items`, `template_type`,
+  `canvas_cache_map`, `imported_data_height`, `theme`,
+  `recognised_data_modified_time`, `stroke_recognition_data`,
+  `custom_objects`). New module `pysdocx/page_header.py`, gate
+  `spec/tools/validate_page_header.py`, zero counterexamples on **214/214**
+  corpus pages — this fully resolves what the entry below left open (`kind`/
+  paper/template presence are just field-flags bits, no signature lookahead
+  needed to explain them). Also ported to `spec/ksy/sdocx_page.ksy`
+  (field-for-field mirror) + `spec/tools/validate_page.py` +
+  `tests/test_kaitai_spec.py::test_page_header`, all green.
+
+  Cross-checked field-for-field against the pre-existing heuristic scanners
+  below wherever both fire, zero disagreements: `background_colour`,
+  `template_type` id (incl. previously-unnamed ids 10/12-15 — Todo/Custom/
+  Weekly/Monthly/Manuscript, Marker naming from sdocx2pdf, not yet
+  hand-labeled by us), `template_uri` (structural read is strictly cleaner —
+  the heuristic occasionally over-reads one leading UTF-16 code unit).
+  `pdf_data_items` also finds a case the heuristic missed entirely:
+  `samples/cs61bl_su22` has a **20-entry** tiled/pageless PDF import (not yet
+  wired into rendering — separate follow-up). Two things sdocx2pdf's own
+  schema doesn't cover, found while validating: sticky notes'
+  `skn_bg_color` (never extracted before — a signed-decimal Android ARGB
+  string, `"-6482"` == `0xFFFFE64E`, warm cream, on all 3 corpus instances),
+  and every sticky-note `custom_objects` entry (3/3) carries an unmodeled
+  8-byte trailer (two `u32`s, both `5303`) past where sdocx2pdf's parser
+  calls `ensure_eof()`.
+
+  **Two new open items** (see `docs/format/unknowns.md`): (1) sticky notes'
+  outer `CustomPageObject.rect` and `custom_data["skn_collapse_rect"]` are
+  two *different* bounding boxes on every instance — which is the true
+  on-page icon placement needs a targeted sample with an unambiguous visible
+  icon (a GT-photo check today was inconclusive, partial scroll capture);
+  (2) the `5303`/`5303` trailer's semantics.
+
+  The legacy heuristic scanners (`_locate_paper_record`, `page_template`,
+  `page_background_color`, `page_custom_template_uri`, `page_pdf_template`)
+  are UNCHANGED for now — deliberately not touched this round since they're
+  mirrored in `crates/sdocx/src/page.rs`; swapping their internals to the
+  structural read is a separate follow-up (their outputs already agree with
+  the structural decode everywhere both fire, so this is a safe, low-urgency
+  cleanup, not a correctness fix).
+
 - **`.page` header preamble — field sequence DECODED, `content_bbox` gate DONE,
-  template gates OPEN
-  (2026-07-11):** the bytes before the paper
+  template gates OPEN (2026-07-11, superseded above).** the bytes before the paper
   record are now mapped — fixed `[obj_id][seq][4000][4000]` @0x70, then optional
   `content_bbox` / `template_uri` / `[u32 kind]`, then `[BGRA][width]` (= M),
   then the template fields. Full sequence + evidence in

@@ -44,6 +44,60 @@ the lazy `tree.has_objects` instance: the tree lives later at `base`, but Kaitai
 can inspect it without confusing the bytes at `0x80` for four floats. Proven by
 `PaginaVuota&Paginapuntino_260711_122434.sdocx` and checked corpus-wide.
 
+### The full preamble as a sequential field-flags structure — Decoded
+
+The table above is a *reading* of fixed offsets that happen to hold on the
+current corpus. `pysdocx/page_header.py` decodes the same bytes as what they
+actually are: a sequential header (`page_end_offset` == `base`, `flex_offset`,
+variable-length property/field-flags bitfields, orientation, `width`,
+`height`, `offset_x`, `offset_y`, `uuid`, `modified_time`, `format_version`,
+`min_format_version`) followed by a **field-flags-gated optional region**
+between `flex_offset` and `base` — the same region the table above just calls
+"where the layer tree starts". Cross-referenced from `squ1dd13/sdocx2pdf`
+(MIT, see [`xref-sdocx2pdf.md`](../../xref-sdocx2pdf.md#page-header--promosso))
+and validated with **zero counterexamples on 214/214 corpus pages**
+(`spec/tools/validate_page_header.py`): the region always consumes exactly
+`base - flex_offset` bytes.
+
+Field-flags bits, in bit order (`FIELD_NAMES` in `pysdocx/page_header.py`):
+
+| bit | field | note |
+|---|---|---|
+| 0 | `drawn_rect` | == `content_bbox` above; presence matches `object_count > 0` on 226/226 |
+| 1 | `tags` | vector of short UTF-16 strings; unseen on the corpus |
+| 2 | `template_uri` | custom-image template path; supersedes `page_custom_template_uri`'s heuristic (which occasionally over-reads one leading UTF-16 code unit) |
+| 3-7 | `background_image_id/mode/colour/width/rotation` | `background_colour` (BGRA) matches `page_background_color`'s heuristic byte-for-byte, 226/226 |
+| 8 | `pdf_data_items` | embedded-PDF page placements: `[file_id, page_index, rect]*`; matches `page_pdf_template`'s single-entry heuristic on 25/25, and additionally finds a **20-entry** case (`samples/cs61bl_su22`, one tile per vertical page-height slice) the heuristic misses entirely — not yet wired into rendering |
+| 9 | `template_type` | 17-variant enum (`TEMPLATE_TYPE_NAMES`); matches the "Basic" template id from `page_template`'s heuristic id-for-id everywhere both fire, and names ids 10/12-15 that table below didn't have (Todo/Custom/Weekly/Monthly/Manuscript — Marker naming from sdocx2pdf, not yet grounded against our own hand-labeled sample) |
+| 10 | `canvas_cache_map` | keyed `CanvasCacheEntry` records (49 bytes each: 4-byte key + 45-byte entry) |
+| 11-12 | `imported_data_height`, `theme` | Unknown semantics; `theme` sdocx2pdf calls "skipped by the libs" |
+| 15-16 | `recognised_data_modified_time`, `stroke_recognition_data` | opaque blobs, unseen on the corpus |
+| 18 | `custom_objects` | sticky notes (`CustomObjectType::StickyNote`, id 1) — see below |
+
+**`custom_objects` / sticky notes**, decoded structurally (previously only
+found by a whole-page `co_attach_file` marker scan, `scan_sticky_notes`):
+`uuid`, `attached_files` map (`co_attach_file` -> media bind id, matches the
+marker scan), `custom_data` map (`skn_collapse_rect` matches the marker scan;
+**`skn_bg_color`** is new — a signed-decimal Android ARGB colour string,
+`"-6482"` == `0xFFFFE64E`, a warm cream, on all 3 corpus instances), and an
+outer `rect`. Two things not yet resolved: the outer `rect` and
+`custom_data["skn_collapse_rect"]` are two *different* bounding boxes on
+every observed instance (which one is the real on-page icon placement needs
+a targeted sample — a GT-photo check was inconclusive, see
+[`unknowns.md`](../../unknowns.md)); and every instance (3/3) carries an
+unmodeled 8-byte trailer after `rect` (two `u32`s, both `5303`) that
+sdocx2pdf's own parser doesn't expect (`ensure_eof()` right after `rect`) —
+kept as `trailing_raw`, semantics Unknown.
+
+No `.ksy` yet for this region — `spec/tools/validate_page_header.py` is the
+gate. `pysdocx.page.parse_page()` exposes the decode as `page["header"]`
+(best-effort: `None` if a page falls outside the validated corpus shape,
+which has not happened yet). The legacy heuristic scanners
+(`_locate_paper_record`, `page_template`, `page_background_color`,
+`page_custom_template_uri`, `page_pdf_template`) are unchanged for now —
+they're mirrored in `crates/sdocx/src/page.rs`, so swapping their internals
+to the structural read is a separate follow-up round.
+
 ### Page footer — Decoded
 
 Every `.page` ends with a 32-byte page content hash immediately followed by the

@@ -65,8 +65,37 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   Mathsolver typed text) is possible but unobserved for inline images.
 
 ## `.page`
-- **Header preamble — field sequence Decoded; `content_bbox` gate Decoded;
-  remaining template gates Unknown (RE 2026-07-11).**
+- **Header preamble — RESOLVED as a sequential field-flags structure
+  (RE 2026-07-20).** The whole preamble (bytes `0 .. base`) is a sequential
+  header + field-flags-gated optional region, cross-referenced from
+  `squ1dd13/sdocx2pdf` and decoded in `pysdocx/page_header.py`, validated
+  zero-counterexample on 214/214 corpus pages
+  (`spec/tools/validate_page_header.py`; see
+  [`docs/format/container/page/README.md`](./container/page/README.md#the-full-preamble-as-a-sequential-field-flags-structure--decoded)
+  and [`xref-sdocx2pdf.md`](./xref-sdocx2pdf.md#page-header--promosso)). This
+  resolves everything the note below used to call Unknown: `kind`/paper/
+  template presence are just field-flags bits 3-9 (no signature lookahead
+  needed to *explain* them, even though the legacy heuristic scanners in
+  `pysdocx/page.py` still exist and are unchanged); the "PDF-template record
+  `flag == 1`" mystery below is simply the `pdf_data_items` vector's `u16`
+  count field (usually 1, but 20 on a tiled pageless-PDF-import page,
+  `samples/cs61bl_su22` — proving it really is a count, not a fixed flag);
+  "Basic template id 10" now has a name from sdocx2pdf (`Todo`), though not
+  yet grounded against our own hand-labeled sample. Two *new* open items this
+  decode surfaced (not in sdocx2pdf's own schema): (1) sticky notes'
+  `CustomPageObject.rect` and `custom_data["skn_collapse_rect"]` are two
+  different bounding boxes on all 3 corpus instances — which is the true
+  on-page icon placement is unresolved (a GT-photo check was inconclusive);
+  (2) every sticky-note `custom_objects` entry (3/3) carries an unmodeled
+  8-byte trailer (two `u32`s, both `5303`) after sdocx2pdf's own schema ends.
+  Needs a targeted sample with an unambiguous visible sticky-note icon to
+  settle (1); (2) just needs more instances to see if `5303` ever varies.
+  The legacy heuristic-scanning description below is kept for reference (it
+  still describes what `pysdocx/page.py`'s existing functions do) but is no
+  longer the frontier.
+
+- **Header preamble — legacy heuristic-scan description (superseded above,
+  RE 2026-07-11).**
   The bytes between the fixed leading fields and the paper record are now mapped
   (`M` = paper-BGRA offset, located by `_locate_paper_record`):
   ```
@@ -116,12 +145,16 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   the matching media member. Rendering still degrades to the paper color if a
   future sample lacks the match, but that is a defensive fallback, not an
   observed case. Distinct from the `note.note` `template_uri` flex field.
-- **PDF-template record `flag` (M+8)**: `== 1` on all 15 observed PDF-backed
-  pages (2 Academic PDFs + 1 imported). A count for multi-template pages? Needs
-  a sample with >1 template PDF on one page family.
+- **PDF-template record `flag` (M+8) — RESOLVED (2026-07-20)**: it is the
+  `pdf_data_items` vector's `u16` entry count (field-flags bit 8), confirmed
+  by `samples/cs61bl_su22`'s 20-entry tiled-PDF-import page — see the
+  resolved entry above.
 - **Basic template id 10**: never appeared in the AlltypeofPageBasic sample
   (ids 1-9, 11 all named from the user's handwritten labels); name and pitch
-  unknown. Needs a dedicated capture.
+  unknown from our own corpus. sdocx2pdf's `TemplateType` enum names id 10
+  `Todo` (2026-07-20) — Marker naming only, not yet grounded against a
+  hand-labeled sample of our own. Still needs a dedicated capture to confirm
+  and measure a pitch/layout.
 - **Object header `flags`** (u16): constant `0x1bf` on non-stroke objects; on
   strokes only bit `0x1` varies (an invariant, not a clean semantic).
 - **`ext_block.seq` / `ext_block.counter`**: `seq` near-constant per note (not

@@ -74,6 +74,7 @@ we copy logic closely, add MIT attribution.
 | `mediaInfo.dat` | **CONFERMA + PROMOSSO** | Our former `magic/tag/time_candidate/marker` correspond to their `format_version/ref_count/modified_time/is_attached`; parser/spec/docs now use the new names with compatibility aliases. |
 | `end_tag.bin` | **CONFERMA + PROMOSSO** | Their richer SDK struct explains our former raw islands; parser/spec/docs now expose the sequential footer with compatibility aliases. |
 | `note.note` | **PROMOSSO** | Their sequential `note_doc` schema (bitfields, header, title/body blobs, flag-gated flex fields: string registry, pen info, voice records, attached files, …) is now decoded end-to-end and validates on 14/14, landing exactly on the trailing hash (`pysdocx/note_doc.py`, `spec/ksy/sdocx_note.ksy`). Two local improvements over their parser: the 8-byte pre-flex gap decodes as a `(width, round(width*sqrt(2)))` pair, and inline objects carry `position` + 8 trailing bytes they don't model. |
+| `.page` header | **PROMOSSO** | Their sequential page-header schema (`page.rs`/`page/header.rs`: flex/field-flags bitfields, orientation/dims/uuid, then flag-gated drawn_rect/tags/template_uri/background/pdf_data_items/template_type/canvas_cache_map/custom_objects) is now decoded end-to-end in `pysdocx/page_header.py` and validates with zero counterexamples on 214/214 corpus pages, landing exactly on `base` (`spec/tools/validate_page_header.py`). Supersedes three prior signature/heuristic scanners field-for-field (background colour, "Basic" template id, custom-image URI — see below) and surfaces two things the heuristics never found: multi-entry `pdf_data_items` on tiled/pageless PDF imports, and sticky-notes' `skn_bg_color`. No `.ksy` yet. |
 
 ## Detailed gaps
 
@@ -437,13 +438,95 @@ Local additions beyond their parser: the sometimes-8-byte pre-flex gap (their
 tail-record scans map one-for-one onto flex fields
 (`docs/format/container/note-note/tail-records.md`).
 
+### `.page` header — PROMOSSO
+
+`sdocx2pdf`:
+- `Page::try_parse_with_ctx` (`sdocx/src/page.rs:471-618`) reads a sequential
+  header — `page_end_offset`, `flex_offset`, property/field-flags bitfields,
+  orientation/width/height/offset_x/offset_y, uuid, modified_time,
+  format_version, min_format_version — then, gated by field_flags bits in bit
+  order: `drawn_rect` (0), `tags` (1), `template_uri` (2),
+  `background_image_id/mode/colour/width/rotation` (3-7),
+  `pdf_data_items: Vec<PdfPage>` (8, `sdocx/src/page/header.rs:28-70`),
+  `template_type` (9, 17-variant enum incl. `Pdf`, `sdocx/src/page.rs:304-342`),
+  `canvas_cache_map` (10, keyed `CanvasCacheEntry`s,
+  `sdocx/src/page/header.rs:72-108`), `imported_data_height`/`theme` (11-12),
+  `recognised_data_modified_time` (15), `stroke_recognition_data` (16),
+  `custom_objects: Vec<CustomPageObject>` (18, `sdocx/src/page/header.rs:129-222`,
+  incl. `CustomObjectType::StickyNote`).
+
+Ours (before this round):
+- Only `base`/`width`/`height`/`uuid` at fixed offsets and `content_bbox` at a
+  fixed `0x80` (`pysdocx/page.py::parse_page`).
+- Background colour, "Basic" template id, and custom-image template URI found
+  by scanning for a `[BGRA][u32 width]` signature and reading base-dependent
+  offsets around it (`_locate_paper_record`, `page_template`,
+  `page_background_color`, `page_custom_template_uri`) — several
+  base-value-keyed branches (`base==0x90`, `base==0xA6`, `base>=0xE7`) with no
+  formal justification beyond "matches the corpus so far".
+- Sticky notes found by a whole-page marker scan for `co_attach_file`
+  (`scan_attachment_placements`, `scan_sticky_notes`), since the layer's own
+  `object_count` excludes them.
+- PDF-backed page templates found via an 8-byte quad
+  `[u16 flag][u16 pdf_media_index][u16 reserved][u16 pdf_page_index]`
+  immediately after the same signature (`page_pdf_template`).
+
+Verdict: **PROMOSSO.** The full sequential header — through the entire
+field-flags-gated optional region — now parses byte-exact on 214/214 corpus
+pages, landing exactly on `base` (`pysdocx/page_header.py`,
+`spec/tools/validate_page_header.py`). Cross-checked field-for-field against
+every prior heuristic wherever both fire, zero disagreements:
+`background_colour` (BGRA) against `page_background_color` (226/226 in the
+wider ad-hoc sweep), `template_type` id against `page_template`'s "Basic" id
+(id-for-id, including previously-unnamed ids 10/12-15 —
+see `TEMPLATE_TYPE_NAMES` in `pysdocx/page_header.py`), and `template_uri`
+against `page_custom_template_uri` (the heuristic occasionally over-reads one
+leading UTF-16 code unit — the structural read is strictly cleaner).
+`pdf_data_items`/`page_pdf_template` agree on every single-entry case (25/25)
+and the structural read additionally finds a case the heuristic missed
+entirely: `samples/cs61bl_su22` has **20** `pdf_data_items` entries on one
+page (a tiled/pageless PDF import, each entry a vertical page-height slice) —
+not yet wired into rendering.
+
+Two things sdocx2pdf's own schema does not cover, found while validating:
+1. **`custom_objects`' `skn_bg_color`** — sticky notes carry a `custom_data`
+   key never surfaced by our marker scan (which only pulled
+   `skn_collapse_rect`): a signed-decimal Android ARGB color string
+   (`"-6482"` == `0xFFFFE64E`, a warm cream, on all 3 corpus sticky notes).
+2. **An unmodeled 8-byte trailer** on every `custom_objects` entry (3/3):
+   two `u32`s, both `5303`, after the `rect` field where sdocx2pdf's parser
+   calls `ensure_eof()`. Constant across two unrelated notes — likely a
+   version/build tag added by a newer Samsung Notes build than sdocx2pdf's
+   author saw. Captured as `trailing_raw`, semantics Unknown.
+3. **Two different rects per sticky note**: `CustomPageObject.rect` (outer)
+   and `custom_data["skn_collapse_rect"]` (inner) never coincide on any of
+   the 3 corpus instances. Which one is the true on-page icon placement is
+   unresolved — a GT photo check was inconclusive (partial scroll capture,
+   no visible icon). Needs a targeted sample with an unambiguous visible
+   sticky-note icon. See `docs/format/unknowns.md`.
+
+No `.ksy` exists for this surface yet — `spec/tools/validate_page_header.py`
+is the gate in the meantime (mirrors `validate_page.py`'s corpus glob, but
+checks `pysdocx/page_header.py` internally rather than a Kaitai spec).
+
+Next step: (a) decide whether to replace the legacy heuristic scanners'
+*internals* with `parse_page_header` calls now that they're proven
+equivalent-or-better (kept as-is for this round — they're mirrored in
+`crates/sdocx/src/page.rs`, so swapping them is a separate, dedicated round);
+(b) wire multi-entry `pdf_data_items` into rendering for tiled PDF imports;
+(c) resolve the sticky-note dual-rect ambiguity with a targeted sample;
+(d) port to `spec/ksy/sdocx_page_header.ksy` at the next Rust-porting
+checkpoint.
+
 ## What is worth porting first
 
 1. ~~Note-level `text_core::Common` payload parsing~~ — **done** (promoted
    with the full sequential `note_doc` schema, 2026-07-08).
 2. ~~Page text-box `Common` variant~~ — **done** (frame at 386/406, 8/8
    structural + span agreement, 2026-07-08).
-3. `Image` / `Painting` flex-field alignment, because media refs are confirmed
+3. ~~`.page` header field-flags region~~ — **done** (promoted end-to-end,
+   214/214, 2026-07-20).
+4. `Image` / `Painting` flex-field alignment, because media refs are confirmed
    as `u32` on 60/60 objects but crop/original/thumbnail fields are not isolated.
-4. Targeted audio-object samples, because current voice clips link to `.m4a`
+5. Targeted audio-object samples, because current voice clips link to `.m4a`
    2/2 but page object type 10 is absent 0/14.
