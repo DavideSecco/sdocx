@@ -8,3 +8,6 @@ serde = { version = "1", features = ["derive"] }
 sdocx = { path = "../../crates/sdocx", features = ["serde"] }
 base64 = "0.22"
 resvg = "0.47.0"
+rustybuzz = "0.20.1"
+ttf-parser = "0.25.1"
+fontdb = "0.23.0"

@@ -2547,9 +2547,12 @@ name = "opensdocx-render"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "fontdb",
  "resvg",
+ "rustybuzz",
  "sdocx",
  "serde",
+ "ttf-parser",
 ]
 
 [[package]]
