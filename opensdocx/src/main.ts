@@ -28,6 +28,7 @@ const MAX_BITMAP_DIM = 8192; // cap the offscreen raster per page (webview canva
 
 // ── State ────────────────────────────────────────────────────────────────────
 let meta: DocMeta | null = null;
+let currentDocPath: string | null = null; // for the PDF export's default filename
 let sizes: [number, number][] = []; // per-page [w, h] in page units
 let zoom = 1; // page units -> CSS px
 let pageTop: number[] = []; // CSS-px top of each page within #doc
@@ -1071,6 +1072,7 @@ async function openFile(): Promise<void> {
 }
 
 async function loadDocument(selected: string): Promise<void> {
+  currentDocPath = selected;
   meta = await invoke<DocMeta>("open_document", { path: selected });
   sizes = await invoke<[number, number][]>("get_page_sizes");
   resetAudioState();
@@ -1161,12 +1163,30 @@ async function exportCurrentPage(format: "svg" | "png"): Promise<void> {
   if (!path) return;
   await invoke("export_page", { index: curPage, format, path });
 }
+// PDF export: always the whole document (every page in one file), unlike
+// exportCurrentPage above — a different verb, not just a third format, so
+// it calls its own Tauri command (export_document_pdf) instead of export_page.
+async function exportDocumentPdf(): Promise<void> {
+  if (!meta) return;
+  const stem = currentDocPath
+    ? (currentDocPath.split(/[/\\]/).pop() ?? "document").replace(/\.sdocx$/i, "")
+    : "document";
+  const path = await save({
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+    defaultPath: `${stem}.pdf`,
+  });
+  if (!path) return;
+  await invoke("export_document_pdf", { path });
+}
 exportMenu.addEventListener("click", (e) => {
   const item = (e.target as HTMLElement).closest<HTMLElement>(".menu-item");
   const format = item?.dataset.format;
+  const docFormat = item?.dataset.docFormat;
   closeMenus();
   if (format === "svg" || format === "png") {
     exportCurrentPage(format).catch((err) => alert(String(err)));
+  } else if (docFormat === "pdf") {
+    exportDocumentPdf().catch((err) => alert(String(err)));
   }
 });
 sidebarBtn.addEventListener("click", toggleSidebar);
