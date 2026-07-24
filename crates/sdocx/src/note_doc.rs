@@ -1230,7 +1230,9 @@ fn parse_voice_recording(cur: &mut Cur) -> R<NoteVoiceClip> {
     let file_id = win.u32()?;
     let name = win.short_utf16()?;
     let duration_str = win.short_utf16()?;
-    let created_time_us = win.i64()?;
+    // Epoch MILLIseconds, not micros despite the sibling event timestamps below being
+    // genuine micros — see the `created_time_ms` doc comment on `NoteVoiceClip`.
+    let created_time_ms = win.i64()?;
     let event_count = win.u32()?;
     ensure(event_count <= 100_000, "voice event count implausible")?;
     for _ in 0..event_count {
@@ -1239,7 +1241,7 @@ fn parse_voice_recording(cur: &mut Cur) -> R<NoteVoiceClip> {
     }
     let duration_ms = win.i64()?;
     ensure_eof(&win, "voice_recording")?;
-    Ok(NoteVoiceClip { file_id, name, duration_ms, duration_str, created_time_us })
+    Ok(NoteVoiceClip { file_id, name, duration_ms, duration_str, created_time_ms })
 }
 
 /// Decode every voice recording attached to the note (`note.note` field_flags

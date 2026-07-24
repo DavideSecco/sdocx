@@ -134,7 +134,7 @@ def diffs_for(data: bytes) -> list[str]:
             if (ref_rec["file_id"] != k_rec.file_id
                     or ref_rec["name"] != k_rec.name.value
                     or ref_rec["duration_str"] != k_rec.duration_str.value
-                    or ref_rec["created_time_us"] != k_rec.created_time_us
+                    or ref_rec["created_time_ms"] != k_rec.created_time_ms
                     or ref_rec["precise_duration_ms"] != k_rec.precise_duration_ms
                     or [(e["action"], e["time_us"]) for e in ref_rec["events"]]
                     != [(e.action, e.time_us) for e in k_rec.events]):

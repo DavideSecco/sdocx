@@ -694,7 +694,7 @@ class SdocxNote(KaitaiStruct):
             self.file_id = self._io.read_u4le()
             self.name = SdocxNote.ShortUtf16(self._io, self, self._root)
             self.duration_str = SdocxNote.ShortUtf16(self._io, self, self._root)
-            self.created_time_us = self._io.read_s8le()
+            self.created_time_ms = self._io.read_s8le()
             self.event_count = self._io.read_u4le()
             self.events = []
             for i in range(self.event_count):

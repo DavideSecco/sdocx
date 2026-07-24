@@ -213,14 +213,23 @@ def _parse_pen_info_full(cur: _Cur) -> dict:
 
 
 def _parse_voice_recording(cur: _Cur) -> dict:
-    """Exclusive-length-prefixed voice record; `file_id` indexes mediaInfo.dat."""
+    """Exclusive-length-prefixed voice record; `file_id` indexes mediaInfo.dat.
+
+    `created_time_ms` is epoch MILLIseconds, not micros despite every other `_us`
+    timestamp in this format (including this same record's own `events[].time_us`)
+    being genuine microseconds — verified on the 2/2 corpus samples carrying voice
+    clips: the raw value is 13 digits and only resolves to a sane date treated as
+    epoch millis (a prior `created_time_us` mislabeling, fixed by the same
+    by-analogy naming as the note-level header fields, made OpenSdocx's audio
+    player display 1970-01-2x dates).
+    """
     size = cur.u32()
     win = cur.sub(size)
     out = {
         "file_id": win.u32(),
         "name": win.short_utf16(),
         "duration_str": win.short_utf16(),
-        "created_time_us": win.i64(),
+        "created_time_ms": win.i64(),
         "events": [],
     }
     event_count = win.u32()

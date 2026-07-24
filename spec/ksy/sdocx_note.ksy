@@ -431,8 +431,13 @@ types:
         type: short_utf16
       - id: duration_str
         type: short_utf16
-      - id: created_time_us
+      - id: created_time_ms
         type: s8
+        doc: >
+          Epoch MILLIseconds — not micros, unlike `voice_event.time_us` below and
+          every other `_us` timestamp in this format. Verified on the 2/2 corpus
+          samples carrying voice clips: the raw value is 13 digits and only
+          resolves to a sane date when treated as epoch millis.
       - id: event_count
         type: u4
       - id: events

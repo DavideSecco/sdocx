@@ -67,8 +67,13 @@ pub struct NoteVoiceClip {
     /// Raw `HH:MM:SS` duration string, kept as a fallback when `duration_ms`
     /// is non-positive.
     pub duration_str: String,
-    /// Recording timestamp in microseconds since the Unix epoch.
-    pub created_time_us: i64,
+    /// Recording timestamp in **milliseconds** since the Unix epoch (not
+    /// microseconds, unlike the `time_us` event timestamps and every other
+    /// `_us` field in this format — verified against the 2/2 corpus samples
+    /// that carry voice clips: the raw value is 13 digits, matching the
+    /// sample's own export date, and only resolves to a sane date when
+    /// treated as epoch millis).
+    pub created_time_ms: i64,
 }
 
 /// An imported image anchored inline in the typed-note body (`note.note`),

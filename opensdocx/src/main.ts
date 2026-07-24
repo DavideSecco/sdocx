@@ -3,7 +3,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 
 // ── Types mirroring the Rust Scene (src-tauri/src/lib.rs) ────────────────────
 type RGB = [number, number, number];
-interface AudioClip { file_id: number; name: string; duration_ms: number; duration_str: string; created_time_us: number }
+interface AudioClip { file_id: number; name: string; duration_ms: number; duration_str: string; created_time_ms: number }
 interface DocMeta { page_count: number; dark_mode: boolean; background: RGB | null; audio: AudioClip[] }
 interface Stroke { points: [number, number][]; color: RGB | null; width: number; tapered: boolean; tool_id: number | null; pressures?: number[] }
 interface SImage {
@@ -801,8 +801,10 @@ function durationMsOf(clip: AudioClip): number {
 // Recording timestamp, formatted in the viewer's local timezone — the
 // authoring device's original tz offset isn't stored in the voice record, so
 // exact reproduction of Samsung's displayed time isn't possible.
-function formatClipDate(createdUs: number): string {
-  const d = new Date(createdUs / 1000);
+// `created_time_ms` is epoch milliseconds already (unlike the note-header
+// timestamps, which are microseconds) — no unit conversion needed here.
+function formatClipDate(createdMs: number): string {
+  const d = new Date(createdMs);
   return new Intl.DateTimeFormat(undefined, {
     day: "2-digit",
     month: "2-digit",
@@ -838,7 +840,7 @@ function renderClipList(): void {
     nameEl.textContent = c.name;
     const metaEl = document.createElement("span");
     metaEl.className = "audio-clip-meta";
-    metaEl.textContent = `${formatClock(durationMsOf(c))} · ${formatClipDate(c.created_time_us)}`;
+    metaEl.textContent = `${formatClock(durationMsOf(c))} · ${formatClipDate(c.created_time_ms)}`;
     btn.append(nameEl, metaEl);
     audioListMenu.appendChild(btn);
   });

@@ -945,6 +945,18 @@ mod tests {
         assert_eq!(clips[2].name, "Voice 003  - Rinominata");
         assert_eq!(clips[2].duration_ms, 7275);
 
+        // Regression guard for the created_time_ms unit bug (2026-07-24): this field is
+        // epoch MILLIseconds, not micros — a value in the (obviously wrong) epoch-micros
+        // range here would collapse to a 1970 date once the app formats it as millis.
+        for clip in &clips {
+            assert!(
+                clip.created_time_ms > 1_000_000_000_000,
+                "file_id {}: created_time_ms {} looks like epoch micros, not millis",
+                clip.file_id,
+                clip.created_time_ms
+            );
+        }
+
         for clip in &clips {
             let bytes = reader.media_bytes(clip.file_id as usize).expect("media bytes");
             assert!(bytes.len() > 8, "file_id {}: audio bytes too short", clip.file_id);

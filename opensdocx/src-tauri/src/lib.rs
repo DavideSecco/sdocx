@@ -38,7 +38,7 @@ struct AudioClip {
     name: String,
     duration_ms: i64,
     duration_str: String,
-    created_time_us: i64,
+    created_time_ms: i64,
 }
 
 #[derive(Serialize)]
@@ -63,7 +63,7 @@ async fn open_document(path: String, state: State<'_, AppState>) -> Result<DocMe
             name: c.name.clone(),
             duration_ms: c.duration_ms,
             duration_str: c.duration_str.clone(),
-            created_time_us: c.created_time_us,
+            created_time_ms: c.created_time_ms,
         })
         .collect();
     let meta = DocMeta {
