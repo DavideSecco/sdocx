@@ -539,6 +539,31 @@ def cmd_render(args: argparse.Namespace) -> None:
     print(f"wrote {stem}-page-NN.{args.format} to {out_dir} (pages: {pages})")
 
 
+def cmd_spi(args: argparse.Namespace) -> None:
+    """Decode Samsung's own `.spi` rasters: page renders and formula objects."""
+    from pysdocx.spi import decode_rgba, spi_size
+    from pysdocx.spi.parse import iter_member_bytes
+
+    found = 0
+    for name, data in iter_member_bytes(args.file):
+        if args.only and args.only not in name:
+            continue
+        found += 1
+        width, height = spi_size(data)
+        if args.list:
+            print(f"{name}  {width}x{height}  {len(data)} bytes")
+            continue
+        rgba, width, height = decode_rgba(data)
+        from PIL import Image
+
+        out = args.out / (name.replace("/", "_").removesuffix(".spi") + ".png")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        Image.frombytes("RGBA", (width, height), rgba).save(out)
+        print(f"{name}  {width}x{height} -> {out}")
+    if not found:
+        print("no .spi members" + (f" matching {args.only!r}" if args.only else ""))
+
+
 def cmd_media_info(args: argparse.Namespace) -> None:
     media = list_media_info(args.file, verify_hash=args.verify_hash)
     if media is None:
@@ -971,6 +996,15 @@ def main() -> None:
     p_note_doc.add_argument("--json", action="store_true", help="dump the full structure as JSON")
     p_note_doc.add_argument("--spans", action="store_true", help="also print every span record")
     p_note_doc.set_defaults(func=cmd_note_doc)
+
+    p_spi = sub.add_parser("spi", help="decode the .spi (Samsung raster) members to PNG")
+    p_spi.add_argument("file", type=Path)
+    p_spi.add_argument("--only", help="substring filter on the member name")
+    p_spi.add_argument("--out", type=Path, default=Path("."),
+                       help="output directory (default: current)")
+    p_spi.add_argument("--list", action="store_true",
+                       help="only list the members and their size, decode nothing")
+    p_spi.set_defaults(func=cmd_spi)
 
     p_inventory = sub.add_parser("inventory", help="summarize corpus-level format coverage/profiles")
     p_inventory.add_argument("paths", type=Path, nargs="*", help="files or directories to scan (default: samples/)")
