@@ -19,6 +19,10 @@ concrete tasks). It is the handoff between work sessions and agents.
 - `pysdocx/` — **the RE workbench.** A Python parser/renderer where all format
   decoding is prototyped and validated before anything is ported. This is where
   day-to-day work happens.
+  - `pysdocx/spi/` — the decoder for Samsung's `.spi` ("Maetel") raster: the
+    formula objects and Samsung's own per-page renders. `tables.py` is
+    **generated** (see its header); nothing here reads a Samsung binary at
+    runtime. Gated by `tests/test_spi_decode.py` against committed pixel hashes.
 - `crates/` — the Rust workspace (`sdocx`, `sdocx-cli`, `sdocx-render`,
   `sdocx-wasm`) and `viewer/` — the shipped product. Lags pysdocx by design.
 - `docs/format/` + `spec/` — **the format knowledge base** (see below).
@@ -83,5 +87,10 @@ Two complementary layers; consult both, don't re-derive from raw bytes:
 
 - The 14-sample corpus includes the user's personal `samples/Appunti vari_*` —
   keep it uncommitted/private. Same for `Interesting discussion.txt`.
+- **`apk-re/` is gitignored and stays that way**: it holds APK-derived material
+  (Samsung's `libSPenBase.so`, the Unicorn emulator oracle, decompiled sources,
+  ~50 MB of captured fixtures). Decoders derived from it may live in the repo —
+  see `pysdocx/spi/` — but only as code plus generated constants, never as
+  vendored Samsung bytes and never reading that binary at runtime.
 - `future_todo.md` is a running backlog checkpoint; `unknowns.md` is the
   consolidated open-question list.

@@ -390,6 +390,485 @@ object bodies.
 
 ## Next tasks
 
+- **`.spi` / Maetel raster codec — DECODED END-TO-END in Python (2026-07-26):**
+  `.spi` is Samsung's proprietary raster, used both for page thumbnails and for
+  **real page objects** — notably the "convert to math" formula render on page 3
+  of `MultiMath_260724_201808` (`media/2@84bbec22-….spi`, 1408×286). Without a
+  decoder that page cannot be rendered. Full write-up in the gitignored
+  `apk-re/findings.md` ("SPI / Maetel" section); tools in `apk-re/scripts/`.
+  State:
+  * **Three oracles now exist and are verified.** (1) `ground_truth.pdf` p.3
+    embeds Samsung's *own* decode as `1408×286 rgb` + smask — free ground-truth
+    pixels, no device (`spi_ground_truth.py`). (2) `spi_emu.py` runs
+    `libSPenBase.so` under **Unicorn** on the PC and decodes all 6 `.spi` members
+    of the sample; on the formula it matches the PDF on every fully opaque
+    pixel (the 0.61% that differ have partial/zero alpha and delta ≤ 2 — the
+    premultiplied→straight rounding of the PDF export). (3) `spi_emu.py
+    --trace-csv` yields a **ground-truth per-tile trace** (3168 rows = 88×18×2
+    planes) of mode + exact bit positions.
+  * Decoder shape decoded: `FUN_001c0124` dispatches `[plane*6 + mode]` through
+    three pointer tables (regenerated from the `.so` by `spi_tables.py`, not
+    transcribed); exactly **2 planes × 6 modes**; `color_index=4` ⇒ 3 colour
+    components + alpha; planes are sequential within a chunk with a byte-align
+    rewind between passes.
+  * `spi_probe.py` is now falsifiable: hard chunk-boundary asserts, an
+    illegal-mode oracle (modes 2/4 cannot occur on plane 1), and
+    `--verify-handlers` which checks each ported handler in isolation against
+    the native trace. **Modes 0 and 1 are EXACT on both planes: 2501/3168 tiles.**
+  * **Triage done (2026-07-26), and it resized the job by an order of magnitude.**
+    Do **not** measure this work in KB of Ghidra pseudo-C: NEON expands hugely, so
+    `FUN_001cf238` is 65 KB of `.c` but only **3596 bytes of machine code**. The
+    right metric comes from `.eh_frame` FDEs (`spi_tables.FunctionMap`). The whole
+    decoder call graph is **56 functions / 53.9 KB of ARM64**, of which 19.2 KB is
+    never executed on this sample. `spi_emu.py --triage` measures the rest
+    directly — a block hook for coverage, plus a write hook on the bit-reader
+    struct, since consuming bits without touching it is impossible. Net:
+    **10 functions / 18.3 KB still to port for bit-exact parsing.** The same hook
+    found `FUN_001c2624`, the bitstream refill primitive, reachable *only* via a
+    function pointer in `bitreader+0x28` — no static call-graph walk could see it
+    (it needs no porting: an ordinary bit reader covers it).
+  * **Tree A is DONE (2026-07-26): 2501 -> 2841/3168 tiles bit-exact.** Plane 0
+    modes 2 and 4, 340 tiles, all EXACT on the first run after reading the code.
+    `FUN_001d3b4c` turned out to be a run-length + Exp-Golomb symbol coder (not a
+    NEON monster), and mode 4 is an incremental-palette path. Full grammar in
+    `apk-re/findings.md`, "L'albero A decodificato". Two things made it cheap and
+    are worth reusing on tree B: `spi_emu.py --element-trace` samples the bit
+    position at every call into an inner decoder, so a port is diffed stage by
+    stage rather than on the tile total; and the per-tile trace now carries the
+    decoder state the handlers branch on (`tile[0x9c4]` palette entries,
+    `tile[0x9c8]` index width), without which a handler verified in isolation
+    cannot know how much palette was already transmitted.
+  * **Tree B is DONE (2026-07-26): layer 2 is CLOSED at 3168/3168 tiles.** Plane
+    1 mode 3, 327 tiles. The 11.9 KB estimate was again too high: `FUN_001d0044`
+    is 8.3 KB but reads *one bit per tile* before delegating, so the real core
+    was 3.1 KB (`FUN_001d2874` + `FUN_001d4000` + `FUN_001d3980`). Grammar in
+    `apk-re/findings.md`, "L'albero B decodificato". Two reusable lessons:
+    (a) the six lookup tables are **read from the .so** at runtime
+    (`spi_tables.load_coefficient_tables`) rather than transcribed — a typo
+    would surface as a plausible-but-wrong bit count deep in the corpus;
+    (b) `FUN_001d4000` depends on *spatial* neighbour context that only pixel
+    reconstruction maintains, solved by observing it instead of deriving it
+    (`spi_emu.py --context-trace` reads the two bytes out of emulated memory,
+    and `spi_probe.py --context-csv` feeds them back). That oracle stays useful
+    for layer 3.
+  * **Layer 3 STARTED (2026-07-26), not finished.** Two milestones landed. First,
+    the **whole stream now parses sequentially**: `spi_probe.py` walks it end to
+    end and all 4 chunks land exactly on 13869 / 32258 / 46864 / 54329. Getting
+    there needed a real find — mode 4's palette state (`tile[0x9c4]`/`[0x9c8]`)
+    is an *output* of one tile and an *input* of the next, so the walk desynced
+    at tile 10 even though every handler was individually bit-exact. Only an
+    end-to-end walk could have surfaced that. Second, `spi_emu.py --block-trace`
+    captures the four 16x16 blocks before each blit, and mode 4's palette
+    expansion reconstructs **313/313 tiles exactly** against it.
+  * The NEON worry was misplaced: the only vector instructions in the decoder are
+    20 `a64_TBL` inside `FUN_001cf238`, and they are a byte shuffle plus
+    `-(x & 1) ^ x` (permutation + zigzag). Everything else in reconstruction is
+    scalar. Ghidra's ~760-line expansion was the whole illusion.
+  * **Mode 2 blocks: negative result, worth not repeating.** The `a64_TBL`
+    sequence is decoded (four shuffles widening 16 bytes into 32-bit lanes,
+    `(s >> 1) ^ -(s & 1)`, then a regather whose net permutation is the
+    *identity*). But no linear DPCM reproduces the native blocks: straight
+    vertical accumulation gives 0/27 tiles, all six symbol-block-to-component
+    assignments give 0/27, and shifting the predictor by -1/0/+1/+2 still leaves
+    20% of residuals above +-8 where a correct DPCM would leave ~0%. So the
+    prediction is 2D or sub-block structured -- consistent with the TBLs grouping
+    bytes four at a time. Deliberately left unimplemented rather than shipped
+    wrong.
+  * **Mode 3 scoped, and it is bigger than expected.** `FUN_001d5abc` shows the
+    alpha plane is a full intra coder, not a table swap: neighbour fetch, a
+    `(a*2 + b + c + 2) >> 2` smoothing filter, **directional intra prediction**
+    over 17 modes, then dequantisation and an inverse transform that adds the
+    residual. Five stages go through *function pointers* in the context, resolved
+    by reading them at runtime under the emulator: `ctx+0x598` ->
+    `FUN_001c7b0c`, `+0x5a0` -> `FUN_001c7540`, `+0x5d8` -> `FUN_001c64f4`,
+    `+0x5e0` -> `FUN_001c6a14`, `+0x608` -> `FUN_001c6d4c` (5.4 KB in total).
+    **The static call graph cannot see those** -- the same blind spot that hid
+    `FUN_001c2624` -- so the earlier "10.5 KB of reconstruction" estimate was low
+    by at least that much. The blitter at `ctx+0x630` still needs resolving the
+    same way.
+  * **THE FORMULA NOW DECODES IN OUR OWN CODE (2026-07-26).**
+    `spi_decode.py --png` renders a legible `a^2 + b^2 = c^2` with no emulator
+    involved. Against the ground truth: **RGB 6533/402688 pixels differ (1.6%)**,
+    alpha 12.5%. So colour is essentially complete -- the residual 1.6% is the 27
+    mode-2 tiles (27 x 256 = 6912 px) plus what the copies propagate -- and every
+    remaining difference is alpha, i.e. mode 3.
+  * Modes 0 and 1 (2501 tiles) copy a 16x16 region of the running frame rather
+    than filling blocks, which is why the frame had to exist first. Mode 0 has no
+    coded vector: above when at the left edge, otherwise left (`DAT_0012ed78` =
+    `(0,16)`, `DAT_0012ee88` = `(16,0)`) -- **2283/2283 exact**. Mode 1 is still
+    partial: `FUN_001cd1b4` writes only `dx` and never `dy`, so `dy` **persists
+    from the previous tile**; that carry is unmodelled, and those 218 tiles (7%)
+    still take their vector from the native trace.
+  * 📖 **Full handoff: `apk-re/SPI-HANDOFF.md`** — self-contained, written so a
+    fresh session (or another agent) can pick this up without reading the
+    chronological log. Runnable commands, the complete format, what is verified
+    with which numbers, the two known gaps, and a "traps" section listing the
+    things that cost real time. Start there, not here.
+  * **THE DECODER NO LONGER NEEDS ANY ORACLE (2026-07-26).** Both trace
+    dependencies are gone, which is what makes a Rust port worth doing rather
+    than a kludge. (a) Mode 1's motion: `FUN_001cd1b4` does write `dy`, via
+    `*(int *)(param_2 + 0x41b)` -- 0x41b in 8-byte units *is* 0x20d8, which is
+    why grepping for "0x20d8" missed it. Gate bit -> `(0,16)`, else
+    `dx = zigzag(c1 + 1) * 16`, `dy = expgolomb(c2) * 16`; the `+1` is because
+    the native builds `payload + (1 << z)`. **2501/2501 exact.** (b) Mode 3's
+    contexts come from a 4-pixel-granularity mode map (`spi_probe.ModeMap`)
+    built from decoded modes alone -- no pixels needed. The non-obvious rule:
+    **the map does not carry across AA02 chunks** (a chunk restarts the native
+    line buffers), worth 126 of 2199 contexts. **2199/2199 exact.**
+    `spi_probe.py` now walks all 4 chunks and `spi_decode.py --png` renders the
+    formula with no `--context-csv` and no trace files at all.
+  * **RUST PORT DONE (2026-07-26).** `crates/sdocx/src/samsung_spi.rs` +
+    `crates/sdocx/tests/samsung_spi_decode.rs` (both untracked). The Rust decoder
+    produces **byte-identical RGBA** to the Python reference. Static tables are
+    Rust `const`s -- no `libSPenBase.so` read at runtime, no Samsung binary in
+    the repo. Three parity gates, all of which actually run here: chunk
+    boundaries (needs only the sample), 3168/3168 per-tile bit counts, 313/313
+    mode-4 blocks. Mode 2 and mode 3 *reconstruction* remain honest gaps --
+    parsing is complete, so the stream stays in sync. Detail in
+    `apk-re/SPI-HANDOFF.md` §9, including why an earlier Codex attempt looked
+    green while shipping a fabricated 256-byte lookup table (**0/27 tiles**
+    against the real fixture); it had also contaminated `spi_decode.py`, and both
+    are now cleaned.
+  * **THE CODEC IS FULLY DECODED (2026-07-26).** `spi_decode.py` reproduces the
+    native decoder **exactly**: 667/667 blocks (mode 2 **27/27**, mode 3
+    **327/327**, mode 4 313/313) and **0/402688 pixels differ** from
+    `multimath_formula_emu.png`. The 2462-pixel (0.61%) gap to the Samsung PDF
+    export is the export's own floor — the emulator shows the same number. No
+    oracle, no trace files, single pass. Three things closed it, all found by
+    diffing against `--intra-trace` rather than transcribing the 20-case switch in
+    `FUN_001cbf98`/`FUN_001cc150` (which turned out not to be needed):
+    (a) **mode 2** is the scalar `else` branch of `FUN_001cf238` (submode 2), a
+    vertical DPCM with **step 4** plus a wrap — the step is exactly why the
+    step-1 version had scored 0/27;
+    (b) **reference construction** is HEVC's: the two arrays have **independent
+    corners**, undecoded samples are *unavailable* and replicate the last
+    available value forward (not clamped), and the `[1,2,1]/4` smoothing is
+    **conditional** on `min(|angle-5|,|angle-13|) > threshold[dim]` — applying it
+    always drops refs to 545/2199;
+    (c) the **tile context** rule is symmetric: on the first row of an `AA02`
+    chunk the row above does not exist, and the missing side replicates the other
+    side's first sample (0x80 when neither exists). That is the whole explanation
+    of the "tile 0 has top=0x80, the others have top=0" anomaly.
+    Declared Unknowns: the smoothing thresholds have slack (distance 3 at dim 4
+    and distance 1 at dim 8 never occur; `dim 16` never occurs), and the
+    "only-top-available" context rule is verified on 4 tiles in an all-zero
+    region, so it is not distinguishable there from a carried-over line buffer.
+  * **PLANE 0 MODE 3 PARSED -- THE WHOLE CORPUS NOW WALKS (2026-07-26).** The one
+    remaining unported handler (`FUN_001ce290`) is done, and the `.spi` census
+    goes **30/220 -> 220/220** members walked end to end with every `AA 02` chunk
+    boundary hit exactly (`apk-re/scripts/spi_corpus_census.py`, which asserts the
+    boundary rather than just "no exception"). Why it matters: the `page_*.spi`
+    members are **Samsung's own full-resolution render of every page**, one per
+    (page, layer) -- ~220 reference images across 25 samples, i.e. a per-page
+    rendering oracle the project has never had. Structure: the wrapper reads 1
+    bit (the plane 1 wrapper has none), then `FUN_001d0044` loops over **bands**
+    -- 3 colour on plane 0, 1 alpha on plane 1 -- reading one bit each: set means
+    four 8x8 quadrants, clear means a single unsplit 16x16. Four fixes, all found
+    by diffing against the emulator: (a) the 16x16 scan tables were already in the
+    binary, `SCAN_SIZE_CLASSES` was just capped at 4; (b) **the mode map is per
+    band**, not per plane (the context trace has a `band` column we were ignoring),
+    and a 16x16 block writes 4x4 cells not 2x2; (c) **`quant = 23` on the colour
+    bands**, 0 on alpha, which picks which half of the sub-block mask table a 4x4
+    block reads -- 122 of the 150 residual failures; (d) **chunks are chained by
+    their own length** (the u32 after the `AA 02` tag), and scanning for the tag
+    bytes is unsafe -- one member had a false positive 7257 bytes early that passed
+    both existing validity checks. Also **removed a wrong invariant**: the
+    "coefficient position past the scan" guard fires on legitimate data (tile 809
+    of page-59 reaches 321 on a 256-entry scan) while bit consumption stays exact.
+    Declared Unknown: all 220 members carry the same chunk header, so the corpus
+    cannot tell `quant = 23` from a header field (`field_04`) versus a hardcoded
+    constant.
+  * **PLANE 0 MODE 3 RECONSTRUCTION: ESSENTIALLY DONE (2026-07-27).** The
+    missing link, `FUN_001d5f44`, is transcribed and exact: **129/129** calls on
+    basic-18 and **27/27** on page-59, verified per call against the int16 plane
+    the native produces. The colour stage (`FUN_001c1d3c`) is a reversible
+    YCoCg-R-style lifting with chroma biased by `+0x100` -- at zero chroma it
+    yields R=G=B, which is exactly the flat grey that made the old attempt look
+    absurd -- and reproduces **9984/9984** pixels. Dequantisation, whose formulas
+    were documented but whose code was never in the repo, is now in
+    `spi_decode.dequant()` at **61/61** (plus 61/61 inverse transforms). End to
+    end: basic-18 **3485/3619200 pixels differ (0.10%)**, page-59 **883 (0.02%)**,
+    and the MultiMath formula stays at **0/402688**; corpus 220/220; repo suite 35
+    tests OK. Three things had to be fixed before any of it could be measured, all
+    documented in `apk-re/SPI-HANDOFF.md` 7.3:
+    (a) two claims in the handoff were **wrong** -- `FUN_001d31b8` is called with
+    literal zeros here, so the coefficient buffer is `tile+0x140` for every band,
+    and the "known tracer bug" was therefore not a bug;
+    (b) the real fixture defect was that the reference arrays were captured at
+    **34 bytes instead of 0x42** (33 int16), so the 16x16 blocks -- 113 rows of
+    129 -- were compared against half a reference. That, not the other three
+    leads, is why the first attempt scored 0/119;
+    (c) the four unresolved context slots were read at runtime: `ctx+0x610` is
+    the planar predictor **we already had**, `ctx+0x618` is the alpha's angular
+    predictor in int16 with the same tables, `ctx+0x620` is the residual add
+    (nine parameters, the ninth passed **on the stack**, which is why Ghidra shows
+    eight at the call site), `ctx+0x628` is dead here.
+    Also settled: the smoothing decision is a plain **table lookup**
+    (`UNK_00131ace[size_class][mode]`), not the mid-point thresholds that were
+    previously declared Unknown -- the table was already extracted, `spi_decode`
+    just was not using it.
+  * **The run/level escape gap is CLOSED (2026-07-27).** There are **two**
+    coefficient decoders and the quant picks which: in `FUN_001d2874`,
+    `*(char *)(param_1 + 7)` is `tile[0x38]` in 8-byte units -- the same trap for
+    the third time -- and it is 0 on the alpha but 23/24 on plane 0, so plane 0
+    goes through `FUN_001d42a8` instead of the inline loop. The two share their
+    bit syntax exactly, which is why bit counts stayed exact while reconstruction
+    was wrong; only the escape branch differs (bias `value-1` not `value-0x80`, a
+    fixed 8-bit run field, level **minus** one) plus scan context 0 always.
+    Pre-dequant buffers went 37/61 -> **61/61**, and the scan overrun to 638
+    vanished (max position 255) -- it was an artefact of the wrong formula, and
+    the "native reads past the end of the scan" idea is falsified.
+  * **Two more findings, from a third sample.** basic-18 and page-59 both hit
+    **0 pixels**, but `Allsamsungnotes media/11@page_0000007` -- 4139 coefficient
+    blocks against basic-18's 113 -- did not, which is exactly why it was worth
+    generating a third reference. It exposed:
+    (a) **the quant is not a constant**: the chunk header carries **two** quant
+    fields, `(field_03, field_04) = (24, 23)` on every corpus member, and the bit
+    `FUN_001ce290` reads -- whose meaning had never been determined -- selects
+    between them **per tile** (bit 0 -> field_03, bit 1 -> field_04). Verified
+    **1409/1409** tiles against the native `tile[0x3a]`. No gate had caught it
+    because `quant_group[23] == quant_group[24]`, so the quant does not change
+    parsing at all;
+    (b) **the clamp width is per band** -- luma 8 bits, chroma 9 -- read out of
+    the native (the ninth argument of `FUN_001c6ea4`, passed on the stack).
+    Chroma is biased by `+0x100` and legitimately exceeds 255; neither of the
+    first two samples saturates, so they could not tell 8 from 9.
+  * **Sub-block references TRANSCRIBED, and a channel order fixed (2026-07-27).**
+    `FUN_001cc318` (4x4) and `FUN_001cc4dc` (8x8) are position switches, not a
+    substitution rule: some cases **do not write the whole array**, so the tail
+    keeps the previous sub-block's values -- the arrays are locals of
+    `FUN_001d5f44`, zeroed only on entry and reused across the loop. Transcribed
+    literally, prediction goes **4489/4491 -> 4491/4491** on the hard sample and
+    stays 129/129 and 27/27 on the other two. Then a second finding: the frame
+    planes are **G, R, B**, not R, G, B. Every path writes the same three planes,
+    but the first three reference samples are **entirely monochrome** (R == G == B
+    on all 7.6M pixels), so they could not tell any permutation apart; the
+    coloured sample has 144661 pixels with R != G and pins it. Swapping the first
+    two planes took that sample from 4.0% to **205 pixels** with the other three
+    unchanged at 0.
+  * **A fifth reference, chosen to falsify.** `ImagesAllTrasnsformations
+    media/2@page_0000130.spi` (449 KB, imported photos) exercises 3975 plane-0
+    mode-3 calls, all three block dims (so the newly transcribed reference
+    switches run 612 times), **both quants**, **262464 pixels with R != G** and
+    2.78M non-opaque pixels -- and lands at **0/3619200**. That is the
+    independent confirmation the three monochrome samples structurally could not
+    give. A corpus-wide parameter census also came back uniform: `color_index = 4`
+    on **220/220** members and `(field_03, field_04) = (24, 23)` on **880/880**
+    chunks, so no untested format variant exists in the corpus.
+  * ✅ **THE CODEC IS BIT-EXACT ON THE WHOLE CORPUS (2026-07-27).**
+    `apk-re/scripts/spi_corpus_pixels.py` decodes every `.spi` member twice in one
+    process -- `libSPenBase.so` under Unicorn and our decoder -- and compares in
+    memory: **220/220 members identical, 28 archives, 800,698,496 pixels, 0
+    differences, 0 failures** (13 min on 6 processes). This is no longer "the
+    samples we have pass": it is the corpus. Sanity-checked first -- flipping one
+    byte of our output makes it report exactly 1 differing pixel.
+  * Six of those members are the named references, all at **0 pixels**: formula
+    0/402688, basic-18 0/3619200, page-59 0/3619200, ImagesAllTrasnsformations
+    page 130 0/3619200, Allsamsungnotes page 7 **0**/3619200 (was 205), and the
+    new `Machine_learning… media/193@page_0000177.spi` **0**/3616000. Against the
+    Samsung **PDF export** -- evidence independent of the emulator -- the formula
+    lands on 2462/402688, which is the emulator's own floor. Per-call gates:
+    plane 0 129/129 + 27/27 + 4491/4491, dequant/transforms 122/122, and the new
+    **alpha gate 4374/4374 tile contexts + 33210/33210** references, predictions
+    and outputs. Parsing unchanged: 3168/3168 bit counts, corpus 220/220, repo
+    suite 35 OK.
+  * **Closing the 205 pixels took three defects, not one** -- full write-up in
+    `apk-re/SPI-HANDOFF.md` §7.2/§7.3:
+    (a) the **smoothing corner came from `top[0]` instead of `left[0]`**
+    (`FUN_001d5abc` line 163, same formula the colour planes already used). The
+    two only differ on the first tile row of an `AA02` chunk, where `left[0]` is
+    0x80 and `top[0]` replicates `left[1]` -- exactly the 5 failing tiles. One
+    line, 205 -> 0;
+    (b) the **alpha sub-block reference switches had to be transcribed** after
+    all (`FUN_001cbf98` / `FUN_001cc150`), the same lesson as the plane 0 twins:
+    the arrays are locals of `FUN_001d5abc` zeroed only on entry, so entries a
+    case does not write stay **stale**. The generic model sat at 2168/2199 on the
+    formula *without changing a single block*, which is why it had been declared
+    unnecessary -- on ml177 it got 740/26626 references wrong;
+    (c) **mode 5 (raw blocks) was parsed but never reconstructed**: `spi_decode`
+    threw away the 3x256 raw bytes `spi_probe` already returned, so those tiles
+    came out black and the error spread to neighbours through the context. 13
+    tiles in the whole corpus, none in the first five references.
+  * ✅ **The decoder now lives in the repo (2026-07-27):** `pysdocx/spi/`
+    (`parse.py`, `decode.py`, generated `tables.py`), a `pysdocx spi` CLI
+    subcommand, and `tests/test_spi_decode.py` pinning the 18 `.spi` members of
+    the *tracked* samples by SHA-256 of their decoded pixels (regen:
+    `python -m tests.regen_spi_golden`). Those hashes come from decodes that had
+    just been proven identical to the native decoder, so the gate carries the
+    emulator-verified truth into the repo **without** carrying the APK: no
+    Samsung bytes are vendored and nothing reads `libSPenBase.so` at runtime --
+    its static tables were extracted once, offline, by
+    `apk-re/scripts/spi_gen_tables.py`, each with its Ghidra provenance. The
+    oracle side (emulator, tracers, ~50 MB of captured fixtures, decompiled
+    sources) stays in the gitignored `apk-re/`, and now imports the tracked
+    decoder instead of keeping its own copy -- one source of truth. Rationale and
+    the new repo/no-repo line: `apk-re/SPI-HANDOFF.md` §10.
+  * **The method that found them, worth reusing:** a new gate
+    `apk-re/scripts/spi_verify_intra.py` drives the *real* `spi_decode` code
+    (through new `context_tap`/`subblock_tap` hooks) and compares it against
+    `--intra-trace` **in cascade** -- tile context, then references, prediction,
+    output. The first stage that diverges is the defect; everything after it is a
+    consequence. On the 5 failing tiles it said immediately: context correct,
+    references wrong, and only in the corner. It also prints how many tiles are in
+    the risky configuration, so a sample that "passes" without exercising the
+    branch is visible as such -- the formula has 80 exposed tiles and passed at 0
+    pixels **with the wrong corner**.
+  * **The severe alpha sample now exists**, and was added to falsify rather than
+    confirm: ml177 has **190** exposed tiles (the corpus maximum) and 26626 intra
+    calls. It caught (b) and (c) after (a) had already taken allnotes7 to zero.
+  * ⚠️ **Still falsified, do not repeat:** letting the pixel context cross the
+    chunk boundary (`top_available = py > 0`) makes it worse (205 -> 9382) **and
+    breaks the formula** (0 -> 1880); doing it only on the alpha is worse still on
+    all three samples. The per-chunk reset is right for both planes.
+  * (superseded) **Was open:** the 4x4 sub-block reference
+    arrays have a **stale tail**. `FUN_001cc318` case 3 writes only `top[0..4]`;
+    `top[5..8]` keep whatever the previous sub-block left, because the arrays are
+    locals of `FUN_001d5f44` zeroed only at function entry and reused across the
+    loop. Mode 5 (angle 7, step 13) really does read `top[5..6]`. The generic HEVC
+    substitution model is therefore wrong here even though it sufficed on the
+    alpha; closing it means transcribing `FUN_001cc318`'s 20 cases and
+    `FUN_001cc4dc`'s 4 literally, with persistent arrays. Current numbers on that
+    sample: pre-dequant **2060/2060**, dequant **1474/1474**, flags **5112/5112**,
+    prediction **4489/4491**, references **4076/4227**, image **4.7%**.
+  * (superseded) **Was open: the run/level escape on size class 4.** On 11 of
+    basic-18's 61 coefficient blocks the decoded pairs disagree with the native
+    buffer in a specific shape -- our level is consistently one larger in
+    magnitude, and the run is far too big, so the running position overruns the
+    scan (up to 638 on a 256-entry order). Neither changes the bit count, which is
+    why 220/220 still parse exactly: this is a gap the parsing gate structurally
+    cannot see. **Falsified, do not repeat:** "the native reads past the end of
+    the scan" -- the scan orders are consecutive in memory, so an overrun lands in
+    the next table and collides, while the native buffer holds exactly one
+    non-zero per coefficient. All 3485 differing pixels sit inside the 15 affected
+    tiles; nothing propagates.
+  * (superseded, kept for the trail) **Was open: plane 0 mode 3 *reconstruction*.** `FUN_001d31b8` (472 B)
+    replaces `FUN_001d5abc` as the plane 0 driver. Feeding the existing intra
+    chain with plane 0 coefficients gives wrong blocks: where the native emits a
+    flat grey (R=G=B ~ 0x25) we emit scattered 1..9. Two concrete leads -- the
+    native output being R=G=B says the three bands are luma + two chromas with a
+    final conversion, and the 4-9x magnitude gap plus `quant = 23` (vs 0 on alpha)
+    says a **dequantisation** step that was the identity on plane 1 is missing.
+  * **Plane 0 mode 3 reconstruction: dequantisation DONE (61/61), inverse
+    transform identified but not implemented (2026-07-26).** `FUN_001d31b8` is a
+    118-instruction dispatcher that calls two function pointers per sub-block --
+    a dequantiser then an inverse transform, both in place on the coefficient
+    buffer. All six resolved at runtime (3 dequant + 3 transforms, ~3.7 KB).
+    **Dequant is closed**: tables extracted into `spi_tables.load_dequant_tables`
+    (the `quant -> (matrix<<4)|shift` table has exactly 52 entries, matching the
+    `quant > 0x33` bound already in the parser; `quant = 23` -> matrix 5, shift 3),
+    formulas verified 61/61 against `--recon0-trace`, a new oracle that captures
+    each primitive's buffer before and after.
+    **The transform is H.264's integer transform** -- proven two ways: impulse
+    probing gives exactly the `[64,64,64,64 / 64,32,-32,-64 / 64,-64,-64,64 /
+    32,-64,64,-32]` basis, and the disassembly is the H.264 inverse butterfly with
+    a final `(v + 0x20) >> 6`. New reusable tool for that:
+    `apk-re/scripts/spi_probe_native.py` **calls native primitives directly under
+    Unicorn with synthetic input**, turning the emulator into an unlimited oracle
+    instead of relying on whatever the corpus happens to contain.
+    **The placement stage is now located too, and the call graph is closed.** It
+    was not in the parse handler but in the **reconstruct** table
+    (`PTR_FUN_00204300`), never looked at: `(plane 0, mode 3) -> FUN_001c1d3c`,
+    **1072 B** (the plane 1 entry is only 188 B because its work lives inside
+    `FUN_001d5abc`). Its 14 indirect calls all go to just two functions --
+    `ctx+0x630 -> FUN_001c3850` (256 B, a plain unrolled 16x16 `ldr q0`/`str q0`
+    blit with source/dest strides) and `ctx+0x5e8 -> FUN_001c3db8` (424 B, the 8x8
+    chroma equivalent). Their argument widths, 16 from `tile[0x20e0]` and 8 from
+    `tile[0x20e8]`, independently confirm that **plane 0 is a YCbCr 4:2:0 coder**
+    -- consistent with the native emitting R=G=B when chroma is zero, and with
+    bands 1 and 2 almost never carrying coefficients. Since the two primitives are
+    plain copies, prediction, residual add and colour conversion are all inline in
+    those 1072 bytes. Proof a prediction exists at all: on tile 511 of basic-18 the
+    residual is +/-7 noise while the native block has real shape (~37 at the
+    bottom, 0 above) and `native - residual` is not constant.
+    **Honest total still missing: 4564 B** -- 2812 of inverse transforms
+    (mechanical transcription, verifiable in one shot with the probe), 1072 of the
+    placement dispatcher (the real remaining RE), 680 of blits (one already read
+    and trivial). For scale, the alpha chain already finished was ~4.2 KB.
+  * **THE THREE INVERSE TRANSFORMS ARE DONE (2026-07-26), 61/61 on real calls.**
+    What unlocked them: all six remaining functions turned out to be **already
+    decompiled to C** in `apk-re/decompiled/libSPenBase/`, so this was
+    transcription from readable C, not from interleaved assembly. And the C shows
+    the one thing no fitting could guess -- **every intermediate is truncated to
+    `short`, at every single step**, with logical shifts on sign-extended ints.
+    4x4 and 8x8 are H.264-style lifting butterflies; **16x16 is HEVC's integer
+    DCT-16**, standard matrix (the probe returns exactly `90 87 80 70 57 43 25 9`,
+    `89 75 50 18`, `83 36`, `64`), with the canonical **shift 7 then 12**.
+    Verified 300/300 and 460/460 on random vectors plus edge cases, and **61/61 on
+    the real calls**. Declared limit: the 16x16 model diverges on *saturated*
+    inputs (+/-32767, 42 synthetic cases) because it does not reproduce the NEON
+    version's internal overflow; real dequantised data never gets there (35/35).
+  * **Step 0 measured, and it resolved an 11816-byte doubt in our favour
+    (2026-07-26).** Do **not** trust the triage's "executed?" column: it marks as
+    unexecuted functions reached through context pointers that run constantly.
+    Counting with a per-address hook (`scratchpad/count_calls.py`) shows
+    `FUN_001c8b5c` (11816 B) *does* run -- but it is **the planar predictor we
+    already implement**: our `predict` mode-17 formula reproduces it **60/60** at
+    dim 4, 8 and 16, so those 11816 bytes are Ghidra unrolling, not new work.
+    `FUN_001c3db8` (424) and `FUN_001d75d4` (608) never run at all -> refuse, do
+    not guess. Real remaining surface: **8140 B** across 8 functions, the key one
+    being `FUN_001d5f44` (1332 B), the plane-0 analogue of `FUN_001d5abc`: it
+    reads the residual at `tile+0x140` and the reference context at
+    `tile + band*0x42 + 0x3120/0x31e6`, and writes the reconstructed plane to
+    `tile[0x3108 + band*8]`, which the colour transform then consumes.
+  * **Step 1 started: `FUN_001d5f44`, the plane 0 prediction.** New oracle
+    `spi_emu.py --predict0-trace` captures band, dim, `nsub` (`tile[0x947]`),
+    mask, modes, both reference buffers and the produced plane
+    (`apk-re/fixtures/basic18_predict0.csv`, 129 rows). Established: it reads the
+    residual at `tile+0x140` (+ `band*0x200 + sub*0x80`), references at
+    `tile + band*0x42 + 0x3120` and `+0x31e6` (34 bytes each), writes
+    `tile[0x3108 + band*8]`; it does **not** call `FUN_001d31b8` -- they are
+    siblings, 129 calls each, both from `FUN_001d0044`.
+    ⚠️ First attempt falsified: reusing the plane 1 `predict` with `a = ref_a`,
+    `b = ref_b`, mode from `tile[0x33]` and `clamp(pred + residual)` scores
+    **0/119** on unsplit blocks (~150 of 256 positions differ, but magnitudes are
+    comparable -- the shape is close, the mapping is not). Leads, in order:
+    (1) **known bug in the current trace** -- bands 1 and 2 capture `tile+0x140`
+    instead of `tile + band*0x200 + 0x140`; (2) the order between `FUN_001d31b8`
+    and `FUN_001d5f44` -- if prediction runs first, the buffer holds raw
+    coefficients, not the residual; (3) the mode location may not be `tile[0x33]`
+    on plane 0; (4) `ref_a`/`ref_b` may be swapped or offset differently.
+  * ⚠️ **Correction to the earlier estimate**: "4564 B, graph closed" counted only
+    *indirect* calls. `FUN_001c1d3c` also makes direct ones. The verified full
+    graph leaves **5368 B** still to do: `FUN_001c1d3c` 1072, **`FUN_001d6478`
+    2692** (it writes `tile+0x2560/0x2580/...`, i.e. it is the plane 0 tile-context
+    builder, the analogue of `FUN_001cef0c`, initialising references to 0x80),
+    `FUN_001d75d4` 608, `FUN_001c1c00` 316, and the two blits 680. None of those
+    call anything further -- that part is now genuinely verified.
+    **The open question is still where prediction enters**: who fills
+    `tile+0x3108/0x3110/0x3118` (the reconstructed Y/Cb/Cr the colour transform
+    reads) from the residual at `tile + band*0x200 + sub*0x80 + 0x140`.
+    **What stopped the transforms earlier**: every parametric model plateaus at **52/60** random
+    vectors. The internal `>>1`s truncate and the code is full of scattered
+    `sxth`, so the exact arithmetic depends on *where* each truncation falls --
+    fitting cannot guess that. The honest remaining route is a **literal
+    transcription** of the three functions (~90 dataflow instructions for 4x4,
+    ~150 and ~400 for 8x8/16x16): mechanical and verifiable in one shot with the
+    probe (60/60 or nothing), but transcription rather than deduction. And the
+    **placement stage is still unlocated** -- the transform works in place and
+    nothing in the dispatcher adds it to a prediction or writes the final 16x16.
+    Falsified, do not repeat: pure matrix model without the `>>1` truncations
+    (33/40); butterfly with every combination of shifts 0..13, rounding, row/column
+    order, 16-bit intermediates and asr-vs-lsr (max 52/60).
+    Extending `spi_trace.py --intra-trace` to latch on `FUN_001d31b8` (done, plus
+    new `driver`/`arg3` columns -- `arg3` is the band) narrowed it sharply: all
+    **362** `FUN_001c6a14` calls on basic-18 come from `d5abc` with band 3, so
+    **`FUN_001d31b8` never calls it**. Colour reconstruction is not the intra
+    chain with different parameters, it is a separate primitive inside those 472
+    bytes. Plane 0 mode 3 is therefore parsed but deliberately **not**
+    reconstructed in `spi_decode.py`. Next: read/trace `FUN_001d31b8` itself.
+    Working fixtures already generated: `page59_*` and `basic18_*`.
+  * **Next: port mode 2 + mode 3 reconstruction to Rust.** `samsung_spi.rs`
+    currently has parsing only; the reconstruction stage is what has to be added,
+    and the parity gate then becomes a direct comparison against
+    `multimath_formula_emu.png`. Note the corpus has only **one** non-thumbnail
+    `.spi`, so nothing here can be promoted to `docs/format/` or `spec/ksy/`
+    under the zero-counterexample rule — it stays in `apk-re/` until more samples
+    exist.
+  * Earlier claims now **retracted**: the "1582/1584 tiles, stays in sync" result
+    was a false positive (the probe over-consumed ~14% and read only one plane;
+    the file contains *no* mode-5 tiles at all), and `FUN_001cf238` is not the
+    row-state function but the mode 2/4 payload decoder.
+
 - **Grounded typed-text line-height / pagination model (CORE DONE, residual
   calibration OPEN, 2026-07-13):** the two controlled `.sdocx` + vector-PDF
   exports ground the document-body advance as
