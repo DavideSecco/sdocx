@@ -1,0 +1,92 @@
+{
+  "cs61bl_su22/media/11@page_0000009.spi": {
+    "height": 2290,
+    "sha256": "a549f212dc3301e8bf9fddcd1d388448f64dde22d44cff7dcbc7bbd70b7c86e0",
+    "width": 1080
+  },
+  "cs61bl_su22/media/14@page_0000010.spi": {
+    "height": 2290,
+    "sha256": "cfb78abcbd13dc7390b4b1a2daeacd670de5bb9bc9acdbe69ef34cd34a0b729e",
+    "width": 1080
+  },
+  "cs61bl_su22/media/15@page_0000002.spi": {
+    "height": 2290,
+    "sha256": "51f2a33439e8a91ca21e9d888ff8a54307f05fa16e067eeab17e984324494af4",
+    "width": 1080
+  },
+  "cs61bl_su22/media/16@page_0000001.spi": {
+    "height": 2290,
+    "sha256": "b7704a6a6d62c8c6650874877260e032bcc3e736ded678a5722f0a4c83146345",
+    "width": 1080
+  },
+  "cs61bl_su22/media/18@page_0000011.spi": {
+    "height": 2290,
+    "sha256": "b9a5bfd5ba759789040cad87336054900c3cf359c016e7be4b3fb56ed51e3e0d",
+    "width": 1080
+  },
+  "cs61bl_su22/media/1@page_0000003.spi": {
+    "height": 2290,
+    "sha256": "fd3a518d7a7a90f2d546282d50f95f0db1cf75d924cf62518184fef188f04045",
+    "width": 1080
+  },
+  "cs61bl_su22/media/2@page_0000004.spi": {
+    "height": 2290,
+    "sha256": "a6d2bddfad79e3fabbd9513ffd230be9d1aa770245069325687d7ccab5c27465",
+    "width": 1080
+  },
+  "cs61bl_su22/media/4@page_0000005.spi": {
+    "height": 2290,
+    "sha256": "a405a931458967abcdd60ab4ef6a4b2a1478c76d014cbb6fcbadc9f9aa7e046d",
+    "width": 1080
+  },
+  "cs61bl_su22/media/5@page_0000006.spi": {
+    "height": 2290,
+    "sha256": "ecdad71fc06d970de5d04bde531cf2b223899c9527390e3f31a2a343ab0904d3",
+    "width": 1080
+  },
+  "cs61bl_su22/media/6@page_0000007.spi": {
+    "height": 2290,
+    "sha256": "a5c22b5a577ebe38d7c4b41ee6853374ab6869c95786c7589c1e629ed71b99ee",
+    "width": 1080
+  },
+  "cs61bl_su22/media/8@page_0000008.spi": {
+    "height": 2290,
+    "sha256": "188b719a28ae08ac071afa52019e99e96c2868a84d78ef1d9441ca8f2f5b52e8",
+    "width": 1080
+  },
+  "handwritten/media/0@page_0000000.spi": {
+    "height": 3919,
+    "sha256": "be60c1d4e373a424a6d580fa7e8bcbf4d9586718c5104f7eb7508b98d79f8395",
+    "width": 1848
+  },
+  "quiz/media/14@page_1000000.spi": {
+    "height": 3843,
+    "sha256": "6a76f2cb23cb10fcaef5f28fbf54ef693fd138fd3a8d524530d12dac7f2a242b",
+    "width": 1812
+  },
+  "quiz/media/15@page_1000002.spi": {
+    "height": 3843,
+    "sha256": "ac5f61ea18a14b971d0c5f0b46434137fbba678f1ee4cdb90ae9119e552352e5",
+    "width": 1812
+  },
+  "quiz/media/17@page_0000001.spi": {
+    "height": 3843,
+    "sha256": "1c7e3d50ded8ad2a1cdefa1f79f480037c7308f20130c45aafbbe4a0b19a3d46",
+    "width": 1812
+  },
+  "quiz/media/18@page_0000002.spi": {
+    "height": 3843,
+    "sha256": "a986ea6b771764e786f6c321258be9f414b83d7e25188764cd1d275512960528",
+    "width": 1812
+  },
+  "quiz/media/4@page_1000001.spi": {
+    "height": 3843,
+    "sha256": "3631342bdf7942f6dba3a8d3828046133d13946eb73692561df285d529cfe7e8",
+    "width": 1812
+  },
+  "quiz/media/6@page_0000000.spi": {
+    "height": 3843,
+    "sha256": "34b4303f55b05cc3ed4006e5788df3c23960727fcfcb480f53dfe796d84e4c99",
+    "width": 1812
+  }
+}
