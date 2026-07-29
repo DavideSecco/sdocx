@@ -5,7 +5,7 @@ from pathlib import Path
 from pysdocx.container import list_pages, load_note, load_page
 from pysdocx.note import parse_typed_text
 from pysdocx.note_doc import common_frame_paragraphs, note_doc_common_frames, parse_note_doc
-from pysdocx.page import (_parse_object_header, page_background_color, page_template,
+from pysdocx.page import (_iter_objects, _parse_object_header, page_background_color, page_template,
                          page_thumbnail_media_index, parse_page, parse_page_tree)
 from pysdocx.measure_typed_text_gt import detect_horizontal_ink_bands
 from pysdocx.render import debug_text_box_layout, paginate_typed_text
@@ -18,6 +18,7 @@ ONLY_TEXT_SQUARED = SAMPLES / "OnlyTextTypeWritten_squared_260703_013624" / "not
 ONLY_TEXT_GT = SAMPLES / "OnlyTextTypeWritten_260701_180427" / "gt"
 ONLY_TEXT_SQUARED_GT = SAMPLES / "OnlyTextTypeWritten_squared_260703_013624" / "gt"
 MATH_WEB = SAMPLES / "Mathsolver&Hyperlink_260711_180442" / "note.sdocx"
+MULTI_MATH = SAMPLES / "MultiMath_260724_201808" / "note.sdocx"
 ALL_SAMSUNG_NOTES = SAMPLES / "Allsamsungnotes_260630_113259" / "note.sdocx"
 TYPED_TEXT_MIXED_FONTS = SAMPLES / "OnlyTypeWrittenTextDifferentFont_260713_212408" / "note.sdocx"
 TYPED_TEXT_UNIFORM_15 = SAMPLES / "OnlytextTypewritten-Sistematic-carattere15_260713_212435" / "note.sdocx"
@@ -160,19 +161,119 @@ class MathSolverWebRegressionTest(unittest.TestCase):
         base = parse_page(page_data)["base"]
         tree = parse_page_tree(page_data, 0, 0, base)
         props = []
-        for obj in tree["layers"][0]["objects"]:
+        uuid_to_raw_type = {}
+        for obj in _iter_objects(tree["layers"][0]["objects"]):
             header = _parse_object_header(page_data[obj["blob_off"]:obj["end"]])
+            if header:
+                uuid_to_raw_type[header["uuid"]] = obj["raw_type"]
             if header and header.get("extra_key_block"):
                 props.append(header["extra_key_block"])
-        arrays = [p for p in props if p["key"] == "RecogUIFeature_MathStrokeUuidStringArray"]
+        arrays = [
+            p for p in props
+            if "RecogUIFeature_MathStrokeUuidStringArray" in p["bundle"]["string_vecs"]
+        ]
         self.assertTrue(arrays)
-        self.assertTrue(all(p["value_kind"] == "utf16_string_array" for p in arrays))
-        self.assertTrue(all(p["strings"] for p in arrays))
-        chains = [p for p in props if p["value_kind"] == "math_property_chain"]
+        self.assertTrue(all(p["bundle"]["presence_flags"] & 0x04 for p in arrays))
+        self.assertTrue(all(p["bundle"]["string_vecs"]["RecogUIFeature_MathStrokeUuidStringArray"] for p in arrays))
+
+        # Each Math Solver stroke carries a UUID-vector naming every stroke in
+        # its recognition group, including itself. Corpus proof: the six
+        # observed groups are closed over page-local stroke objects.
+        groups = {}
+        for p in arrays:
+            group = tuple(p["bundle"]["string_vecs"]["RecogUIFeature_MathStrokeUuidStringArray"])
+            groups.setdefault(group, 0)
+            groups[group] += 1
+            self.assertTrue(all(uuid_to_raw_type.get(uuid) == 1 for uuid in group))
+        self.assertEqual(len(groups), 6)
+        self.assertTrue(all(len(group) == carrier_count for group, carrier_count in groups.items()))
+
+        chains = [p for p in props if p["bundle"]["presence_flags"] in (0x06, 0x07)]
         self.assertEqual(len(chains), 9)
-        self.assertTrue(all(p["fail_code"] == 7 for p in chains))
-        self.assertTrue(all(p["strings"] for p in chains))
-        self.assertTrue(any(p["expression"] == "A^{T}1k\\mid SOCUr=R" for p in chains))
+        self.assertTrue(all(p["bundle"]["integers"]["RecogUIFeature_MathFailCodeKey"] == 7 for p in chains))
+        self.assertTrue(all(p["bundle"]["string_vecs"]["RecogUIFeature_MathStrokeUuidStringArray"] for p in chains))
+        expressions = [
+            p["bundle"]["strings"]["RecogUIFeature_MathExpressionString"]
+            for p in chains
+            if "RecogUIFeature_MathExpressionString" in p["bundle"]["strings"]
+        ]
+        self.assertIn("A^{T}1k\\mid SOCUr=R", expressions)
+
+    def test_multi_math_answer_stroke_groups(self) -> None:
+        require_sample(MULTI_MATH)
+        math_groups = {}
+        answer_groups = {}
+        answer_refs_from_math = 0
+        answer_plot_values = []
+        solved_expressions = []
+        fail_codes = []
+
+        with zipfile.ZipFile(MULTI_MATH) as z:
+            page_names = sorted(n for n in z.namelist() if n.endswith(".page"))
+            for page_name in page_names:
+                page_data = z.read(page_name)
+                try:
+                    base = parse_page(page_data)["base"]
+                except ValueError:
+                    continue
+                tree = parse_page_tree(page_data, 0, 0, base)
+                uuid_to_raw_type = {}
+                props = []
+                for layer in tree["layers"]:
+                    for obj in _iter_objects(layer["objects"]):
+                        header = _parse_object_header(page_data[obj["blob_off"]:obj["end"]])
+                        if header:
+                            uuid_to_raw_type[header["uuid"]] = obj["raw_type"]
+                        if header and header.get("extra_key_block"):
+                            props.append((header["uuid"], header["extra_key_block"]["bundle"]))
+
+                for uuid, bundle in props:
+                    vectors = bundle["string_vecs"]
+                    math = tuple(vectors.get("RecogUIFeature_MathStrokeUuidStringArray", ()))
+                    answer = tuple(vectors.get("RecogUIFeature_AnswerStrokeUuidStringArray", ()))
+                    expr = bundle["strings"].get("RecogUIFeature_MathExpressionString")
+                    if math:
+                        math_groups.setdefault((page_name, math), {"carriers": set(), "answer": answer})
+                        math_groups[(page_name, math)]["carriers"].add(uuid)
+                        if answer:
+                            answer_refs_from_math += 1
+                    if answer and not math:
+                        answer_groups.setdefault((page_name, answer), {"carriers": set(), "exprs": set()})
+                        answer_groups[(page_name, answer)]["carriers"].add(uuid)
+                        if expr:
+                            answer_groups[(page_name, answer)]["exprs"].add(expr)
+                        if "RecogUIFeature_MathPlot" in bundle["integers"]:
+                            answer_plot_values.append(bundle["integers"]["RecogUIFeature_MathPlot"])
+                    if expr:
+                        solved_expressions.append(expr)
+                    if "RecogUIFeature_MathFailCodeKey" in bundle["integers"]:
+                        fail_codes.append(bundle["integers"]["RecogUIFeature_MathFailCodeKey"])
+
+                page_math_groups = {
+                    group: info for (group_page, group), info in math_groups.items()
+                    if group_page == page_name
+                }
+                page_answer_groups = {
+                    group: info for (group_page, group), info in answer_groups.items()
+                    if group_page == page_name
+                }
+                for group, info in page_math_groups.items():
+                    self.assertTrue(all(uuid_to_raw_type.get(uuid) == 1 for uuid in group))
+                    self.assertEqual(set(group), info["carriers"])
+                for group, info in page_answer_groups.items():
+                    self.assertTrue(all(uuid_to_raw_type.get(uuid) == 1 for uuid in group))
+                    self.assertEqual(set(group), info["carriers"])
+                    self.assertTrue(info["exprs"])
+
+        self.assertEqual(len(math_groups), 21)
+        self.assertEqual(len(answer_groups), 5)
+        self.assertGreater(answer_refs_from_math, 0)
+        self.assertEqual(set(answer_plot_values), {0})
+        self.assertIn("18+18=\\color{#387AFF}{36}", solved_expressions)
+        self.assertIn("3+1=\\color{#387AFF}{4}", solved_expressions)
+        self.assertIn("4+5=\\color{#387AFF}{9}", solved_expressions)
+        self.assertIn("7+8=\\color{#387AFF}{15}", solved_expressions)
+        self.assertEqual(set(fail_codes), {7})
 
 
 class NoteInlineImageTest(unittest.TestCase):
