@@ -55,7 +55,7 @@ for stroke/text_box and `122` for the image/shape/drawing family.
 | bit | name | size delta | meaning |
 |---|---|---|---|
 | `0x1` | `ANGLE` | +4 | rotation-angle `f32` at offset 105 |
-| `0x20` | `EXTRA_KEY` | +32 | a named attribute block (see below) |
+| `0x20` | `EXTRA_BUNDLE` | variable | a generic ObjectBase property bag (see below) |
 | `0x40000` | `HDR_EXT` | +16 | a 16-byte header extension (see below) |
 | `0x8000` | `MEDIA_FAMILY` | 0 | family discriminator (image/shape/drawing) |
 | `0x2000` \| `0x4000` | `BASE_PRESENT` | 0 | set on every object ("record present") |
@@ -73,32 +73,62 @@ that offset is other fields and reads as near-zero garbage. Verified against 9
 hand-labelled rotated images (exact on 5/6 non-zero angles, 1° off on a
 protractor-drawn label) and two `-45°/90°` placements.
 
-### `0x20` EXTRA_KEY — variable-sized named property
-The original form is a `u16`-length-prefixed key after a `02 01 00` head. Its
-key is `extra_key_stroke_shape` (23 chars), followed by `u32 = 1`.
-Interpretation: the stroke is a shape's recognised ink. Honest caveat: despite
-the name these strokes do **not** link to any inserted-shape object (shapes = 0
-on every page carrying them), so it reads as a per-stroke attribute, not a
-foreign key.
+### `0x20` EXTRA_BUNDLE — generic ObjectBase property bag
+This field is Samsung's generic ObjectBase bundle/property bag, matching
+`squ1dd13/sdocx2pdf`'s `Bundle` model. The first byte is a presence bitfield;
+set bits gate maps in this order:
 
-`Mathsolver&Hyperlink` proves that the block is not fixed at 32 bytes. Math
-Solver uses a `04 01 00` head with `RecogUIFeature_*` keys; the
-`RecogUIFeature_MathStrokeUuidStringArray` value is `[u16 count]` followed by
-counted UTF-16 strings. Their names and values identify them as stroke UUIDs
-associated with the recognised expression (15 in the first observed group),
-but the exact relationship remains Marker. A 16-byte zero tail
-follows HDR_EXT on this family. Both Python and Kaitai decode the two property
-forms and cross-check every string.
+| bit | map |
+|---|---|
+| `0x01` | ASCII key → short UTF-16 string |
+| `0x02` | ASCII key → `u32` |
+| `0x04` | ASCII key → counted vector of short UTF-16 strings |
+| `0x08` | ASCII key → byte buffer |
 
-The same sample contains `06/07 01 00` multi-property chains, now decoded
-byte-exactly in all 9 instances. `07` starts with
-`RecogUIFeature_MathExpressionString = [u16 chars][UTF-16LE]`, followed by a
-separator `u16 = 1`, `RecogUIFeature_MathFailCodeKey = u32`, then another
-separator and `RecogUIFeature_MathStrokeUuidStringArray`. `06` is the same
-chain without the expression: its outer property is the fail code, followed by
-the UUID-array property. The four distinct observed payloads all close exactly;
-the recognised expression strings include `A^{T}1k\\mid SOCUr=R`, and every
-observed fail code is 7. The semantic meaning of code 7 remains Unknown.
+Keys are `u16` byte-length-prefixed ASCII strings and often include a trailing
+NUL, which the parser strips. Values are decoded according to their map. The old
+`02 01 00` / `04 01 00` / `06 01 00` / `07 01 00` descriptions were correct
+byte boundaries but the wrong abstraction: those bytes are
+`presence_flags + u16 entry_count`, not a special property head.
+
+Observed corpus forms (100111 object-header gate, zero mismatches):
+
+| presence | meaning | observed keys |
+|---|---|---|
+| `0x02` | one integer property | `extra_key_stroke_shape = 1` |
+| `0x04` | one string-vector property | `RecogUIFeature_MathStrokeUuidStringArray` |
+| `0x06` | integer + string-vector properties | `RecogUIFeature_MathFailCodeKey`, `RecogUIFeature_MathStrokeUuidStringArray` |
+| `0x07` | string + integer + string-vector properties | `RecogUIFeature_MathExpressionString`, `RecogUIFeature_MathFailCodeKey`, `RecogUIFeature_MathStrokeUuidStringArray` |
+| `0x05` | string + string-vector properties | `RecogUIFeature_MathExpressionString`, `RecogUIFeature_AnswerStrokeUuidStringArray`, `RecogUIFeature_MathStrokeUuidStringArray` |
+
+`MultiMath` adds successful-solve/answer forms:
+
+| key | value | status |
+|---|---|---|
+| `RecogUIFeature_MathExpressionString` | short UTF-16 expression; successful arithmetic embeds the generated answer with `\color{#387AFF}{...}` | Marker |
+| `RecogUIFeature_AnswerStrokeUuidStringArray` | counted vector of answer stroke UUIDs | Decoded as answer-stroke group membership |
+| `RecogUIFeature_MathPlot` | `u32 = 0` on observed answer strokes | Marker |
+
+The structural container is Decoded and Kaitai-gated. Semantics remain narrower:
+`extra_key_stroke_shape = 1` reads as a per-stroke recognised-ink attribute, not
+a link to a shape object, and Math Solver's fail code `7` is still Unknown.
+
+Math Solver's UUID-vector property is now decoded as recognition-group
+membership. In `Mathsolver&Hyperlink` and `MultiMath`, every
+`RecogUIFeature_MathStrokeUuidStringArray` vector resolves to page-local stroke
+objects, and every stroke in a group carries the same vector, including its own
+UUID. This makes the vector a group-membership record, not merely an arbitrary
+reference list. Expression and fail-code properties are sparser: they appear on
+only some member strokes, and the carrier strokes are not consistently the
+first/last stroke by object order, X position or Y position, so no "group
+leader" rule is promoted.
+
+In `MultiMath`, solved arithmetic expressions introduce a second closed group:
+answer strokes. The handwritten formula strokes carry their usual Math UUID
+group plus an `AnswerStrokeUuidStringArray` pointing to the generated blue
+answer strokes. The answer strokes themselves carry only the answer UUID group
+plus the same expression string and `MathPlot = 0`. Five answer groups are
+observed and all are page-local, closed over real stroke objects.
 
 ### `0x40000` HDR_EXT — 16-byte extension
 Layout `[u32 counter][u32 seq][u32 page_width][u32 page_height]`. The trailing
@@ -145,4 +175,7 @@ Current corpus summary:
   file/session save-generation value; `counter` behaves like a persistent
   object/group lineage id. Neither interpretation is clean enough for Decoded
   status on the current corpus.
-- **Scalar `extra_key` trailing `u32 = 1`** — flag-vs-count remains ambiguous.
+- **Bundle property semantics** — the container and Math Solver stroke-group
+  membership are decoded, but some values are still Marker/Unknown:
+  `extra_key_stroke_shape = 1` behaves like a recognised-ink attribute, and
+  Math Solver's fail code `7` has no promoted meaning.

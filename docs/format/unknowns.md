@@ -160,7 +160,15 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
 - **`ext_block.seq` / `ext_block.counter`**: `seq` near-constant per note (not
   per-object, not monotonic); `counter` repeats / groups related-or-copied
   objects. No clean semantic.
-- **`extra_key` trailing `u32 = 1`**: constant; flag-vs-count undecidable.
+- **EXTRA_BUNDLE property semantics**: the object-header `0x20` payload is now
+  decoded as Samsung's generic ObjectBase Bundle/property bag (string, integer,
+  string-vector, byte-buffer maps; zero counterexamples). Math Solver's
+  `RecogUIFeature_MathStrokeUuidStringArray` is decoded as page-local stroke
+  recognition-group membership, and `MultiMath` shows
+  `RecogUIFeature_AnswerStrokeUuidStringArray` as generated-answer stroke-group
+  membership. Remaining semantics: `extra_key_stroke_shape = 1` is a
+  recognised-ink Marker, `RecogUIFeature_MathPlot = 0` is only observed on
+  answer strokes, and Math Solver fail code `7` is still Unknown.
 - **Raw-absolute-`f64` stroke variant**: observed on a couple of benchmark pages
   (absolute coordinate pairs, not deltas); neither known layout reads it. The
   current corpus diagnostic scans only delta-inconsistent stroke objects by

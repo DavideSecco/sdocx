@@ -8,7 +8,7 @@ profiles were refreshed after the July 11 targeted-sample campaign (incl. the
 `Tabella4x3Regolare` v1+v2 styled-table samples that cracked table styling
 end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
 
-- **APK reverse engineering session, hypothesis to port (NEW, 2026-07-14):**
+- **APK reverse engineering session, hypothesis to port (UPDATED, 2026-07-24):**
   a separate static-RE thread against the Samsung Notes app itself (decompiled
   code, native libs — kept out of this repo, see the untracked/gitignored
   `apk-re/` for the full write-up) found that `note.note`'s "unexercised flex
@@ -17,11 +17,23 @@ end-to-end — per-cell styling, fills, borders — now Kaitai-gated).
   `app_custom_data` — all "0/corpus" in `unknowns.md`) are likely not
   fixed-position fields at all, but entries in a **generic 3-map property bag**
   (int-valued / string-valued / byte-buffer-valued, each keyed by a string
-  name), gated by a 3-bit flag. Coincides with the `extra_key` variable
-  property bag already partially decoded in a parallel session. **NEXT:** port
-  this as a hypothesis into `pysdocx` and validate against the corpus
-  (zero-counterexample discipline) before touching `docs/format/` or the
-  `.ksy`. The same session also traced the *entire* native save pipeline for
+  name), gated by a 3-bit flag. The related `.page` object-header `extra_key`
+  lead is now resolved: field bit `0x20` is Samsung's generic ObjectBase Bundle
+  property bag (`presence_flags` plus string/u32/string-vector/byte-buffer maps),
+  matching `squ1dd13/sdocx2pdf`'s model and validating on **1326/1326** corpus
+  payloads / **100111** object headers via `pysdocx` + Kaitai. Remaining semantic
+  Unknowns are property-specific (`extra_key_stroke_shape = 1`, Math Solver fail
+  code `7`), not the container shape. Follow-up corpus check promoted Math
+  Solver's `RecogUIFeature_MathStrokeUuidStringArray` to page-local stroke
+  recognition-group membership: six closed groups in the observed sample, every
+  UUID resolving to a stroke on the same page and every member carrying the same
+  vector. `MultiMath_260724_201808` adds solved-answer evidence:
+  `RecogUIFeature_AnswerStrokeUuidStringArray` is a closed page-local group of
+  generated answer strokes, referenced from the handwritten formula strokes;
+  answer strokes carry the same expression plus `RecogUIFeature_MathPlot = 0`
+  (Marker). **NEXT:** if revisited, apply the same Bundle/property-bag
+  hypothesis only to the still-unexercised `note.note` flex fields, with
+  targeted samples before promotion. The same session also traced the *entire* native save pipeline for
   the `.page` footer hash and found nothing (see updated "Negative results"
   below) — that thread is paused per the user's call, don't redo the trace,
   just pick it up from `apk-re/04-ghidra.md` if revisited.
