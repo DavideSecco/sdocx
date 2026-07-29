@@ -1,5 +1,5 @@
 {
-  "sample_count": 29,
+  "sample_count": 37,
   "samples": [
     {
       "file": "Appunti vari_260629_230848.sdocx",
@@ -69,7 +69,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "Allsamsungnotes_260630_113259",
       "pages": 6,
       "objects": 739,
       "typed_text": true,
@@ -105,12 +105,11 @@
         "tail_hash_block",
         "tail_sentinel",
         "voice_clip",
-        "voice_clip_header",
         "voice_clip_post"
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "AlltypeofPageBasic_260709_200911",
       "pages": 12,
       "objects": 150,
       "typed_text": false,
@@ -144,7 +143,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "Associationpages&stickynote&images&audio_260701_183225",
       "pages": 7,
       "objects": 6,
       "typed_text": true,
@@ -179,7 +178,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "Default-darkmode-Liscio_260711_153256",
       "pages": 2,
       "objects": 135,
       "typed_text": false,
@@ -213,7 +212,75 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "ImagesAllTrasnsformations_260713_221310",
+      "pages": 4,
+      "objects": 260,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 73,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "ImagesRotated_260713_221237",
+      "pages": 2,
+      "objects": 64,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 6,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "Importedlandscape_260711_153103",
       "pages": 2,
       "objects": 60,
       "typed_text": false,
@@ -246,7 +313,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "Mathsolver&Hyperlink_260711_180442",
       "pages": 4,
       "objects": 116,
       "typed_text": true,
@@ -280,7 +347,139 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "MultiAudioNota_260713_213420",
+      "pages": 2,
+      "objects": 254,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xcae80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_tables_flag_0x2000",
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel",
+        "voice_clip",
+        "voice_clip_post"
+      ]
+    },
+    {
+      "file": "MultiMath_260724_201808",
+      "pages": 6,
+      "objects": 395,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "NotaFraIPreferiti_260714_203004",
+      "pages": 2,
+      "objects": 49,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "pen_style_tail",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "NotaVuotaConPassword1492_260713_213313",
+      "pages": 2,
+      "objects": 0,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 0,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc0a80",
+        "family": "v4000_hash",
+        "known_features": [
+          "meta_base_bits",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "tail_hash_block",
+        "tail_post_hash_u32",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "Notebook&Planner1_260709_213306",
       "pages": 14,
       "objects": 27,
       "typed_text": false,
@@ -313,7 +512,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "OnlyHighlighterBlack_260630_131753",
       "pages": 2,
       "objects": 13,
       "typed_text": false,
@@ -347,7 +546,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "OnlyPensBlacksize10_260630_120309",
       "pages": 2,
       "objects": 6,
       "typed_text": false,
@@ -381,7 +580,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "OnlyShapesblack_260701_173146",
       "pages": 8,
       "objects": 1085,
       "typed_text": false,
@@ -415,7 +614,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "OnlyShapesblack_new_260701_185935",
       "pages": 9,
       "objects": 1325,
       "typed_text": false,
@@ -449,7 +648,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "OnlyTextTypeWritten_260701_180427",
       "pages": 3,
       "objects": 3,
       "typed_text": true,
@@ -478,7 +677,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "OnlyTextTypeWritten_squared_260703_013624",
       "pages": 3,
       "objects": 3,
       "typed_text": true,
@@ -507,7 +706,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "OnlyTypeWrittenTextDifferentFont_260713_212408",
       "pages": 4,
       "objects": 0,
       "typed_text": true,
@@ -536,7 +735,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "OnlytextTypewritten-Sistematic-carattere15_260713_212435",
       "pages": 4,
       "objects": 0,
       "typed_text": true,
@@ -565,7 +764,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "PagLiscia&templatescustoms_260711_122117",
       "pages": 5,
       "objects": 109,
       "typed_text": false,
@@ -598,7 +797,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "PaginaVuota&Paginapuntino_260711_122434",
       "pages": 3,
       "objects": 1,
       "typed_text": false,
@@ -632,7 +831,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "Pagvuota&templatescustoms_260711_115623",
       "pages": 5,
       "objects": 109,
       "typed_text": false,
@@ -665,7 +864,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "Segnalibri_260709_225650",
       "pages": 4,
       "objects": 132,
       "typed_text": false,
@@ -699,7 +898,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "Shared Notebook1_260710_000433",
       "pages": 2,
       "objects": 0,
       "typed_text": false,
@@ -728,7 +927,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "Tabella4x3Regolare_260711_160040",
       "pages": 8,
       "objects": 434,
       "typed_text": false,
@@ -763,7 +962,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "Tabella4x3Regolarev2_260711_174656",
       "pages": 13,
       "objects": 645,
       "typed_text": false,
@@ -798,7 +997,68 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "TestMultilayer_260713_213548",
+      "pages": 2,
+      "objects": 221,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 39,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc8e80",
+        "family": "v4000_preload_hash",
+        "known_features": [
+          "meta_base_bits",
+          "pen_preload_tail_present",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "meta:0x400",
+          "meta:0x8000",
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "pen_preload_path",
+        "pen_preload_prelude",
+        "pen_preload_prelude_raw",
+        "tail_hash_block",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "TextboxAllAnglesLarge_260713_214254",
+      "pages": 2,
+      "objects": 8,
+      "typed_text": false,
+      "typed_text_chars": 0,
+      "tables": 0,
+      "voice_clips": 0,
+      "sticky_placements": 0,
+      "attachment_placements": 0,
+      "header_ext_blocks": 8,
+      "note_profile": {
+        "signature": "fmt4000/flags0x8/meta0xc0a80",
+        "family": "v4000_hash",
+        "known_features": [
+          "meta_base_bits",
+          "tail_hash_block_present"
+        ],
+        "unknown_bits": [
+          "0x8"
+        ]
+      },
+      "note_tail_kinds": [
+        "tail_hash_block",
+        "tail_post_hash_u32",
+        "tail_sentinel"
+      ]
+    },
+    {
+      "file": "TextboxAllAngles_260709_231912",
       "pages": 2,
       "objects": 8,
       "typed_text": false,
@@ -826,7 +1086,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "cs61bl_su22",
       "pages": 1,
       "objects": 1185,
       "typed_text": false,
@@ -858,7 +1118,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "handwritten",
       "pages": 1,
       "objects": 2769,
       "typed_text": false,
@@ -892,7 +1152,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "quiz",
       "pages": 1,
       "objects": 3228,
       "typed_text": false,
@@ -925,7 +1185,7 @@
       ]
     },
     {
-      "file": "note.sdocx",
+      "file": "samsung2",
       "pages": 2,
       "objects": 413,
       "typed_text": false,
@@ -1227,14 +1487,14 @@
       "signature": "122/0xe000",
       "count": 1,
       "example_files": [
-        "note.sdocx"
+        "Allsamsungnotes_260630_113259"
       ]
     },
     {
       "object_type": "image",
       "family": "extended",
       "signature": "122/0xe000",
-      "count": 47,
+      "count": 51,
       "example_files": [
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
@@ -1245,12 +1505,45 @@
     },
     {
       "object_type": "image",
+      "family": "extended",
+      "signature": "126/0x10e000",
+      "count": 3,
+      "example_files": [
+        "ImagesAllTrasnsformations_260713_221310",
+        "ImagesAllTrasnsformations_260713_221310",
+        "ImagesAllTrasnsformations_260713_221310"
+      ]
+    },
+    {
+      "object_type": "image",
+      "family": "extended",
+      "signature": "142/0x14e000",
+      "count": 1,
+      "example_files": [
+        "ImagesAllTrasnsformations_260713_221310"
+      ]
+    },
+    {
+      "object_type": "image",
       "family": "extended_rotated",
       "signature": "142/0x4e001",
+      "count": 8,
+      "example_files": [
+        "Associationpages&stickynote&images&audio_260701_183225",
+        "Associationpages&stickynote&images&audio_260701_183225",
+        "ImagesRotated_260713_221237",
+        "ImagesRotated_260713_221237",
+        "ImagesRotated_260713_221237"
+      ]
+    },
+    {
+      "object_type": "image",
+      "family": "extended_rotated",
+      "signature": "146/0x14e001",
       "count": 2,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx"
+        "ImagesAllTrasnsformations_260713_221310",
+        "ImagesAllTrasnsformations_260713_221310"
       ]
     },
     {
@@ -1272,24 +1565,44 @@
       "signature": "138/0x4e000",
       "count": 251,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "OnlyShapesblack_260701_173146",
+        "OnlyShapesblack_260701_173146",
+        "OnlyShapesblack_260701_173146",
+        "OnlyShapesblack_260701_173146",
+        "OnlyShapesblack_260701_173146"
       ]
     },
     {
       "object_type": "stroke",
       "family": "base",
       "signature": "121/0x6000",
-      "count": 95514,
+      "count": 96230,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "1044/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "1048/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
       ]
     },
     {
@@ -1298,11 +1611,24 @@
       "signature": "1131/0x6020",
       "count": 13,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "1279/0x6020",
+      "count": 12,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
       ]
     },
     {
@@ -1311,24 +1637,35 @@
       "signature": "1295/0x46020",
       "count": 28,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442"
       ]
     },
     {
       "object_type": "stroke",
       "family": "extended",
       "signature": "137/0x46000",
-      "count": 1933,
+      "count": 2041,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "1400/0x6020",
+      "count": 3,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
       ]
     },
     {
@@ -1337,21 +1674,45 @@
       "signature": "1414/0x46020",
       "count": 2,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx"
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "1501/0x6020",
+      "count": 15,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
       ]
     },
     {
       "object_type": "stroke",
       "family": "extended",
       "signature": "153/0x6020",
-      "count": 365,
+      "count": 374,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "1636/0x6020",
+      "count": 3,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
       ]
     },
     {
@@ -1363,21 +1724,47 @@
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
         "Appunti vari_260629_230848.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Allsamsungnotes_260630_113259",
+        "Allsamsungnotes_260630_113259"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "1797/0x6020",
+      "count": 22,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "1871/0x6020",
+      "count": 23,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
       ]
     },
     {
       "object_type": "stroke",
       "family": "extended",
       "signature": "1945/0x6020",
-      "count": 21,
+      "count": 69,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442"
       ]
     },
     {
@@ -1386,22 +1773,101 @@
       "signature": "2090/0x6020",
       "count": 3,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "2241/0x6020",
+      "count": 26,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "2388/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "243/0x6020",
+      "count": 1,
+      "example_files": [
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "2463/0x6020",
+      "count": 29,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "2608/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "2833/0x6020",
+      "count": 33,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "2974/0x6020",
+      "count": 3,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
       ]
     },
     {
       "object_type": "stroke",
       "family": "extended",
       "signature": "3129/0x6020",
-      "count": 36,
+      "count": 76,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442"
       ]
     },
     {
@@ -1410,8 +1876,8 @@
       "signature": "3168/0x6020",
       "count": 2,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx"
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442"
       ]
     },
     {
@@ -1420,8 +1886,83 @@
       "signature": "3270/0x6020",
       "count": 2,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx"
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "363/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "3647/0x6020",
+      "count": 42,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "3686/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "3802/0x6020",
+      "count": 3,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "437/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "443/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "513/0x6020",
+      "count": 3,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
       ]
     },
     {
@@ -1430,11 +1971,140 @@
       "signature": "687/0x6020",
       "count": 7,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442",
+        "Mathsolver&Hyperlink_260711_180442"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "734/0x6020",
+      "count": 4,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "808/0x6020",
+      "count": 4,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "835/0x6020",
+      "count": 7,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "859/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "882/0x6020",
+      "count": 6,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "894/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "909/0x6020",
+      "count": 20,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "926/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "956/0x6020",
+      "count": 11,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "968/0x6020",
+      "count": 2,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
+      ]
+    },
+    {
+      "object_type": "stroke",
+      "family": "extended",
+      "signature": "983/0x6020",
+      "count": 11,
+      "example_files": [
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808",
+        "MultiMath_260724_201808"
       ]
     },
     {
@@ -1454,13 +2124,13 @@
       "object_type": "stroke",
       "family": "extended_rotated",
       "signature": "173/0x46021",
-      "count": 5,
+      "count": 6,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Allsamsungnotes_260630_113259",
+        "Allsamsungnotes_260630_113259",
+        "ImagesAllTrasnsformations_260713_221310",
+        "OnlyHighlighterBlack_260630_131753"
       ]
     },
     {
@@ -1470,23 +2140,32 @@
       "count": 5,
       "example_files": [
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Associationpages&stickynote&images&audio_260701_183225",
+        "OnlyTextTypeWritten_260701_180427",
+        "OnlyTextTypeWritten_squared_260703_013624",
+        "TextboxAllAngles_260709_231912"
+      ]
+    },
+    {
+      "object_type": "text_box",
+      "family": "extended",
+      "signature": "137/0x46000",
+      "count": 1,
+      "example_files": [
+        "TextboxAllAnglesLarge_260713_214254"
       ]
     },
     {
       "object_type": "text_box",
       "family": "extended_rotated",
       "signature": "141/0x46001",
-      "count": 11,
+      "count": 18,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "OnlyTextTypeWritten_260701_180427",
+        "OnlyTextTypeWritten_260701_180427",
+        "OnlyTextTypeWritten_squared_260703_013624",
+        "OnlyTextTypeWritten_squared_260703_013624",
+        "TextboxAllAnglesLarge_260713_214254"
       ]
     }
   ],
@@ -1502,11 +2181,26 @@
       {
         "family": "extended",
         "signature": "122/0xe000",
-        "count": 47
+        "count": 51
+      },
+      {
+        "family": "extended",
+        "signature": "126/0x10e000",
+        "count": 3
+      },
+      {
+        "family": "extended",
+        "signature": "142/0x14e000",
+        "count": 1
       },
       {
         "family": "extended_rotated",
         "signature": "142/0x4e001",
+        "count": 8
+      },
+      {
+        "family": "extended_rotated",
+        "signature": "146/0x14e001",
         "count": 2
       }
     ],
@@ -1526,12 +2220,27 @@
       {
         "family": "base",
         "signature": "121/0x6000",
-        "count": 95514
+        "count": 96230
+      },
+      {
+        "family": "extended",
+        "signature": "1044/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "1048/0x6020",
+        "count": 2
       },
       {
         "family": "extended",
         "signature": "1131/0x6020",
         "count": 13
+      },
+      {
+        "family": "extended",
+        "signature": "1279/0x6020",
+        "count": 12
       },
       {
         "family": "extended",
@@ -1541,7 +2250,12 @@
       {
         "family": "extended",
         "signature": "137/0x46000",
-        "count": 1933
+        "count": 2041
+      },
+      {
+        "family": "extended",
+        "signature": "1400/0x6020",
+        "count": 3
       },
       {
         "family": "extended",
@@ -1550,8 +2264,18 @@
       },
       {
         "family": "extended",
+        "signature": "1501/0x6020",
+        "count": 15
+      },
+      {
+        "family": "extended",
         "signature": "153/0x6020",
-        "count": 365
+        "count": 374
+      },
+      {
+        "family": "extended",
+        "signature": "1636/0x6020",
+        "count": 3
       },
       {
         "family": "extended",
@@ -1560,8 +2284,18 @@
       },
       {
         "family": "extended",
+        "signature": "1797/0x6020",
+        "count": 22
+      },
+      {
+        "family": "extended",
+        "signature": "1871/0x6020",
+        "count": 23
+      },
+      {
+        "family": "extended",
         "signature": "1945/0x6020",
-        "count": 21
+        "count": 69
       },
       {
         "family": "extended",
@@ -1570,8 +2304,43 @@
       },
       {
         "family": "extended",
+        "signature": "2241/0x6020",
+        "count": 26
+      },
+      {
+        "family": "extended",
+        "signature": "2388/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "243/0x6020",
+        "count": 1
+      },
+      {
+        "family": "extended",
+        "signature": "2463/0x6020",
+        "count": 29
+      },
+      {
+        "family": "extended",
+        "signature": "2608/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "2833/0x6020",
+        "count": 33
+      },
+      {
+        "family": "extended",
+        "signature": "2974/0x6020",
+        "count": 3
+      },
+      {
+        "family": "extended",
         "signature": "3129/0x6020",
-        "count": 36
+        "count": 76
       },
       {
         "family": "extended",
@@ -1585,8 +2354,98 @@
       },
       {
         "family": "extended",
+        "signature": "363/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "3647/0x6020",
+        "count": 42
+      },
+      {
+        "family": "extended",
+        "signature": "3686/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "3802/0x6020",
+        "count": 3
+      },
+      {
+        "family": "extended",
+        "signature": "437/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "443/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "513/0x6020",
+        "count": 3
+      },
+      {
+        "family": "extended",
         "signature": "687/0x6020",
         "count": 7
+      },
+      {
+        "family": "extended",
+        "signature": "734/0x6020",
+        "count": 4
+      },
+      {
+        "family": "extended",
+        "signature": "808/0x6020",
+        "count": 4
+      },
+      {
+        "family": "extended",
+        "signature": "835/0x6020",
+        "count": 7
+      },
+      {
+        "family": "extended",
+        "signature": "859/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "882/0x6020",
+        "count": 6
+      },
+      {
+        "family": "extended",
+        "signature": "894/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "909/0x6020",
+        "count": 20
+      },
+      {
+        "family": "extended",
+        "signature": "926/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "956/0x6020",
+        "count": 11
+      },
+      {
+        "family": "extended",
+        "signature": "968/0x6020",
+        "count": 2
+      },
+      {
+        "family": "extended",
+        "signature": "983/0x6020",
+        "count": 11
       },
       {
         "family": "extended_rotated",
@@ -1596,7 +2455,7 @@
       {
         "family": "extended_rotated",
         "signature": "173/0x46021",
-        "count": 5
+        "count": 6
       }
     ],
     "text_box": [
@@ -1606,9 +2465,14 @@
         "count": 5
       },
       {
+        "family": "extended",
+        "signature": "137/0x46000",
+        "count": 1
+      },
+      {
         "family": "extended_rotated",
         "signature": "141/0x46001",
-        "count": 11
+        "count": 18
       }
     ]
   },
@@ -1616,9 +2480,11 @@
     {
       "family": "v4000_hash",
       "signature": "fmt4000/flags0x8/meta0xc0a80",
-      "count": 1,
+      "count": 3,
       "example_files": [
-        "note.sdocx"
+        "NotaVuotaConPassword1492_260713_213313",
+        "TextboxAllAnglesLarge_260713_214254",
+        "TextboxAllAngles_260709_231912"
       ]
     },
     {
@@ -1626,7 +2492,7 @@
       "signature": "fmt4000/flags0x0/meta0xd4e80",
       "count": 1,
       "example_files": [
-        "note.sdocx"
+        "Shared Notebook1_260710_000433"
       ]
     },
     {
@@ -1635,22 +2501,30 @@
       "count": 8,
       "example_files": [
         "Appunti vari_260629_230848.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Importedlandscape_260711_153103",
+        "Notebook&Planner1_260709_213306",
+        "PagLiscia&templatescustoms_260711_122117",
+        "Pagvuota&templatescustoms_260711_115623"
       ]
     },
     {
       "family": "v4000_preload_hash",
       "signature": "fmt4000/flags0x8/meta0xc8e80",
-      "count": 10,
+      "count": 15,
       "example_files": [
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "AlltypeofPageBasic_260709_200911",
+        "Default-darkmode-Liscio_260711_153256",
+        "ImagesAllTrasnsformations_260713_221310",
+        "ImagesRotated_260713_221237"
+      ]
+    },
+    {
+      "family": "v4000_preload_hash",
+      "signature": "fmt4000/flags0x8/meta0xcae80",
+      "count": 1,
+      "example_files": [
+        "MultiAudioNota_260713_213420"
       ]
     },
     {
@@ -1658,8 +2532,8 @@
       "signature": "fmt4000/flags0x8/meta0xc0a80",
       "count": 2,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx"
+        "OnlyTypeWrittenTextDifferentFont_260713_212408",
+        "OnlytextTypewritten-Sistematic-carattere15_260713_212435"
       ]
     },
     {
@@ -1667,8 +2541,8 @@
       "signature": "fmt5400/flags0x8/meta0xc8e80",
       "count": 2,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx"
+        "Tabella4x3Regolare_260711_160040",
+        "Tabella4x3Regolarev2_260711_174656"
       ]
     },
     {
@@ -1676,8 +2550,8 @@
       "signature": "fmt5400/flags0x8/meta0xc0a80",
       "count": 2,
       "example_files": [
-        "note.sdocx",
-        "note.sdocx"
+        "OnlyTextTypeWritten_260701_180427",
+        "OnlyTextTypeWritten_squared_260703_013624"
       ]
     },
     {
@@ -1685,7 +2559,7 @@
       "signature": "fmt5400/flags0x0/meta0xc8e80",
       "count": 1,
       "example_files": [
-        "note.sdocx"
+        "Mathsolver&Hyperlink_260711_180442"
       ]
     },
     {
@@ -1693,7 +2567,7 @@
       "signature": "fmt5400/flags0x8/meta0xc2a80",
       "count": 1,
       "example_files": [
-        "note.sdocx"
+        "Associationpages&stickynote&images&audio_260701_183225"
       ]
     },
     {
@@ -1701,22 +2575,22 @@
       "signature": "fmt5400/flags0x8/meta0xcae80",
       "count": 1,
       "example_files": [
-        "note.sdocx"
+        "Allsamsungnotes_260630_113259"
       ]
     }
   ],
   "note_tail_profiles": {
     "kinds": {
-      "pen_preload_path": 88,
-      "pen_preload_prelude": 39,
-      "pen_preload_prelude_raw": 48,
-      "pen_style_tail": 22,
-      "tail_hash_block": 28,
-      "tail_post_hash_u32": 6,
-      "tail_sentinel": 29,
-      "voice_clip": 2,
-      "voice_clip_header": 2,
-      "voice_clip_post": 2
+      "pen_preload_path": 102,
+      "pen_preload_prelude": 44,
+      "pen_preload_prelude_raw": 55,
+      "pen_style_tail": 27,
+      "tail_hash_block": 36,
+      "tail_post_hash_u32": 8,
+      "tail_sentinel": 37,
+      "voice_clip": 4,
+      "voice_clip_header": 1,
+      "voice_clip_post": 4
     },
     "examples": {
       "pen_preload_path": [
@@ -1738,52 +2612,55 @@
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
-        "note.sdocx"
+        "Allsamsungnotes_260630_113259"
       ],
       "pen_style_tail": [
         "Appunti vari_260629_230848.sdocx",
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Allsamsungnotes_260630_113259",
+        "AlltypeofPageBasic_260709_200911",
+        "Default-darkmode-Liscio_260711_153256"
       ],
       "tail_hash_block": [
         "Appunti vari_260629_230848.sdocx",
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Allsamsungnotes_260630_113259",
+        "AlltypeofPageBasic_260709_200911",
+        "Associationpages&stickynote&images&audio_260701_183225"
       ],
       "tail_post_hash_u32": [
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Associationpages&stickynote&images&audio_260701_183225",
+        "NotaVuotaConPassword1492_260713_213313",
+        "OnlyTextTypeWritten_260701_180427",
+        "OnlyTextTypeWritten_squared_260703_013624",
+        "OnlyTypeWrittenTextDifferentFont_260713_212408"
       ],
       "tail_sentinel": [
         "Appunti vari_260629_230848.sdocx",
         "Machine_learning_riassunto_Supervised_Learning_260208_110644.sdocx",
-        "note.sdocx",
-        "note.sdocx",
-        "note.sdocx"
+        "Allsamsungnotes_260630_113259",
+        "AlltypeofPageBasic_260709_200911",
+        "Associationpages&stickynote&images&audio_260701_183225"
       ],
       "voice_clip": [
-        "note.sdocx",
-        "note.sdocx"
+        "Allsamsungnotes_260630_113259",
+        "Associationpages&stickynote&images&audio_260701_183225",
+        "MultiAudioNota_260713_213420",
+        "MultiAudioNota_260713_213420"
       ],
       "voice_clip_header": [
-        "note.sdocx",
-        "note.sdocx"
+        "Associationpages&stickynote&images&audio_260701_183225"
       ],
       "voice_clip_post": [
-        "note.sdocx",
-        "note.sdocx"
+        "Allsamsungnotes_260630_113259",
+        "Associationpages&stickynote&images&audio_260701_183225",
+        "MultiAudioNota_260713_213420",
+        "MultiAudioNota_260713_213420"
       ]
     },
     "page_id_info_relations": {
-      "page_id_head_exact": 22,
-      "page_id_head_shifted_u32_2": 6
+      "page_id_head_exact": 28,
+      "page_id_head_shifted_u32_2": 8
     },
     "tail_hash_prefixes": [
       {
@@ -1791,14 +2668,14 @@
           0,
           2
         ],
-        "count": 6
+        "count": 8
       },
       {
         "prefix_u32": [
           2,
           2
         ],
-        "count": 22
+        "count": 28
       }
     ],
     "preload_paths": {
@@ -1811,7 +2688,7 @@
       "com.samsung.android.sdk.pen.pen.preload.FountainPen": 13,
       "com.samsung.android.sdk.pen.pen.preload.FountainTipPen": 1,
       "com.samsung.android.sdk.pen.pen.preload.InkPen": 1,
-      "com.samsung.android.sdk.pen.pen.preload.InkPen2": 34,
+      "com.samsung.android.sdk.pen.pen.preload.InkPen2": 45,
       "com.samsung.android.sdk.pen.pen.preload.Marker2": 1,
       "com.samsung.android.sdk.pen.pen.preload.Marker3": 4,
       "com.samsung.android.sdk.pen.pen.preload.Marker4": 5,
@@ -1820,27 +2697,27 @@
       "com.samsung.android.sdk.pen.pen.preload.Pencil2": 4,
       "com.samsung.android.sdk.pen.pen.preload.Pencil3": 1,
       "com.samsung.android.sdk.pen.pen.preload.Smudge": 1,
-      "com.samsung.android.sdk.pen.pen.preload.StraightHighlighter": 4,
-      "com.samsung.android.sdk.pen.pen.preload.StraightMarker": 4,
+      "com.samsung.android.sdk.pen.pen.preload.StraightHighlighter": 6,
+      "com.samsung.android.sdk.pen.pen.preload.StraightMarker": 5,
       "com.samsung.android.sdk.pen.pen.preload.WaterColorBrush": 1,
       "com.samsung.android.sdk.pen.pen.preload.WaterColorTipBrush": 1
     },
     "preload_param_hints": {
       "14;": 1,
       "18;0;100;": 1,
-      "8;": 14
+      "8;": 16
     },
     "preload_prelude_params": {
       "10;": 2,
       "13;": 3,
       "14;": 3,
       "15;0;100;": 1,
-      "18;0;100;": 5,
+      "18;0;100;": 6,
       "22;": 1,
       "4;": 2,
-      "5;": 3,
+      "5;": 4,
       "7;": 1,
-      "8;": 18
+      "8;": 21
     },
     "preload_prelude_shapes": [
       {
@@ -1850,7 +2727,7 @@
         "trailing_u32": [
           0
         ],
-        "count": 4
+        "count": 3
       },
       {
         "prefix_u32": [
@@ -1860,7 +2737,7 @@
           0,
           162
         ],
-        "count": 2
+        "count": 4
       },
       {
         "prefix_u32": [
@@ -1869,7 +2746,7 @@
         "trailing_u32": [
           2
         ],
-        "count": 1
+        "count": 2
       },
       {
         "prefix_u32": [
@@ -1916,7 +2793,7 @@
         "trailing_u32": [
           4
         ],
-        "count": 1
+        "count": 2
       },
       {
         "prefix_u32": [
@@ -2005,7 +2882,19 @@
         "trailing_u32": [
           0
         ],
-        "count": 11
+        "count": 12
+      },
+      {
+        "prefix_u32": [
+          136,
+          131075
+        ],
+        "trailing_u32": [
+          1,
+          3670018,
+          59
+        ],
+        "count": 1
       },
       {
         "prefix_u32": [
@@ -2118,7 +3007,7 @@
           0,
           162
         ],
-        "count": 11
+        "count": 13
       },
       {
         "raw_u32": [
@@ -2131,6 +3020,13 @@
         "raw_u32": [
           0,
           180
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          0,
+          186
         ],
         "count": 1
       },
@@ -2259,7 +3155,7 @@
           112,
           2
         ],
-        "count": 2
+        "count": 5
       },
       {
         "raw_u32": [
@@ -2279,6 +3175,13 @@
         "raw_u32": [
           356,
           6
+        ],
+        "count": 1
+      },
+      {
+        "raw_u32": [
+          360,
+          5
         ],
         "count": 1
       },
@@ -2448,7 +3351,7 @@
           0,
           0
         ],
-        "count": 12
+        "count": 17
       },
       {
         "width": 6.355,
@@ -2550,6 +3453,28 @@
           415119
         ],
         "count": 1
+      },
+      {
+        "post_u32": [
+          1451971568,
+          415,
+          2,
+          1,
+          272769660,
+          415338
+        ],
+        "count": 1
+      },
+      {
+        "post_u32": [
+          1452121405,
+          415,
+          2,
+          1,
+          422606862,
+          415338
+        ],
+        "count": 1
       }
     ],
     "voice_post_u64_pairs": [
@@ -2566,6 +3491,22 @@
           1782923525248,
           4294967298,
           1782923525405332
+        ],
+        "count": 1
+      },
+      {
+        "post_u64_pairs": [
+          1783863399408,
+          4294967298,
+          1783863399555708
+        ],
+        "count": 1
+      },
+      {
+        "post_u64_pairs": [
+          1783863549245,
+          4294967298,
+          1783863549392910
         ],
         "count": 1
       }
@@ -2591,19 +3532,45 @@
           51767241233807
         ],
         "count": 1
+      },
+      {
+        "raw_u64_pairs": [
+          1783863399408,
+          4294967298,
+          1783863399555708,
+          1210802262004203524,
+          38482907387498,
+          489626271744
+        ],
+        "count": 1
+      },
+      {
+        "raw_u64_pairs": [
+          1783863549245,
+          4294967298,
+          1783863549392910,
+          1847041966861189124,
+          31245887493738,
+          695784701952
+        ],
+        "count": 1
       }
     ],
     "voice_media_links": {
-      "voice_actual_duration_ms_candidate": 2,
-      "voice_media_index_candidate": 2,
-      "voice_media_time_candidate": 2
+      "voice_actual_duration_ms_candidate": 3,
+      "voice_media_index_candidate": 1,
+      "voice_media_time_candidate": 3
     },
     "coverage": {
-      "known_bytes": 13270,
-      "unknown_bytes": 144,
+      "known_bytes": 15954,
+      "unknown_bytes": 206,
       "gap_prefixes": [
         {
           "prefix_hex": "0000000001002a005100300039004600",
+          "count": 1
+        },
+        {
+          "prefix_hex": "d6e756423a691a850100000000000000",
           "count": 1
         }
       ],
@@ -2631,7 +3598,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "Allsamsungnotes_260630_113259",
           "tail_start": 12996,
           "tail_len": 1356,
           "known_bytes": 1356,
@@ -2642,7 +3609,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "AlltypeofPageBasic_260709_200911",
           "tail_start": 775,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2653,7 +3620,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "Associationpages&stickynote&images&audio_260701_183225",
           "tail_start": 8602,
           "tail_len": 154,
           "known_bytes": 154,
@@ -2664,7 +3631,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "Default-darkmode-Liscio_260711_153256",
           "tail_start": 833,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2675,7 +3642,29 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "ImagesAllTrasnsformations_260713_221310",
+          "tail_start": 5151,
+          "tail_len": 338,
+          "known_bytes": 338,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "ImagesRotated_260713_221237",
+          "tail_start": 1605,
+          "tail_len": 338,
+          "known_bytes": 338,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "Importedlandscape_260711_153103",
           "tail_start": 783,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2686,7 +3675,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "Mathsolver&Hyperlink_260711_180442",
           "tail_start": 2411,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2697,7 +3686,51 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "MultiAudioNota_260713_213420",
+          "tail_start": 909,
+          "tail_len": 640,
+          "known_bytes": 640,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "MultiMath_260724_201808",
+          "tail_start": 789,
+          "tail_len": 362,
+          "known_bytes": 362,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "NotaFraIPreferiti_260714_203004",
+          "tail_start": 805,
+          "tail_len": 338,
+          "known_bytes": 338,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "NotaVuotaConPassword1492_260713_213313",
+          "tail_start": 835,
+          "tail_len": 60,
+          "known_bytes": 60,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "Notebook&Planner1_260709_213306",
           "tail_start": 783,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2708,7 +3741,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "OnlyHighlighterBlack_260630_131753",
           "tail_start": 789,
           "tail_len": 704,
           "known_bytes": 704,
@@ -2719,7 +3752,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "OnlyPensBlacksize10_260630_120309",
           "tail_start": 809,
           "tail_len": 814,
           "known_bytes": 814,
@@ -2730,7 +3763,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "OnlyShapesblack_260701_173146",
           "tail_start": 779,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2741,7 +3774,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "OnlyShapesblack_new_260701_185935",
           "tail_start": 803,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2752,7 +3785,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "OnlyTextTypeWritten_260701_180427",
           "tail_start": 5801,
           "tail_len": 60,
           "known_bytes": 60,
@@ -2763,7 +3796,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "OnlyTextTypeWritten_squared_260703_013624",
           "tail_start": 5817,
           "tail_len": 60,
           "known_bytes": 60,
@@ -2774,7 +3807,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "OnlyTypeWrittenTextDifferentFont_260713_212408",
           "tail_start": 4007,
           "tail_len": 60,
           "known_bytes": 60,
@@ -2785,7 +3818,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "OnlytextTypewritten-Sistematic-carattere15_260713_212435",
           "tail_start": 8709,
           "tail_len": 60,
           "known_bytes": 60,
@@ -2796,7 +3829,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "PagLiscia&templatescustoms_260711_122117",
           "tail_start": 817,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2807,7 +3840,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "PaginaVuota&Paginapuntino_260711_122434",
           "tail_start": 821,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2818,7 +3851,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "Pagvuota&templatescustoms_260711_115623",
           "tail_start": 799,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2829,7 +3862,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "Segnalibri_260709_225650",
           "tail_start": 791,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2840,7 +3873,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "Shared Notebook1_260710_000433",
           "tail_start": 819,
           "tail_len": 2746,
           "known_bytes": 2602,
@@ -2857,7 +3890,7 @@
           ]
         },
         {
-          "file": "note.sdocx",
+          "file": "Tabella4x3Regolare_260711_160040",
           "tail_start": 54159,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2868,7 +3901,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "Tabella4x3Regolarev2_260711_174656",
           "tail_start": 119606,
           "tail_len": 338,
           "known_bytes": 338,
@@ -2879,7 +3912,35 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "TestMultilayer_260713_213548",
+          "tail_start": 815,
+          "tail_len": 610,
+          "known_bytes": 548,
+          "unknown_bytes": 62,
+          "known_ratio": 0.898360655737705,
+          "gap_count": 1,
+          "max_gap": 62,
+          "gap_prefixes": [
+            {
+              "off": 1323,
+              "size": 62,
+              "prefix_hex": "d6e756423a691a850100000000000000"
+            }
+          ]
+        },
+        {
+          "file": "TextboxAllAnglesLarge_260713_214254",
+          "tail_start": 1115,
+          "tail_len": 60,
+          "known_bytes": 60,
+          "unknown_bytes": 0,
+          "known_ratio": 1.0,
+          "gap_count": 0,
+          "max_gap": 0,
+          "gap_prefixes": []
+        },
+        {
+          "file": "TextboxAllAngles_260709_231912",
           "tail_start": 1089,
           "tail_len": 60,
           "known_bytes": 60,
@@ -2890,7 +3951,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "cs61bl_su22",
           "tail_start": 12561,
           "tail_len": 380,
           "known_bytes": 380,
@@ -2901,7 +3962,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "handwritten",
           "tail_start": 1397,
           "tail_len": 344,
           "known_bytes": 344,
@@ -2912,7 +3973,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "quiz",
           "tail_start": 5550,
           "tail_len": 466,
           "known_bytes": 466,
@@ -2923,7 +3984,7 @@
           "gap_prefixes": []
         },
         {
-          "file": "note.sdocx",
+          "file": "samsung2",
           "tail_start": 809,
           "tail_len": 356,
           "known_bytes": 356,
@@ -2937,9 +3998,9 @@
     }
   },
   "object_header_ext": {
-    "count": 2240,
+    "count": 2366,
     "dimension_mismatches": [],
-    "extra_key_blocks": 923,
+    "extra_key_blocks": 1326,
     "extra_key_bad": [],
     "per_file": [
       {
@@ -2959,7 +4020,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "Allsamsungnotes_260630_113259",
         "count": 207,
         "seq_unique": 1,
         "seq_min": 415093,
@@ -2979,7 +4040,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "Associationpages&stickynote&images&audio_260701_183225",
         "count": 2,
         "seq_unique": 1,
         "seq_min": 415119,
@@ -2993,7 +4054,37 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "ImagesAllTrasnsformations_260713_221310",
+        "count": 73,
+        "seq_unique": 1,
+        "seq_min": 415363,
+        "seq_max": 415363,
+        "seq_inversions": 0,
+        "counter_unique": 73,
+        "repeated_counter_groups": 0,
+        "repeated_counter_size_counts": {},
+        "ext_offsets": [
+          105,
+          109,
+          141
+        ]
+      },
+      {
+        "file": "ImagesRotated_260713_221237",
+        "count": 6,
+        "seq_unique": 1,
+        "seq_min": 415139,
+        "seq_max": 415139,
+        "seq_inversions": 0,
+        "counter_unique": 6,
+        "repeated_counter_groups": 0,
+        "repeated_counter_size_counts": {},
+        "ext_offsets": [
+          109
+        ]
+      },
+      {
+        "file": "Mathsolver&Hyperlink_260711_180442",
         "count": 30,
         "seq_unique": 1,
         "seq_min": 415318,
@@ -3008,7 +4099,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "OnlyHighlighterBlack_260630_131753",
         "count": 4,
         "seq_unique": 1,
         "seq_min": 415094,
@@ -3023,7 +4114,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "OnlyShapesblack_260701_173146",
         "count": 579,
         "seq_unique": 2,
         "seq_min": 415117,
@@ -3042,7 +4133,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "OnlyShapesblack_new_260701_185935",
         "count": 671,
         "seq_unique": 3,
         "seq_min": 415117,
@@ -3061,7 +4152,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "OnlyTextTypeWritten_260701_180427",
         "count": 2,
         "seq_unique": 1,
         "seq_min": 415118,
@@ -3075,7 +4166,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "OnlyTextTypeWritten_squared_260703_013624",
         "count": 2,
         "seq_unique": 1,
         "seq_min": 415118,
@@ -3089,7 +4180,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "PagLiscia&templatescustoms_260711_122117",
         "count": 53,
         "seq_unique": 1,
         "seq_min": 415314,
@@ -3108,7 +4199,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "Pagvuota&templatescustoms_260711_115623",
         "count": 53,
         "seq_unique": 1,
         "seq_min": 415314,
@@ -3127,7 +4218,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "Segnalibri_260709_225650",
         "count": 42,
         "seq_unique": 1,
         "seq_min": 415283,
@@ -3143,7 +4234,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "Tabella4x3Regolare_260711_160040",
         "count": 146,
         "seq_unique": 1,
         "seq_min": 415318,
@@ -3159,7 +4250,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "Tabella4x3Regolarev2_260711_174656",
         "count": 146,
         "seq_unique": 1,
         "seq_min": 415318,
@@ -3175,7 +4266,40 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "TestMultilayer_260713_213548",
+        "count": 39,
+        "seq_unique": 1,
+        "seq_min": 415284,
+        "seq_max": 415284,
+        "seq_inversions": 0,
+        "counter_unique": 13,
+        "repeated_counter_groups": 12,
+        "repeated_counter_size_counts": {
+          "2": 2,
+          "3": 6,
+          "4": 4
+        },
+        "ext_offsets": [
+          105
+        ]
+      },
+      {
+        "file": "TextboxAllAnglesLarge_260713_214254",
+        "count": 8,
+        "seq_unique": 2,
+        "seq_min": 415284,
+        "seq_max": 415363,
+        "seq_inversions": 0,
+        "counter_unique": 8,
+        "repeated_counter_groups": 0,
+        "repeated_counter_size_counts": {},
+        "ext_offsets": [
+          105,
+          109
+        ]
+      },
+      {
+        "file": "TextboxAllAngles_260709_231912",
         "count": 7,
         "seq_unique": 1,
         "seq_min": 415284,
@@ -3189,7 +4313,7 @@
         ]
       },
       {
-        "file": "note.sdocx",
+        "file": "samsung2",
         "count": 79,
         "seq_unique": 1,
         "seq_min": 415132,
@@ -3212,11 +4336,11 @@
     ]
   },
   "payload_geometry_profiles": {
-    "count": 489,
+    "count": 513,
     "by_type": {
-      "image": 49,
+      "image": 65,
       "shape": 424,
-      "text_box": 16
+      "text_box": 24
     },
     "point_counts": {
       "1": 10,
@@ -3225,7 +4349,7 @@
       "15": 1,
       "2": 83,
       "3": 10,
-      "4": 198,
+      "4": 222,
       "5": 28,
       "6": 79,
       "7": 1,
@@ -3233,7 +4357,7 @@
       "9": 3
     },
     "centroid": {
-      "bbox_centroid_match": 364,
+      "bbox_centroid_match": 388,
       "bbox_centroid_mismatch": 115,
       "bbox_centroid_unknown": 10
     },
@@ -3243,7 +4367,7 @@
         "marker": "image",
         "l0_delta": 0,
         "l1_delta": 0,
-        "count": 49
+        "count": 65
       },
       {
         "object_type": "shape",
@@ -3257,7 +4381,7 @@
         "marker": "text",
         "l0_delta": 123,
         "l1_delta": 0,
-        "count": 16
+        "count": 24
       }
     ],
     "shape_roles": [
@@ -3372,56 +4496,58 @@
         ],
         "count": 3,
         "example_pages": [
-          "note.sdocx:73920cee",
-          "note.sdocx:6ffea07a",
-          "note.sdocx:6ffea07a"
+          "Allsamsungnotes_260630_113259:73920cee",
+          "Associationpages&stickynote&images&audio_260701_183225:6ffea07a",
+          "Associationpages&stickynote&images&audio_260701_183225:6ffea07a"
         ]
       }
     ]
   },
   "media_info_profiles": {
-    "parsed_files": 29,
-    "records": 275,
+    "parsed_files": 37,
+    "records": 296,
     "format_versions": {
       "5202": 2,
       "5304": 1,
-      "5400": 26
+      "5400": 34
     },
     "ref_counts": {
-      "1": 265,
+      "1": 282,
       "100": 1,
       "2": 4,
       "20": 1,
-      "3": 1,
+      "3": 4,
       "5": 1,
-      "7": 2
+      "7": 2,
+      "9": 1
     },
     "is_attached": {
-      "True": 275
+      "True": 296
     },
     "magic": {
       "0x1452": 2,
       "0x14b8": 1,
-      "0x1518": 26
+      "0x1518": 34
     },
     "tail_tags": {
-      "1": 265,
+      "1": 282,
       "100": 1,
       "2": 4,
       "20": 1,
-      "3": 1,
+      "3": 4,
       "5": 1,
-      "7": 2
+      "7": 2,
+      "9": 1
     },
     "name_kinds": {
       ".": 29,
-      ".jpg": 21,
-      ".m4a": 2,
+      ".jpg": 26,
+      ".m4a": 5,
       ".nt": 1,
       ".pdf": 10,
       ".png": 1,
       ".sdocx": 3,
-      ".spi": 207,
+      ".spi": 220,
       ".spp": 1
     },
     "bad_eof": 0,
@@ -3433,30 +4559,32 @@
     "unlisted_media_examples": []
   },
   "end_tag_profiles": {
-    "parsed_files": 29,
+    "parsed_files": 37,
     "payload_sizes": {
       "142": 2,
-      "146": 27
+      "146": 34,
+      "274": 1
     },
     "format_versions": {
-      "4000": 22,
+      "4000": 30,
       "5400": 7
     },
     "signature_offsets": {
       "122": 2,
-      "126": 27
+      "126": 34,
+      "254": 1
     },
     "time_relations": {
-      "created_time_a_exact": 26,
+      "created_time_a_exact": 34,
       "created_time_a_millis_close": 3,
-      "created_time_b_exact": 26,
-      "created_time_header_exact": 29,
-      "display_created_time_exact": 26,
+      "created_time_b_exact": 34,
+      "created_time_header_exact": 37,
+      "display_created_time_exact": 34,
       "display_created_time_millis_close": 3,
-      "display_modified_time_exact": 26,
-      "extra_time_nonzero": 6,
-      "last_recognised_data_modified_time_nonzero": 6,
-      "modified_exact": 29
+      "display_modified_time_exact": 34,
+      "extra_time_nonzero": 11,
+      "last_recognised_data_modified_time_nonzero": 11,
+      "modified_exact": 37
     },
     "bad_size": 0,
     "bad_signature": 0,
@@ -3464,11 +4592,11 @@
     "modified_mismatch_examples": []
   },
   "page_id_info_profiles": {
-    "parsed_files": 29,
-    "records": 198,
+    "parsed_files": 37,
+    "records": 220,
     "bad_size": 0,
     "tail_hex": {
-      "": 198
+      "": 220
     },
     "page_hash_sha256_matches": 0
   }

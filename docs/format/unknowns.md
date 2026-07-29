@@ -69,7 +69,7 @@ as flex fields — see `container/note-note/tail-records.md`. What remains:
   (RE 2026-07-20).** The whole preamble (bytes `0 .. base`) is a sequential
   header + field-flags-gated optional region, cross-referenced from
   `squ1dd13/sdocx2pdf` and decoded in `pysdocx/page_header.py`, validated
-  zero-counterexample on 214/214 corpus pages
+  zero-counterexample on 220/220 corpus pages
   (`spec/tools/validate_page_header.py`; see
   [`docs/format/container/page/README.md`](./container/page/README.md#the-full-preamble-as-a-sequential-field-flags-structure--decoded)
   and [`xref-sdocx2pdf.md`](./xref-sdocx2pdf.md#page-header--promosso)). This

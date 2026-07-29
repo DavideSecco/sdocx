@@ -19,7 +19,7 @@ doc: |
 
   Field names cross-referenced from squ1dd13/sdocx2pdf (MIT) — `page.rs`,
   `page/header.rs` — re-validated field-by-field on the local corpus before
-  adoption here (zero counterexamples, 214/214 pages,
+  adoption here (zero counterexamples, 220/220 pages,
   spec/tools/validate_page_header.py; see docs/format/xref-sdocx2pdf.md and
   docs/format/container/page/README.md). Reference Python parser:
   pysdocx/page_header.py (this .ksy mirrors it field-for-field).

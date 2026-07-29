@@ -62,7 +62,7 @@ Expected validator output:
 | `pageIdInfo.dat` | `ksy/sdocx_page_id_info.ksy` | `tools/validate_page_id_info.py` | 14/14 ✅ |
 | `media/mediaInfo.dat` | `ksy/sdocx_media_info.ksy` | `tools/validate_media_info.py` | 14/14, 222/222 record tails ✅ |
 | `note.note` (whole member, sequential) | `ksy/sdocx_note.ksy` | `tools/validate_note.py` | 14/14 ✅ |
-| `<uuid>.page` (header + tree, incl. field-flags region: drawn_rect, tags, template_uri/type, background, pdf_data_items, canvas_cache_map, custom_objects/sticky-notes) | `ksy/sdocx_page.ksy` | `tools/validate_page.py`, `tools/validate_page_tree.py`, `tools/validate_page_header.py` (vs. legacy heuristics) | 214/214 pages ✅ |
+| `<uuid>.page` (header + tree, incl. field-flags region: drawn_rect, tags, template_uri/type, background, pdf_data_items, canvas_cache_map, custom_objects/sticky-notes) | `ksy/sdocx_page.ksy` | `tools/validate_page.py`, `tools/validate_page_tree.py`, `tools/validate_page_header.py` (vs. legacy heuristics) | 220/220 pages ✅ |
 | `.page` object header | `ksy/sdocx_object_header.ksy` | `tools/validate_object_header.py` | all corpus objects ✅ |
 | `.page` payload geometry | `ksy/sdocx_payload_geometry.ksy` | `tools/validate_payload_geometry.py` | 490/490 wrappers ✅ |
 | `note.note` type-22 table object | `ksy/sdocx_table_object.ksy` | `tools/validate_table_object.py` | 20/20 tables, 260 cells ✅ |

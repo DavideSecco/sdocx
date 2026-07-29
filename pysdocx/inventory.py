@@ -168,6 +168,18 @@ def _iter_paths(targets: list[Path]) -> list[Path]:
     return unique
 
 
+def _sample_name(path: Path) -> str:
+    """Human-readable sample id for reports.
+
+    Bundle samples are all called `note.sdocx` inside `<name>/`, so the bare
+    filename would collide across every bundle in the corpus; use the bundle
+    directory name for those and the filename for flat `.sdocx` samples.
+    """
+    if path.name == "note.sdocx" and path.parent != path.parent.parent:
+        return path.parent.name
+    return path.name
+
+
 def _iter_objects(objects: list[dict]):
     for obj in objects:
         yield obj
@@ -355,16 +367,16 @@ def build_inventory(targets: list[Path]) -> dict:
             media_info_format_versions[str(media_info["format_version"])] += 1
             if not media_info.get("valid_eof"):
                 media_info_bad_eof += 1
-            media_info_unlisted_media.extend(f"{path.name}:{name}" for name in media_info.get("unlisted_media", ()))
+            media_info_unlisted_media.extend(f"{_sample_name(path)}:{name}" for name in media_info.get("unlisted_media", ()))
             for record in media_info.get("records", ()):
                 media_info_records += 1
                 media_info_ref_counts[str(record.get("ref_count"))] += 1
                 media_info_is_attached[str(record.get("is_attached"))] += 1
                 media_info_name_kinds[Path(record["name"]).suffix.lower() or "(none)"] += 1
                 if not record.get("exists"):
-                    media_info_missing_media.append(f"{path.name}:{record['archive_name']}")
+                    media_info_missing_media.append(f"{_sample_name(path)}:{record['archive_name']}")
                 if record.get("sha256_matches") is False:
-                    media_info_sha_mismatches.append(f"{path.name}:{record['archive_name']}")
+                    media_info_sha_mismatches.append(f"{_sample_name(path)}:{record['archive_name']}")
 
         note = load_note(path)
         note_meta = parse_note_metadata(note) if note else None
@@ -390,7 +402,7 @@ def build_inventory(targets: list[Path]) -> dict:
                 if end_tag.get("modified_time") == note_meta.get("modified_time"):
                     end_tag_time_relations["modified_exact"] += 1
                 else:
-                    end_tag_modified_mismatches.append(path.name)
+                    end_tag_modified_mismatches.append(_sample_name(path))
                 note_created = note_meta.get("created_time")
                 if end_tag.get("created_time_header") == note_created:
                     end_tag_time_relations["created_time_header_exact"] += 1
@@ -422,13 +434,13 @@ def build_inventory(targets: list[Path]) -> dict:
             nkey = (note_profile["family"], note_profile["signature"])
             note_profiles[nkey] += 1
             if len(note_examples[nkey]) < 5:
-                note_examples[nkey].append(path.name)
+                note_examples[nkey].append(_sample_name(path))
         tail_coverage = _note_tail_coverage(note, note_meta) if note else None
         if tail_coverage is not None:
             for gap in tail_coverage["gap_prefixes"]:
                 note_tail_gap_prefixes[gap["prefix_hex"]] += 1
             note_tail_coverage_rows.append({
-                "file": path.name,
+                "file": _sample_name(path),
                 "tail_start": tail_coverage["tail_start"],
                 "tail_len": tail_coverage["tail_len"],
                 "known_bytes": tail_coverage["known_bytes"],
@@ -441,7 +453,7 @@ def build_inventory(targets: list[Path]) -> dict:
         for record in (note_meta or {}).get("tail_records", ()):
             note_tail_kind_counts[record["kind"]] += 1
             if len(note_tail_examples[record["kind"]]) < 5:
-                note_tail_examples[record["kind"]].append(path.name)
+                note_tail_examples[record["kind"]].append(_sample_name(path))
             relation = record.get("page_id_info_relation")
             if relation:
                 if relation.get("matches_page_id_head_exact"):
@@ -520,7 +532,7 @@ def build_inventory(targets: list[Path]) -> dict:
                 attachment_keys.update(keys)
                 pkey = (placement["kind"], keys)
                 if len(attachment_examples[pkey]) < 5:
-                    attachment_examples[pkey].append(f"{path.name}:{result['uuid'][:8]}")
+                    attachment_examples[pkey].append(f"{_sample_name(path)}:{result['uuid'][:8]}")
             for layer in result["layers"]:
                 for obj in _iter_objects(layer["objects"]):
                     object_order += 1
@@ -532,7 +544,7 @@ def build_inventory(targets: list[Path]) -> dict:
                     if ext:
                         header_ext_total += 1
                         row = {
-                            "file": path.name,
+                            "file": _sample_name(path),
                             "page_uuid": result["uuid"][:8],
                             "object_order": object_order,
                             "object_type": obj["type"],
@@ -552,7 +564,7 @@ def build_inventory(targets: list[Path]) -> dict:
                         extra_key_total += 1
                         if not extra_key["head_ok"] or extra_key["value_kind"] == "raw":
                             extra_key_bad.append({
-                                "file": path.name,
+                                "file": _sample_name(path),
                                 "page_uuid": result["uuid"][:8],
                                 "object_order": object_order,
                                 "object_type": obj["type"],
@@ -582,7 +594,7 @@ def build_inventory(targets: list[Path]) -> dict:
                     object_profiles[okey] += 1
                     object_profiles_by_type[obj["type"]][(profile["family"], profile["signature"])] += 1
                     if len(object_examples[okey]) < 5:
-                        object_examples[okey].append(path.name)
+                        object_examples[okey].append(_sample_name(path))
 
         if file_ext_rows:
             seqs = [row["seq"] for row in file_ext_rows]
@@ -594,7 +606,7 @@ def build_inventory(targets: list[Path]) -> dict:
                 if cur["seq"] < prev["seq"]
             )
             header_ext_file_summaries.append({
-                "file": path.name,
+                "file": _sample_name(path),
                 "count": len(file_ext_rows),
                 "seq_unique": len(set(seqs)),
                 "seq_min": min(seqs),
@@ -607,7 +619,7 @@ def build_inventory(targets: list[Path]) -> dict:
             })
 
         sample_rows.append({
-            "file": path.name,
+            "file": _sample_name(path),
             "pages": page_count,
             "objects": object_count,
             "typed_text": has_typed_text,

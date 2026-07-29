@@ -1,42 +1,42 @@
 {
   "end_tag": {
     "format_versions": {
-      "4000": 29,
+      "4000": 30,
       "5400": 7
     },
     "payload_sizes": {
       "142": 2,
-      "146": 33,
+      "146": 34,
       "274": 1
     },
     "signature_offsets": {
       "122": 2,
-      "126": 33,
+      "126": 34,
       "254": 1
     },
     "time_relations": {
-      "created_time_a_exact": 33,
+      "created_time_a_exact": 34,
       "created_time_a_millis_close": 3,
-      "created_time_b_exact": 33,
-      "created_time_header_exact": 36,
-      "display_created_time_exact": 33,
+      "created_time_b_exact": 34,
+      "created_time_header_exact": 37,
+      "display_created_time_exact": 34,
       "display_created_time_millis_close": 3,
-      "display_modified_time_exact": 33,
-      "extra_time_nonzero": 10,
-      "last_recognised_data_modified_time_nonzero": 10,
-      "modified_exact": 36
+      "display_modified_time_exact": 34,
+      "extra_time_nonzero": 11,
+      "last_recognised_data_modified_time_nonzero": 11,
+      "modified_exact": 37
     }
   },
   "geometry": {
     "by_type": {
-      "image": 64,
+      "image": 65,
       "shape": 424,
       "text_box": 24
     },
-    "count": 512,
+    "count": 513,
     "marker_deltas": [
       {
-        "count": 64,
+        "count": 65,
         "l0_delta": 0,
         "l1_delta": 0,
         "marker": "image",
@@ -64,7 +64,7 @@
       "15": 1,
       "2": 83,
       "3": 10,
-      "4": 221,
+      "4": 222,
       "5": 28,
       "6": 79,
       "7": 1,
@@ -166,17 +166,17 @@
   },
   "leads": {
     "end_tag_page_models": {
-      "0": 33,
+      "0": 34,
       "1": 3
     },
     "media_by_kind": {
-      "image": 64,
+      "image": 65,
       "painting": 1
     },
-    "media_known_ref_u32_hits": 65,
-    "media_objects": 65,
-    "note_text_common_frame_hits": 48,
-    "note_text_surfaces": 50,
+    "media_known_ref_u32_hits": 66,
+    "media_objects": 66,
+    "note_text_common_frame_hits": 49,
+    "note_text_surfaces": 51,
     "text_boxes": 24,
     "text_common_frame_hits": 7,
     "text_structural_frame_offs": {
@@ -193,19 +193,19 @@
     "format_versions": {
       "5202": 2,
       "5304": 1,
-      "5400": 33
+      "5400": 34
     },
     "is_attached": {
-      "True": 290
+      "True": 296
     },
     "magic": {
       "0x1452": 2,
       "0x14b8": 1,
-      "0x1518": 33
+      "0x1518": 34
     },
-    "records": 290,
+    "records": 296,
     "ref_counts": {
-      "1": 276,
+      "1": 282,
       "100": 1,
       "2": 4,
       "20": 1,
@@ -215,7 +215,7 @@
       "9": 1
     },
     "tail_tags": {
-      "1": 276,
+      "1": 282,
       "100": 1,
       "2": 4,
       "20": 1,
@@ -226,19 +226,19 @@
     }
   },
   "note_tail": {
-    "coverage_known_bytes": 15592,
+    "coverage_known_bytes": 15954,
     "kinds": {
-      "pen_preload_path": 100,
-      "pen_preload_prelude": 43,
-      "pen_preload_prelude_raw": 54,
-      "pen_style_tail": 26,
+      "pen_preload_path": 102,
+      "pen_preload_prelude": 44,
+      "pen_preload_prelude_raw": 55,
+      "pen_style_tail": 27,
       "tail_post_hash_u32": 8,
       "voice_clip": 4,
       "voice_clip_header": 1,
       "voice_clip_post": 4
     },
     "page_id_info_relations": {
-      "page_id_head_exact": 27,
+      "page_id_head_exact": 28,
       "page_id_head_shifted_u32_2": 8
     },
     "pen_style_tail_params": {
@@ -250,7 +250,7 @@
       "13;": 3,
       "14;": 3,
       "15;0;100;": 1,
-      "18;0;100;": 5,
+      "18;0;100;": 6,
       "22;": 1,
       "4;": 2,
       "5;": 4,
@@ -301,12 +301,12 @@
     "cell_text_surfaces": 4,
     "gap_sizes": {
       "0": 3,
-      "8": 33
+      "8": 34
     },
     "inline_object_surfaces": 7,
     "table_cells_structural": 260,
     "tables_structural": 20,
     "voice_records": 5
   },
-  "page_id_records": 214
+  "page_id_records": 220
 }

@@ -55,7 +55,7 @@ variable-length property/field-flags bitfields, orientation, `width`,
 between `flex_offset` and `base` — the same region the table above just calls
 "where the layer tree starts". Cross-referenced from `squ1dd13/sdocx2pdf`
 (MIT, see [`xref-sdocx2pdf.md`](../../xref-sdocx2pdf.md#page-header--promosso))
-and validated with **zero counterexamples on 214/214 corpus pages**
+and validated with **zero counterexamples on 220/220 corpus pages**
 (`spec/tools/validate_page_header.py`): the region always consumes exactly
 `base - flex_offset` bytes.
 

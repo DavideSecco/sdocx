@@ -74,7 +74,7 @@ we copy logic closely, add MIT attribution.
 | `mediaInfo.dat` | **CONFERMA + PROMOSSO** | Our former `magic/tag/time_candidate/marker` correspond to their `format_version/ref_count/modified_time/is_attached`; parser/spec/docs now use the new names with compatibility aliases. |
 | `end_tag.bin` | **CONFERMA + PROMOSSO** | Their richer SDK struct explains our former raw islands; parser/spec/docs now expose the sequential footer with compatibility aliases. |
 | `note.note` | **PROMOSSO** | Their sequential `note_doc` schema (bitfields, header, title/body blobs, flag-gated flex fields: string registry, pen info, voice records, attached files, …) is now decoded end-to-end and validates on 14/14, landing exactly on the trailing hash (`pysdocx/note_doc.py`, `spec/ksy/sdocx_note.ksy`). Two local improvements over their parser: the 8-byte pre-flex gap decodes as a `(width, round(width*sqrt(2)))` pair, and inline objects carry `position` + 8 trailing bytes they don't model. |
-| `.page` header | **PROMOSSO** | Their sequential page-header schema (`page.rs`/`page/header.rs`: flex/field-flags bitfields, orientation/dims/uuid, then flag-gated drawn_rect/tags/template_uri/background/pdf_data_items/template_type/canvas_cache_map/custom_objects) is now decoded end-to-end in `pysdocx/page_header.py` and validates with zero counterexamples on 214/214 corpus pages, landing exactly on `base` (`spec/tools/validate_page_header.py`). Supersedes three prior signature/heuristic scanners field-for-field (background colour, "Basic" template id, custom-image URI — see below) and surfaces two things the heuristics never found: multi-entry `pdf_data_items` on tiled/pageless PDF imports, and sticky-notes' `skn_bg_color`. No `.ksy` yet. |
+| `.page` header | **PROMOSSO** | Their sequential page-header schema (`page.rs`/`page/header.rs`: flex/field-flags bitfields, orientation/dims/uuid, then flag-gated drawn_rect/tags/template_uri/background/pdf_data_items/template_type/canvas_cache_map/custom_objects) is now decoded end-to-end in `pysdocx/page_header.py` and validates with zero counterexamples on 220/220 corpus pages, landing exactly on `base` (`spec/tools/validate_page_header.py`). Supersedes three prior signature/heuristic scanners field-for-field (background colour, "Basic" template id, custom-image URI — see below) and surfaces two things the heuristics never found: multi-entry `pdf_data_items` on tiled/pageless PDF imports, and sticky-notes' `skn_bg_color`. No `.ksy` yet. |
 
 ## Detailed gaps
 
@@ -472,7 +472,7 @@ Ours (before this round):
   immediately after the same signature (`page_pdf_template`).
 
 Verdict: **PROMOSSO.** The full sequential header — through the entire
-field-flags-gated optional region — now parses byte-exact on 214/214 corpus
+field-flags-gated optional region — now parses byte-exact on 220/220 corpus
 pages, landing exactly on `base` (`pysdocx/page_header.py`,
 `spec/tools/validate_page_header.py`). Cross-checked field-for-field against
 every prior heuristic wherever both fire, zero disagreements:
@@ -525,7 +525,7 @@ checkpoint.
 2. ~~Page text-box `Common` variant~~ — **done** (frame at 386/406, 8/8
    structural + span agreement, 2026-07-08).
 3. ~~`.page` header field-flags region~~ — **done** (promoted end-to-end,
-   214/214, 2026-07-20).
+   220/220, 2026-07-20).
 4. `Image` / `Painting` flex-field alignment, because media refs are confirmed
    as `u32` on 60/60 objects but crop/original/thumbnail fields are not isolated.
 5. Targeted audio-object samples, because current voice clips link to `.m4a`

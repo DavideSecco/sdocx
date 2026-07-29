@@ -899,7 +899,7 @@ object bodies.
   `canvas_cache_map`, `imported_data_height`, `theme`,
   `recognised_data_modified_time`, `stroke_recognition_data`,
   `custom_objects`). New module `pysdocx/page_header.py`, gate
-  `spec/tools/validate_page_header.py`, zero counterexamples on **214/214**
+  `spec/tools/validate_page_header.py`, zero counterexamples on **220/220**
   corpus pages — this fully resolves what the entry below left open (`kind`/
   paper/template presence are just field-flags bits, no signature lookahead
   needed to explain them). Also ported to `spec/ksy/sdocx_page.ksy`
