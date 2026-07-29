@@ -562,7 +562,7 @@ def build_inventory(targets: list[Path]) -> dict:
                     extra_key = header.get("extra_key_block")
                     if extra_key:
                         extra_key_total += 1
-                        if not extra_key["head_ok"] or extra_key["value_kind"] == "raw":
+                        if extra_key.get("bundle") is None:
                             extra_key_bad.append({
                                 "file": _sample_name(path),
                                 "page_uuid": result["uuid"][:8],

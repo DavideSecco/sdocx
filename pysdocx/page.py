@@ -157,9 +157,10 @@ IMAGE_ANGLE_FIELD_FLAG = 0x1
 # corpus reconstructs its `total_size` from a purely additive model over these bits (baseline 121 for
 # stroke/text_box, 122 for the media/shape family), with zero counterexamples:
 #   FIELD_FLAG_ANGLE     0x1     +4 bytes   rotation-angle f32 at offset 105 (see IMAGE_ANGLE_* above)
-#   FIELD_FLAG_EXTRA_KEY 0x20    variable-sized named property block. Legacy shape strokes carry the
-#                                           32-byte `extra_key_stroke_shape` scalar form; Math Solver strokes
-#                                           carry `RecogUIFeature_*` properties, including UUID string arrays.
+#   FIELD_FLAG_EXTRA_KEY 0x20    generic ObjectBase Bundle/property bag. Legacy shape strokes carry
+#                                           integer `extra_key_stroke_shape = 1`; Math Solver strokes carry
+#                                           `RecogUIFeature_*` properties, including UUID string-array group
+#                                           membership.
 #   FIELD_FLAG_HDR_EXT   0x40000 +16 bytes  a header extension: [u32 counter][u32 seq][u32 page_width]
 #                                           [u32 page_height] — the trailing width/height match the page
 #                                           header on every corpus object carrying it; `seq`/`counter`
@@ -169,8 +170,8 @@ IMAGE_ANGLE_FIELD_FLAG = 0x1
 # FIELD_FLAG_MEDIA_FAMILY (0x8000) is a family discriminator, not a size contributor: it is set on every
 # image/shape/drawing object and on no stroke/text_box object across the corpus. FIELD_FLAG_BASE_PRESENT
 # bits (0x2000|0x4000) are set on every object seen so far, so they read as "record present" base bits.
-# The extensions are stored in bit order (extra_key before hdr_ext). Math Solver's
-# variable-sized property bag is followed by HDR_EXT and a 16-byte zero tail.
+# The extensions are stored in bit order (extra bundle before hdr_ext). Math Solver's
+# variable-sized bundle is followed by HDR_EXT and a 16-byte zero tail.
 FIELD_FLAG_ANGLE = 0x1
 FIELD_FLAG_EXTRA_KEY = 0x20
 FIELD_FLAG_MEDIA_FAMILY = 0x8000
@@ -701,13 +702,99 @@ def _decode_header_ext(blob: bytes, field_flags: int) -> dict | None:
     }
 
 
+def _read_bundle_ascii_key(data: bytes, pos: int) -> tuple[str, int]:
+    n_bytes = struct.unpack_from("<H", data, pos)[0]
+    pos += 2
+    stop = pos + n_bytes
+    if stop > len(data):
+        raise ValueError
+    key = data[pos:stop].rstrip(b"\x00").decode("ascii", errors="replace")
+    return key, stop
+
+
+def _read_bundle_utf16(data: bytes, pos: int) -> tuple[str, int]:
+    n_chars = struct.unpack_from("<H", data, pos)[0]
+    pos += 2
+    stop = pos + 2 * n_chars
+    if stop > len(data):
+        raise ValueError
+    return data[pos:stop].decode("utf-16-le"), stop
+
+
+def _decode_bundle_payload(data: bytes) -> dict | None:
+    """Decode Samsung's generic ObjectBase bundle/property-bag payload.
+
+    Cross-reference: sdocx2pdf calls this structure `Bundle` and parses the
+    same field-flag bit as string/u32/string-vector/byte-buffer maps gated by a
+    one-byte presence bitfield.
+    """
+    if not data:
+        return None
+    pos = 0
+    presence_flags = data[pos]
+    pos += 1
+    out: dict = {
+        "presence_flags": presence_flags,
+        "strings": {},
+        "integers": {},
+        "string_vecs": {},
+        "byte_vecs": {},
+    }
+    try:
+        if presence_flags & 0x01:
+            count = struct.unpack_from("<H", data, pos)[0]
+            pos += 2
+            for _ in range(count):
+                key, pos = _read_bundle_ascii_key(data, pos)
+                value, pos = _read_bundle_utf16(data, pos)
+                out["strings"][key] = value
+        if presence_flags & 0x02:
+            count = struct.unpack_from("<H", data, pos)[0]
+            pos += 2
+            for _ in range(count):
+                key, pos = _read_bundle_ascii_key(data, pos)
+                value = struct.unpack_from("<I", data, pos)[0]
+                pos += 4
+                out["integers"][key] = value
+        if presence_flags & 0x04:
+            count = struct.unpack_from("<H", data, pos)[0]
+            pos += 2
+            for _ in range(count):
+                key, pos = _read_bundle_ascii_key(data, pos)
+                n_strings = struct.unpack_from("<H", data, pos)[0]
+                pos += 2
+                values = []
+                for _ in range(n_strings):
+                    value, pos = _read_bundle_utf16(data, pos)
+                    values.append(value)
+                out["string_vecs"][key] = values
+        if presence_flags & 0x08:
+            count = struct.unpack_from("<H", data, pos)[0]
+            pos += 2
+            for _ in range(count):
+                key, pos = _read_bundle_ascii_key(data, pos)
+                byte_len = struct.unpack_from("<I", data, pos)[0]
+                pos += 4
+                stop = pos + byte_len
+                if stop > len(data):
+                    raise ValueError
+                out["byte_vecs"][key] = data[pos:stop].hex()
+                pos = stop
+    except (struct.error, UnicodeDecodeError, ValueError):
+        return None
+    if pos != len(data) or presence_flags & ~0x0f:
+        return None
+    return out
+
+
 def _decode_extra_key_block(blob: bytes, field_flags: int) -> dict | None:
     """Decode the variable-sized named property gated by field flag 0x20.
 
-    `02 01 00` carries the legacy scalar shape-ink property. Math Solver uses
-    `04 01 00` and a counted array of short UTF-16 strings (stroke UUIDs).
-    Math Solver's `06`/`07` forms are property chains: an optional recognised
-    expression, a fail code, and the associated stroke UUID array.
+    This is Samsung's generic ObjectBase bundle/property bag. For continuity the
+    return value still exposes the older single-property view (`head`,
+    `value_kind`, `trailing`, ...), but the canonical structural view is
+    `bundle`: string, integer, string-vector and byte-buffer maps gated by the
+    first byte's presence flags.
     """
     if not (field_flags & FIELD_FLAG_EXTRA_KEY):
         return None
@@ -730,16 +817,18 @@ def _decode_extra_key_block(blob: bytes, field_flags: int) -> dict | None:
     raw_key = blob[key_start:key_end]
     key = raw_key.rstrip(b"\x00").decode("ascii", errors="replace")
     value = blob[key_end:end]
+    bundle = _decode_bundle_payload(blob[start:end])
     out = {
         "off": start,
         "head": head.hex(),
-        "head_ok": head[1:] == b"\x01\x00" and head[0] in (2, 4, 6, 7),
+        "head_ok": bundle is not None,
         "key_len": key_len,
         "key": key,
         "byte_size": end - start,
         "value_hex": value.hex(),
         "value_kind": "raw",
         "trailing": None,
+        "bundle": bundle,
     }
     if head == b"\x02\x01\x00" and len(value) == 4:
         out["value_kind"] = "u32"
