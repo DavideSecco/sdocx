@@ -159,19 +159,34 @@ fn parse_note_note(data: &[u8], metadata: &mut DocumentMetadata) {
     }
 }
 
-/// Collect image media member names, ordered by their numeric index prefix.
+/// Samsung stores plain-page previews as `media/<index>@page_....spi`; those are
+/// internal thumbnails, not page content. Other `.spi` members can be real image
+/// placements (for example "convert to math" formula renders), so keep them in
+/// the media manifest for a dedicated decoder to handle.
+fn is_page_thumbnail_spi(name: &str) -> bool {
+    let base = name.rsplit('/').next().unwrap_or(name);
+    let lower = base.to_ascii_lowercase();
+    lower
+        .split_once('@')
+        .is_some_and(|(_, rest)| rest.starts_with("page_") && rest.ends_with(".spi"))
+}
+
+fn is_renderable_media_member(name: &str) -> bool {
+    if !name.starts_with("media/") || media_archive_index(name).is_none() {
+        return false;
+    }
+    !is_page_thumbnail_spi(name)
+}
+
+/// Collect renderable media member names, ordered by their numeric index prefix.
 fn media_member_names<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Vec<String> {
     let mut names: Vec<String> = (0..archive.len())
         .filter_map(|i| {
             let name = archive.by_index(i).ok()?.name().to_string();
-            let lower = name.to_ascii_lowercase();
             // Renderable media members are `media/<index>@...`. Extensions are
             // unreliable — pasted images are extensionless JPEGs — so filter by
-            // the indexed prefix and exclude Samsung-internal `.spi` previews.
-            if name.starts_with("media/")
-                && media_archive_index(&name).is_some()
-                && !lower.ends_with(".spi")
-            {
+            // the indexed prefix and exclude only Samsung-internal page previews.
+            if is_renderable_media_member(&name) {
                 Some(name)
             } else {
                 None
@@ -188,6 +203,8 @@ fn mime_for(name: &str) -> &'static str {
         "image/png"
     } else if lower.ends_with(".webp") {
         "image/webp"
+    } else if lower.ends_with(".spi") {
+        "application/x-samsung-spi"
     } else if lower.ends_with(".m4a") {
         "audio/mp4"
     } else if lower.ends_with(".aac") {
@@ -928,6 +945,60 @@ mod tests {
         }
         // The raw indices themselves — byte-identical to what pysdocx decodes.
         assert_eq!(pdf_indices, [0u32, 2u32].into_iter().collect());
+    }
+
+    /// "Convert to math" formula objects can be stored as non-thumbnail `.spi`
+    /// media. Keep those renderable assets addressable while still dropping the
+    /// ordinary `page_*.spi` previews from the media manifest.
+    #[test]
+    fn non_thumbnail_spi_formula_media_is_addressable() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../samples/MultiMath_260724_201808/note.sdocx");
+        if !path.exists() {
+            eprintln!("skipping: MultiMath sample not present");
+            return;
+        }
+        let mut reader = crate::open(&path).expect("open sample");
+        let page = reader.page(2).expect("parse page 3");
+        let image_media: Vec<_> = page
+            .elements
+            .iter()
+            .filter_map(|el| match el {
+                crate::types::PageElement::Image { media_index, .. } => Some(*media_index),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(image_media, vec![2]);
+
+        let asset = reader.media_asset(2).expect("formula .spi media asset");
+        assert!(asset.name.ends_with(".spi"), "{}", asset.name);
+        assert!(
+            !asset.name.contains("@page_"),
+            "formula media was misclassified as a thumbnail"
+        );
+        assert_eq!(asset.mime_type, "application/x-samsung-spi");
+
+        let bytes = reader.media_bytes(2).expect("formula .spi bytes");
+        assert!(bytes.len() > 6);
+        assert_eq!(&bytes[4..6], &[0xAA, 0x01]);
+        assert_eq!(
+            crate::samsung_spi::parse_info(&bytes),
+            Some(crate::samsung_spi::SpiInfo {
+                width: 1408,
+                height: 286,
+                header_len: 20,
+                payload_len: 54329,
+            })
+        );
+
+        assert!(
+            reader
+                .metadata()
+                .media_assets
+                .iter()
+                .all(|asset| !asset.name.contains("@page_")),
+            "page thumbnail .spi previews must stay out of the renderable media manifest"
+        );
     }
 
     /// note.note inline images resolve to a host page + page-local bbox that

@@ -3,6 +3,7 @@ mod decode;
 mod error;
 mod note_doc;
 mod page;
+pub mod samsung_spi;
 mod shape;
 mod types;
 

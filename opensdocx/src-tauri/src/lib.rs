@@ -189,6 +189,10 @@ async fn get_media(index: usize, state: State<'_, AppState>) -> Result<MediaOut,
         [0x89, b'P', b'N', b'G', ..] => Some("image/png"),
         [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => Some("image/webp"),
         [b'G', b'I', b'F', b'8', ..] => Some("image/gif"),
+        // Samsung's S Pen screen-codec / Maetel stream. It is a length-framed
+        // raster image used both for page previews and some real page objects
+        // (notably "convert to math" formula renders).
+        [_, _, _, _, 0xAA, 0x01, ..] => Some("application/x-samsung-spi"),
         _ => None,
     };
     Ok(MediaOut {
