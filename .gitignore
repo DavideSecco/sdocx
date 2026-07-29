@@ -123,3 +123,7 @@ outputs_render/
 # Samsung Notes APK reverse engineering (decompiled code, native libs,
 # instrumentation scripts) — private, not for the public repo
 apk-re/
+
+# Claude Code / agent session config: machine-local permission allow-lists and
+# personal overrides, nothing another checkout needs
+.claude/
