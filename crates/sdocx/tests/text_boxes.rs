@@ -270,7 +270,11 @@ fn row_from_parsed(b: &RichTextBox) -> Row {
             .iter()
             .map(|c| (c.start, c.end, [c.color.r, c.color.g, c.color.b]))
             .collect(),
-        font_sizes: b.font_sizes.iter().map(|f| (f.start, f.end, f.size)).collect(),
+        font_sizes: b
+            .font_sizes
+            .iter()
+            .map(|f| (f.start, f.end, f.size))
+            .collect(),
         font_size: b.font_size,
     }
 }
@@ -278,7 +282,11 @@ fn row_from_parsed(b: &RichTextBox) -> Row {
 fn row_from_fixture(v: &json::Value) -> Row {
     let color3 = |v: &json::Value| -> [u8; 3] {
         let a = v.as_arr();
-        [a[0].as_f64() as u8, a[1].as_f64() as u8, a[2].as_f64() as u8]
+        [
+            a[0].as_f64() as u8,
+            a[1].as_f64() as u8,
+            a[2].as_f64() as u8,
+        ]
     };
     let mut runs: Vec<(String, usize, usize)> = v
         .get("runs")
@@ -317,13 +325,25 @@ fn row_from_fixture(v: &json::Value) -> Row {
             .get("colors")
             .as_arr()
             .iter()
-            .map(|c| (c.get("start").as_usize(), c.get("end").as_usize(), color3(c.get("color"))))
+            .map(|c| {
+                (
+                    c.get("start").as_usize(),
+                    c.get("end").as_usize(),
+                    color3(c.get("color")),
+                )
+            })
             .collect(),
         highlights: v
             .get("highlights")
             .as_arr()
             .iter()
-            .map(|c| (c.get("start").as_usize(), c.get("end").as_usize(), color3(c.get("color"))))
+            .map(|c| {
+                (
+                    c.get("start").as_usize(),
+                    c.get("end").as_usize(),
+                    color3(c.get("color")),
+                )
+            })
             .collect(),
         font_sizes: v
             .get("font_sizes")
@@ -392,7 +412,10 @@ fn text_boxes_match_pysdocx() {
                     .iter()
                     .find(|b| b.text == exp_row.text)
                     .unwrap_or_else(|| {
-                        panic!("{sample_name} {page_name}: no box with text {:?}", exp_row.text)
+                        panic!(
+                            "{sample_name} {page_name}: no box with text {:?}",
+                            exp_row.text
+                        )
                     });
                 let got_row = row_from_parsed(got_box);
                 assert_eq!(got_row, exp_row, "{sample_name} {page_name}");

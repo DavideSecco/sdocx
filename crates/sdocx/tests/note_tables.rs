@@ -17,7 +17,11 @@ fn samples_dir() -> PathBuf {
 }
 
 fn f64s(v: &serde_json::Value) -> Vec<f64> {
-    v.as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect()
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x.as_f64().unwrap())
+        .collect()
 }
 
 fn u64_at(v: &serde_json::Value, k: &str) -> u64 {
@@ -40,22 +44,58 @@ fn assert_floats(ctx: &str, name: &str, got: &[f64], want: &serde_json::Value) {
 
 fn assert_border(ctx: &str, got: &TableBorder, want: &serde_json::Value) {
     let w = want.as_array().unwrap();
-    assert_eq!(got.argb as u64, w[0].as_u64().unwrap(), "{ctx}: border argb");
-    assert!(close(got.width as f64, w[1].as_f64().unwrap()), "{ctx}: border width");
-    assert!(close(got.radius_x as f64, w[2].as_f64().unwrap()), "{ctx}: border radius_x");
-    assert!(close(got.radius_y as f64, w[3].as_f64().unwrap()), "{ctx}: border radius_y");
+    assert_eq!(
+        got.argb as u64,
+        w[0].as_u64().unwrap(),
+        "{ctx}: border argb"
+    );
+    assert!(
+        close(got.width as f64, w[1].as_f64().unwrap()),
+        "{ctx}: border width"
+    );
+    assert!(
+        close(got.radius_x as f64, w[2].as_f64().unwrap()),
+        "{ctx}: border radius_x"
+    );
+    assert!(
+        close(got.radius_y as f64, w[3].as_f64().unwrap()),
+        "{ctx}: border radius_y"
+    );
 }
 
 fn assert_table(ctx: &str, got: &NoteTable, want: &serde_json::Value) {
     assert_eq!(got.uuid, want["uuid"].as_str().unwrap(), "{ctx}: uuid");
-    assert_eq!(got.page_width as u64, u64_at(want, "page_width"), "{ctx}: page_width");
-    assert_eq!(got.table_index as u64, u64_at(want, "table_index"), "{ctx}: table_index");
+    assert_eq!(
+        got.page_width as u64,
+        u64_at(want, "page_width"),
+        "{ctx}: page_width"
+    );
+    assert_eq!(
+        got.table_index as u64,
+        u64_at(want, "table_index"),
+        "{ctx}: table_index"
+    );
     assert_eq!(got.n_rows as u64, u64_at(want, "n_rows"), "{ctx}: n_rows");
     assert_eq!(got.n_cols as u64, u64_at(want, "n_cols"), "{ctx}: n_cols");
-    assert_eq!(got.theme_fill_argb as u64, u64_at(want, "theme_fill_argb"), "{ctx}: theme_fill");
-    assert!(close(got.table_width_max as f64, want["table_width_max"].as_f64().unwrap()), "{ctx}: table_width_max");
+    assert_eq!(
+        got.theme_fill_argb as u64,
+        u64_at(want, "theme_fill_argb"),
+        "{ctx}: theme_fill"
+    );
+    assert!(
+        close(
+            got.table_width_max as f64,
+            want["table_width_max"].as_f64().unwrap()
+        ),
+        "{ctx}: table_width_max"
+    );
 
-    let bbox = [got.bbox.x_min, got.bbox.y_min, got.bbox.x_max, got.bbox.y_max];
+    let bbox = [
+        got.bbox.x_min,
+        got.bbox.y_min,
+        got.bbox.x_max,
+        got.bbox.y_max,
+    ];
     assert_floats(ctx, "bbox", &bbox, &want["bbox"]);
     let widths: Vec<f64> = got.col_widths.iter().map(|&w| w as f64).collect();
     assert_floats(ctx, "col_widths", &widths, &want["col_widths"]);
@@ -82,9 +122,17 @@ fn assert_table(ctx: &str, got: &NoteTable, want: &serde_json::Value) {
         assert_eq!(c.uuid, w["uuid"].as_str().unwrap(), "{cctx}: uuid");
         assert_eq!(c.version as u64, u64_at(w, "version"), "{cctx}: version");
         assert_eq!(c.styled, w["styled"].as_bool().unwrap(), "{cctx}: styled");
-        assert_eq!(c.fill_argb as u64, u64_at(w, "fill_argb"), "{cctx}: fill_argb");
+        assert_eq!(
+            c.fill_argb as u64,
+            u64_at(w, "fill_argb"),
+            "{cctx}: fill_argb"
+        );
         assert_eq!(c.text, w["text"].as_str().unwrap(), "{cctx}: text");
-        assert_eq!(c.spans.len() as u64, u64_at(w, "n_spans"), "{cctx}: n_spans");
+        assert_eq!(
+            c.spans.len() as u64,
+            u64_at(w, "n_spans"),
+            "{cctx}: n_spans"
+        );
         let bbox = [c.bbox.x_min, c.bbox.y_min, c.bbox.x_max, c.bbox.y_max];
         assert_floats(&cctx, "bbox", &bbox, &w["bbox"]);
     }

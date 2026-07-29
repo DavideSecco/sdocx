@@ -229,7 +229,13 @@ fn parse_common_frame(blob: &[u8], off: usize, format_version: u32) -> R<CommonF
         } else {
             0
         };
-        spans.push(FrameSpan { span_type, start, end, interval_type, value });
+        spans.push(FrameSpan {
+            span_type,
+            start,
+            end,
+            interval_type,
+            value,
+        });
     }
 
     let paragraph_count = win.u32()? as usize;
@@ -244,7 +250,12 @@ fn parse_common_frame(blob: &[u8], off: usize, format_version: u32) -> R<CommonF
         let start = win.u32()?;
         let end = win.u32()?;
         let extra = win.bytes(size - PARAGRAPH_BASE_SIZE)?.to_vec();
-        paragraphs.push(FrameParagraph { paragraph_type, start, end, extra });
+        paragraphs.push(FrameParagraph {
+            paragraph_type,
+            start,
+            end,
+            extra,
+        });
     }
 
     let _margins = [win.f32()?, win.f32()?, win.f32()?, win.f32()?];
@@ -280,12 +291,24 @@ fn parse_common_frame(blob: &[u8], off: usize, format_version: u32) -> R<CommonF
                 obj_win.bytes(obj_size)?;
                 let position = obj_win.u32()?;
                 // trailing 8 bytes of Unknown semantics are left unconsumed here.
-                inline_objects.push(InlineObject { obj_size, object_type, body_off, position });
+                inline_objects.push(InlineObject {
+                    obj_size,
+                    object_type,
+                    body_off,
+                    position,
+                });
             }
         }
     }
 
-    Ok(CommonFrame { frame_size, text, spans, paragraphs, sections, inline_objects })
+    Ok(CommonFrame {
+        frame_size,
+        text,
+        spans,
+        paragraphs,
+        sections,
+        inline_objects,
+    })
 }
 
 /// All offsets in `blob` where a complete Common frame parses cleanly (pysdocx
@@ -369,7 +392,9 @@ fn read_f64(blob: &[u8], p: usize) -> R<f64> {
 /// Format version is the first fixed ObjectBase field after its header
 /// (pysdocx `base_format_version`).
 fn base_format_version(blob: &[u8], base: &ObjectFrameHeader) -> R<u32> {
-    let b = blob.get(base.header_end..base.header_end + 4).ok_or("format version out of range")?;
+    let b = blob
+        .get(base.header_end..base.header_end + 4)
+        .ok_or("format version out of range")?;
     Ok(u32::from_le_bytes(b.try_into().unwrap()))
 }
 
@@ -448,7 +473,10 @@ fn parse_text_wrapper(blob: &[u8], off: usize) -> R<TextWrapper> {
         control_points.push((cur.f64()?, cur.f64()?));
     }
     let shape_flex = shape.flex_off.ok_or("Shape has no flex offset")?;
-    ensure(cur.pos == shape_flex, "Shape fixed fields end != flex offset")?;
+    ensure(
+        cur.pos == shape_flex,
+        "Shape fixed fields end != flex offset",
+    )?;
 
     let flags = shape.field_flags;
     let supported = (1 << 0) | (1 << 11) | (1 << 12) | (1 << 13);
@@ -460,14 +488,29 @@ fn parse_text_wrapper(blob: &[u8], off: usize) -> R<TextWrapper> {
         cur.pos += 4 + frame.frame_size;
         common = Some(frame);
     }
-    let shape_field_11_f32 = if flags & (1 << 11) != 0 { Some(cur.f32()?) } else { None };
-    let ellipsis_type = if flags & (1 << 12) != 0 { Some(cur.u8()?) } else { None };
-    let text_auto_fit_type = if flags & (1 << 13) != 0 { Some(cur.u8()?) } else { None };
+    let shape_field_11_f32 = if flags & (1 << 11) != 0 {
+        Some(cur.f32()?)
+    } else {
+        None
+    };
+    let ellipsis_type = if flags & (1 << 12) != 0 {
+        Some(cur.u8()?)
+    } else {
+        None
+    };
+    let text_auto_fit_type = if flags & (1 << 13) != 0 {
+        Some(cur.u8()?)
+    } else {
+        None
+    };
     ensure_eof(&cur, "Shape Text wrapper")?;
 
     let text = parse_object_frame_header(blob, shape.end, 2)?;
     if let Some(flex) = text.flex_off {
-        ensure(text.header_end == flex, "Text frame has unexpected fixed fields")?;
+        ensure(
+            text.header_end == flex,
+            "Text frame has unexpected fixed fields",
+        )?;
     }
     let mut cur = Cur::new(blob, text.flex_off.unwrap_or(text.header_end), text.end);
     let text_flags = text.field_flags;
@@ -477,8 +520,16 @@ fn parse_text_wrapper(blob: &[u8], off: usize) -> R<TextWrapper> {
     } else {
         None
     };
-    let border_width = if text_flags & 4 != 0 { Some(cur.f32()?) } else { None };
-    let border_type = if text_flags & 8 != 0 { Some(cur.u16()?) } else { None };
+    let border_width = if text_flags & 4 != 0 {
+        Some(cur.f32()?)
+    } else {
+        None
+    };
+    let border_type = if text_flags & 8 != 0 {
+        Some(cur.u16()?)
+    } else {
+        None
+    };
     ensure_eof(&cur, "Text frame")?;
 
     let trailing_len = blob.len() - text.end;
@@ -579,7 +630,9 @@ fn structural_paragraphs(frame: &CommonFrame) -> Vec<ParagraphInfo> {
                         p.list = match kind {
                             4 => Some(ListItem::Numbered { number: value }),
                             8 => Some(ListItem::Bullet),
-                            2 => Some(ListItem::Todo { checked: value != 0 }),
+                            2 => Some(ListItem::Todo {
+                                checked: value != 0,
+                            }),
                             _ => p.list,
                         };
                     }
@@ -626,7 +679,10 @@ fn common_frame_rich_text(frame: &CommonFrame) -> Option<WrapperRichText> {
     // paragraph-indexed record.  Keeping the raw prefix here rendered the
     // table anchor as "[OBJ]" and pushed AllSamsung's page-5 text far down.
     let raw = frame.text.trim_end_matches(['\0', '\n']);
-    let lead = raw.chars().take_while(|&c| c == '\n' || c == '\u{FFFC}').count();
+    let lead = raw
+        .chars()
+        .take_while(|&c| c == '\n' || c == '\u{FFFC}')
+        .count();
     let paragraph_lead = raw.chars().take(lead).filter(|&c| c == '\n').count();
     let text: String = raw.chars().skip(lead).collect();
     if text.trim().is_empty() {
@@ -677,7 +733,11 @@ fn common_frame_rich_text(frame: &CommonFrame) -> Option<WrapperRichText> {
                 let row = ColorRun {
                     start,
                     end,
-                    color: Color { r: (value >> 16) as u8, g: (value >> 8) as u8, b: value as u8 },
+                    color: Color {
+                        r: (value >> 16) as u8,
+                        g: (value >> 8) as u8,
+                        b: value as u8,
+                    },
                 };
                 if span.span_type == 1 {
                     colors.push(row);
@@ -694,7 +754,10 @@ fn common_frame_rich_text(frame: &CommonFrame) -> Option<WrapperRichText> {
             _ => {}
         }
     }
-    let paragraphs = structural_paragraphs(frame).into_iter().skip(paragraph_lead).collect();
+    let paragraphs = structural_paragraphs(frame)
+        .into_iter()
+        .skip(paragraph_lead)
+        .collect();
     Some(WrapperRichText {
         text,
         runs,
@@ -786,7 +849,13 @@ fn parse_note_doc_header(note: &[u8]) -> R<NoteHeader> {
 
     let body_size = cur.u32()? as usize;
     let body_off = cur.pos;
-    Ok(NoteHeader { format_version, body_off, body_size, flex_offset, field_flags })
+    Ok(NoteHeader {
+        format_version,
+        body_off,
+        body_size,
+        flex_offset,
+        field_flags,
+    })
 }
 
 // --- type-22 table object -------------------------------------------------
@@ -826,7 +895,14 @@ fn parse_table_wrap(cur: &mut Cur, table_level: bool) -> R<TableWrap> {
         table_index = cur.u32()?;
     }
     ensure(cur.pos == start + size, "wrap size mismatch")?;
-    Ok(TableWrap { version, uuid, ts1_us, bbox, page_width, table_index })
+    Ok(TableWrap {
+        version,
+        uuid,
+        ts1_us,
+        bbox,
+        page_width,
+        table_index,
+    })
 }
 
 /// Self-sized record: the 4 edge midpoints of a rect (text coords). Cell-level
@@ -955,7 +1031,10 @@ fn parse_table_object(blob: &[u8], off: usize, size: usize, format_version: u32)
 
     let content_start = cur.pos;
     let content_size = cur.u32()? as usize;
-    ensure(content_start + content_size == off + size, "content size mismatch")?;
+    ensure(
+        content_start + content_size == off + size,
+        "content size mismatch",
+    )?;
     ensure(cur.u16()? == TABLE_OBJECT_TYPE as u16, "content tag != 22")?;
     ensure(cur.u16()? == 15, "content u16 != 15")?;
     ensure(cur.u16()? == 0, "content pad")?;
@@ -1077,7 +1156,8 @@ pub fn note_tables(note: &[u8]) -> Vec<NoteTable> {
         if obj.object_type != TABLE_OBJECT_TYPE {
             continue;
         }
-        if let Ok(table) = parse_table_object(body, obj.body_off, obj.obj_size, header.format_version)
+        if let Ok(table) =
+            parse_table_object(body, obj.body_off, obj.obj_size, header.format_version)
         {
             tables.push(table);
         }
@@ -1144,7 +1224,12 @@ pub fn note_inline_images(note: &[u8]) -> Vec<NoteInlineImage> {
         let Some(media_index) = crate::page::image_media_index(obj_body) else {
             continue;
         };
-        let bbox = BoundingBox { x_min, y_min, x_max, y_max };
+        let bbox = BoundingBox {
+            x_min,
+            y_min,
+            x_max,
+            y_max,
+        };
         out.push(NoteInlineImage {
             media_index,
             page_index: section_of(&body_frame.sections, obj.position),
@@ -1241,7 +1326,13 @@ fn parse_voice_recording(cur: &mut Cur) -> R<NoteVoiceClip> {
     }
     let duration_ms = win.i64()?;
     ensure_eof(&win, "voice_recording")?;
-    Ok(NoteVoiceClip { file_id, name, duration_ms, duration_str, created_time_ms })
+    Ok(NoteVoiceClip {
+        file_id,
+        name,
+        duration_ms,
+        duration_str,
+        created_time_ms,
+    })
 }
 
 /// Decode every voice recording attached to the note (`note.note` field_flags
@@ -1256,8 +1347,7 @@ pub fn note_voice_clips(note: &[u8]) -> Vec<NoteVoiceClip> {
         return Vec::new();
     }
     let body_end = header.body_off + header.body_size;
-    if body_end > note.len() || header.flex_offset > note.len() || header.flex_offset < body_end
-    {
+    if body_end > note.len() || header.flex_offset > note.len() || header.flex_offset < body_end {
         return Vec::new();
     }
     let mut cur = Cur::new(note, body_end, note.len());
@@ -1325,18 +1415,33 @@ mod wrapper_parity {
 
     fn assert_wrapper(ctx: &str, w: &TextWrapper, e: &serde_json::Value) {
         let u = |k: &str| e[k].as_u64().unwrap();
-        assert_eq!(w.base.size as u64, u("object_base_size"), "{ctx}: object_base_size");
-        assert_eq!(w.shape_base.size as u64, u("shape_base_size"), "{ctx}: shape_base_size");
+        assert_eq!(
+            w.base.size as u64,
+            u("object_base_size"),
+            "{ctx}: object_base_size"
+        );
+        assert_eq!(
+            w.shape_base.size as u64,
+            u("shape_base_size"),
+            "{ctx}: shape_base_size"
+        );
         assert_eq!(w.shape.size as u64, u("shape_size"), "{ctx}: shape_size");
         assert_eq!(w.text.size as u64, u("text_size"), "{ctx}: text_size");
         assert_eq!(w.shape_type as u64, u("shape_type"), "{ctx}: shape_type");
 
         let want_rect = e["original_rect"].as_array().unwrap();
         for (i, g) in w.original_rect.iter().enumerate() {
-            assert!(close(*g, want_rect[i].as_f64().unwrap(), 1e-6), "{ctx}: original_rect[{i}]");
+            assert!(
+                close(*g, want_rect[i].as_f64().unwrap(), 1e-6),
+                "{ctx}: original_rect[{i}]"
+            );
         }
         assert!(
-            close(w.original_angle as f64, e["original_angle"].as_f64().unwrap(), 1e-3),
+            close(
+                w.original_angle as f64,
+                e["original_angle"].as_f64().unwrap(),
+                1e-3
+            ),
             "{ctx}: original_angle"
         );
 
@@ -1353,26 +1458,37 @@ mod wrapper_parity {
                 let (gx, gy) = w.base_pivot.unwrap();
                 let a = v.as_array().unwrap();
                 assert!(
-                    close(gx, a[0].as_f64().unwrap(), 1e-6) && close(gy, a[1].as_f64().unwrap(), 1e-6),
+                    close(gx, a[0].as_f64().unwrap(), 1e-6)
+                        && close(gy, a[1].as_f64().unwrap(), 1e-6),
                     "{ctx}: base_pivot"
                 );
             }
         }
 
-        assert_eq!(hex(&w.path_raw), e["path_hex"].as_str().unwrap(), "{ctx}: path_hex");
+        assert_eq!(
+            hex(&w.path_raw),
+            e["path_hex"].as_str().unwrap(),
+            "{ctx}: path_hex"
+        );
         let want_cp = e["control_points"].as_array().unwrap();
-        assert_eq!(w.control_points.len(), want_cp.len(), "{ctx}: control_points len");
+        assert_eq!(
+            w.control_points.len(),
+            want_cp.len(),
+            "{ctx}: control_points len"
+        );
         for (i, (gx, gy)) in w.control_points.iter().enumerate() {
             let a = want_cp[i].as_array().unwrap();
             assert!(
-                close(*gx, a[0].as_f64().unwrap(), 1e-6) && close(*gy, a[1].as_f64().unwrap(), 1e-6),
+                close(*gx, a[0].as_f64().unwrap(), 1e-6)
+                    && close(*gy, a[1].as_f64().unwrap(), 1e-6),
                 "{ctx}: control_points[{i}]"
             );
         }
 
         assert_eq!(
             w.shape_field_11_f32.map(f64::from),
-            e.get("shape_field_11_f32").and_then(serde_json::Value::as_f64),
+            e.get("shape_field_11_f32")
+                .and_then(serde_json::Value::as_f64),
             "{ctx}: shape_field_11_f32"
         );
         assert_eq!(
@@ -1401,17 +1517,33 @@ mod wrapper_parity {
                 "{ctx}: border_width"
             ),
         }
-        assert_eq!(w.border_type.map(|x| x as u64), opt_u64(&e["border_type"]), "{ctx}: border_type");
-        assert_eq!(w.trailing_len as u64, u("trailing_len"), "{ctx}: trailing_len");
+        assert_eq!(
+            w.border_type.map(|x| x as u64),
+            opt_u64(&e["border_type"]),
+            "{ctx}: border_type"
+        );
+        assert_eq!(
+            w.trailing_len as u64,
+            u("trailing_len"),
+            "{ctx}: trailing_len"
+        );
 
-        assert_eq!(w.common.is_some(), e["has_common"].as_bool().unwrap(), "{ctx}: has_common");
+        assert_eq!(
+            w.common.is_some(),
+            e["has_common"].as_bool().unwrap(),
+            "{ctx}: has_common"
+        );
         if let Some(c) = &w.common {
             assert_eq!(
                 c.text.chars().count() as u64,
                 u("common_char_count"),
                 "{ctx}: common_char_count"
             );
-            assert_eq!(c.spans.len() as u64, u("common_span_count"), "{ctx}: common_span_count");
+            assert_eq!(
+                c.spans.len() as u64,
+                u("common_span_count"),
+                "{ctx}: common_span_count"
+            );
             assert_paragraphs(ctx, c, &e["paragraphs"]);
         }
     }
@@ -1431,8 +1563,16 @@ mod wrapper_parity {
                 Alignment::Right => "right",
                 Alignment::Center => "center",
             };
-            assert_eq!(got_align, w["alignment"].as_str().unwrap(), "{pctx}: alignment");
-            assert_eq!(g.indent as u64, w["indent"].as_u64().unwrap(), "{pctx}: indent");
+            assert_eq!(
+                got_align,
+                w["alignment"].as_str().unwrap(),
+                "{pctx}: alignment"
+            );
+            assert_eq!(
+                g.indent as u64,
+                w["indent"].as_u64().unwrap(),
+                "{pctx}: indent"
+            );
 
             let got_style = g.style.map(|s| match s {
                 ParagraphStyle::Heading1 => "heading1",
@@ -1450,11 +1590,19 @@ mod wrapper_parity {
                 None => assert!(g.line_spacing.is_none(), "{pctx}: line_spacing != None"),
             }
             assert!(
-                close(g.space_before as f64, w["space_before"].as_f64().unwrap(), 1e-4),
+                close(
+                    g.space_before as f64,
+                    w["space_before"].as_f64().unwrap(),
+                    1e-4
+                ),
                 "{pctx}: space_before"
             );
             assert!(
-                close(g.space_after as f64, w["space_after"].as_f64().unwrap(), 1e-4),
+                close(
+                    g.space_after as f64,
+                    w["space_after"].as_f64().unwrap(),
+                    1e-4
+                ),
                 "{pctx}: space_after"
             );
 
@@ -1462,14 +1610,22 @@ mod wrapper_parity {
                 (None, serde_json::Value::Null) => {}
                 (Some(ListItem::Numbered { number }), v) => {
                     assert_eq!(v["type"].as_str().unwrap(), "numbered", "{pctx}: list type");
-                    assert_eq!(*number as u64, v["number"].as_u64().unwrap(), "{pctx}: list number");
+                    assert_eq!(
+                        *number as u64,
+                        v["number"].as_u64().unwrap(),
+                        "{pctx}: list number"
+                    );
                 }
                 (Some(ListItem::Bullet), v) => {
                     assert_eq!(v["type"].as_str().unwrap(), "bullet", "{pctx}: list type");
                 }
                 (Some(ListItem::Todo { checked }), v) => {
                     assert_eq!(v["type"].as_str().unwrap(), "todo", "{pctx}: list type");
-                    assert_eq!(*checked, v["checked"].as_bool().unwrap(), "{pctx}: list checked");
+                    assert_eq!(
+                        *checked,
+                        v["checked"].as_bool().unwrap(),
+                        "{pctx}: list checked"
+                    );
                 }
                 (g, w) => panic!("{pctx}: list mismatch got={g:?} want={w:?}"),
             }

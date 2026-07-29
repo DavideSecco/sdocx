@@ -1,8 +1,8 @@
 use crate::decode::{decode_coordinates, decode_trailing};
 use crate::error::{Error, Result};
 use crate::types::{
-    BoundingBox, Color, ColorRun, FontSizeRun, Page, PageElement, PageTemplate,
-    PageTemplateSource, Point, RichTextBox, RichTextRun, Stroke,
+    BoundingBox, Color, ColorRun, FontSizeRun, Page, PageElement, PageTemplate, PageTemplateSource,
+    Point, RichTextBox, RichTextRun, Stroke,
 };
 
 // Layer/object tree constants (mirror pysdocx page.py):
@@ -179,7 +179,11 @@ fn parse_object_header(blob: &[u8]) -> Option<ObjectHeader> {
     pos += 1 + flag_len;
     let field_len = *blob.get(pos)? as usize;
     let mut field_flags: u64 = 0;
-    for (i, &b) in blob.get(pos + 1..pos + 1 + field_len.min(8))?.iter().enumerate() {
+    for (i, &b) in blob
+        .get(pos + 1..pos + 1 + field_len.min(8))?
+        .iter()
+        .enumerate()
+    {
         field_flags |= (b as u64) << (8 * i);
     }
     pos += 1 + field_len;
@@ -346,7 +350,12 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
         let stroke_off = obj.blob_off + OBJECT_BBOX_OFFSET;
 
         let current = parse_stroke(data, stroke_off, extra_len, StrokeLayout::Current);
-        let shifted = parse_stroke(data, stroke_off, extra_len, StrokeLayout::StartPointMinusThree);
+        let shifted = parse_stroke(
+            data,
+            stroke_off,
+            extra_len,
+            StrokeLayout::StartPointMinusThree,
+        );
 
         // Pick the layout whose decoded points are consistent with the stroke's
         // bounding box, not the one that merely yields more points — a garbage
@@ -376,8 +385,14 @@ pub fn parse_page(data: &[u8]) -> Result<Page> {
             if looks_like_flat_synthetic_line(&parsed.stroke, extra_len) {
                 let bbox = parsed.stroke.bbox;
                 parsed.stroke.points = vec![
-                    Point { x: bbox.x_min, y: bbox.y_min },
-                    Point { x: bbox.x_max, y: bbox.y_max },
+                    Point {
+                        x: bbox.x_min,
+                        y: bbox.y_min,
+                    },
+                    Point {
+                        x: bbox.x_max,
+                        y: bbox.y_max,
+                    },
                 ];
             }
             strokes.push(parsed.stroke);
@@ -652,7 +667,6 @@ fn is_builtin_template_id(id: u32) -> bool {
     id != 0 && id <= 0xFFFF
 }
 
-
 fn parse_page_elements(
     data: &[u8],
     objects: &[PageObject],
@@ -679,37 +693,39 @@ fn parse_page_elements(
             // `find_object_bbox`/`plausible_bbox` scan which rejects `x_min < 1`
             // and so dropped the 270° image. See docs object-types.md.
             if let Some(bbox) = read_image_bbox(blob, marker + IMAGE_BBOX_FWD, width, height)
-                && let Some(media_index) = image_media_index(blob) {
-                    let mut angle_deg = None;
-                    let mut affine_transform = None;
-                    if let Some(header) = parse_object_header(blob) {
-                        let bbox_cx = (bbox.x_min + bbox.x_max) / 2.0;
-                        let bbox_cy = (bbox.y_min + bbox.y_max) / 2.0;
-                        angle_deg = object_rotation_degrees(blob, header.field_flags);
-                        if let Some(points_off) = payload_geometry_4_points(blob, &header)
-                            && let Some(quad) = read_geometry_quad(blob, points_off, bbox_cx, bbox_cy)
-                        {
-                            affine_transform = derive_affine_transform(bbox, quad);
-                        }
+                && let Some(media_index) = image_media_index(blob)
+            {
+                let mut angle_deg = None;
+                let mut affine_transform = None;
+                if let Some(header) = parse_object_header(blob) {
+                    let bbox_cx = (bbox.x_min + bbox.x_max) / 2.0;
+                    let bbox_cy = (bbox.y_min + bbox.y_max) / 2.0;
+                    angle_deg = object_rotation_degrees(blob, header.field_flags);
+                    if let Some(points_off) = payload_geometry_4_points(blob, &header)
+                        && let Some(quad) = read_geometry_quad(blob, points_off, bbox_cx, bbox_cy)
+                    {
+                        affine_transform = derive_affine_transform(bbox, quad);
                     }
-                    elements.push(PageElement::Image {
-                        bbox,
-                        media_index,
-                        angle_deg,
-                        affine_transform,
-                        crop: image_crop(blob, bbox),
-                    });
                 }
+                elements.push(PageElement::Image {
+                    bbox,
+                    media_index,
+                    angle_deg,
+                    affine_transform,
+                    crop: image_crop(blob, bbox),
+                });
+            }
             continue;
         }
 
         // Text boxes are raw type-2 objects whose blob decodes as text
         // (pysdocx `_classify_page_object`).
         if obj.raw_type == 2
-            && let Some(text_box) = parse_text_box_object(blob) {
-                elements.push(PageElement::TextBox(text_box));
-                continue;
-            }
+            && let Some(text_box) = parse_text_box_object(blob)
+        {
+            elements.push(PageElement::TextBox(text_box));
+            continue;
+        }
 
         let mut shapes = Vec::new();
         crate::shape::parse_shapes_in_object(
@@ -790,7 +806,12 @@ pub(crate) fn image_crop(record: &[u8], bbox: BoundingBox) -> Option<crate::type
         return None;
     }
     let f = |o: usize| f64::from_le_bytes(record[o..o + 8].try_into().unwrap());
-    let (x0, y0, x1, y1) = (f(rect_off), f(rect_off + 8), f(rect_off + 16), f(rect_off + 24));
+    let (x0, y0, x1, y1) = (
+        f(rect_off),
+        f(rect_off + 8),
+        f(rect_off + 16),
+        f(rect_off + 24),
+    );
     if ![x0, y0, x1, y1].iter().all(|v| v.is_finite()) || x1 <= x0 || y1 <= y0 {
         return None;
     }
@@ -919,12 +940,7 @@ const PAYLOAD_GEOMETRY_HEADER_LEN: usize = 18;
 /// Read and validate a 4-point quad from blob at given offset, checking that
 /// the centroid is within 1.0 of the bbox center (pysdocx `_text_box_frame_midpoints`
 /// inner closure, extracted for reuse by both text boxes and images).
-fn read_geometry_quad(
-    blob: &[u8],
-    start: usize,
-    bbox_cx: f64,
-    bbox_cy: f64,
-) -> Option<[Point; 4]> {
+fn read_geometry_quad(blob: &[u8], start: usize, bbox_cx: f64, bbox_cy: f64) -> Option<[Point; 4]> {
     let mut pts = [Point { x: 0.0, y: 0.0 }; 4];
     for (i, pt) in pts.iter_mut().enumerate() {
         pt.x = read_f64(blob, start + i * 16)?;
@@ -975,10 +991,22 @@ fn derive_affine_transform(
 
     // Corner that each bbox corner maps to (page space):
     // (x_min,y_min)=TL, (x_max,y_min)=TR, (x_max,y_max)=BR, (x_min,y_max)=BL.
-    let tl = Point { x: cx - wx + hx, y: cy - wy + hy };
-    let tr = Point { x: cx + wx + hx, y: cy + wy + hy };
-    let br = Point { x: cx + wx - hx, y: cy + wy - hy };
-    let bl = Point { x: cx - wx - hx, y: cy - wy - hy };
+    let tl = Point {
+        x: cx - wx + hx,
+        y: cy - wy + hy,
+    };
+    let tr = Point {
+        x: cx + wx + hx,
+        y: cy + wy + hy,
+    };
+    let br = Point {
+        x: cx + wx - hx,
+        y: cy + wy - hy,
+    };
+    let bl = Point {
+        x: cx - wx - hx,
+        y: cy - wy - hy,
+    };
 
     // Solve the affine from TL/TR/BR (the shared-row system collapses to plain
     // differences over the source-rect extents); BL is the closure check.
@@ -1008,9 +1036,10 @@ fn text_box_frame_midpoints(blob: &[u8], header: &ObjectHeader) -> Option<[Point
     let bbox_cy = (header.bbox.y_min + header.bbox.y_max) / 2.0;
 
     if let Some(points_off) = payload_geometry_4_points(blob, header)
-        && let Some(pts) = read_geometry_quad(blob, points_off, bbox_cx, bbox_cy) {
-            return Some(pts);
-        }
+        && let Some(pts) = read_geometry_quad(blob, points_off, bbox_cx, bbox_cy)
+    {
+        return Some(pts);
+    }
     if header.field_flags & ANGLE_FIELD_FLAG != 0 {
         return read_geometry_quad(blob, header.total_size as usize + 0x12, bbox_cx, bbox_cy);
     }
@@ -1085,16 +1114,17 @@ fn text_box_text(blob: &[u8]) -> Option<(usize, String, usize)> {
             end += 2;
         }
         if units.len() >= 3
-            && let Ok(text) = String::from_utf16(&units) {
-                let text = text.trim_matches('\0').to_string();
-                if !text.trim().is_empty() {
-                    let score = text_score(&text);
-                    if score > best_score {
-                        best_score = score;
-                        best = Some((offset, text));
-                    }
+            && let Ok(text) = String::from_utf16(&units)
+        {
+            let text = text.trim_matches('\0').to_string();
+            if !text.trim().is_empty() {
+                let score = text_score(&text);
+                if score > best_score {
+                    best_score = score;
+                    best = Some((offset, text));
                 }
             }
+        }
         offset = if end > offset { end } else { offset + 2 };
     }
     let (off, text) = best?;
@@ -1194,13 +1224,14 @@ pub(crate) fn scan_rich_text_styles(
     ] {
         for (start, end, _value, enabled) in style_runs(data, tag, raw_len, scan_start) {
             if enabled != 0
-                && let Some((start, end)) = rebase(start, end) {
-                    runs.push(RichTextRun {
-                        start,
-                        end,
-                        ..proto.clone()
-                    });
-                }
+                && let Some((start, end)) = rebase(start, end)
+            {
+                runs.push(RichTextRun {
+                    start,
+                    end,
+                    ..proto.clone()
+                });
+            }
         }
     }
 
@@ -1213,17 +1244,19 @@ pub(crate) fn scan_rich_text_styles(
         .map(|&(s, _e, _v, _en)| s)
         .collect();
     for (start, end, _value, enabled) in strike_runs {
-        if enabled == 1 && strike_starts.contains(&end)
-            && let Some((start, end)) = rebase(start, end) {
-                runs.push(RichTextRun {
-                    start,
-                    end,
-                    bold: false,
-                    italic: false,
-                    underline: false,
-                    strikethrough: true,
-                });
-            }
+        if enabled == 1
+            && strike_starts.contains(&end)
+            && let Some((start, end)) = rebase(start, end)
+        {
+            runs.push(RichTextRun {
+                start,
+                end,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: true,
+            });
+        }
     }
 
     let argb_runs = |tag: u16| -> Vec<ColorRun> {
@@ -1350,10 +1383,7 @@ fn read_len_prefixed_ascii(data: &[u8], offset: usize) -> Option<(&str, usize)> 
 }
 
 fn is_bag_key(key: &str) -> bool {
-    (2..=64).contains(&key.len())
-        && key
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    (2..=64).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
 /// "x0,y0,x1,y1" → a page-plausible bbox (pysdocx `_parse_attachment_bbox`).
@@ -1457,7 +1487,9 @@ fn parse_attachment_property_bag(
 #[cfg(test)]
 mod tests {
     use super::{bbox_of, looks_like_flat_synthetic_line, parse_page, within_page_bounds};
-    use crate::types::{BoundingBox, Color, PageElement, PageTemplate, PageTemplateSource, Point, Stroke};
+    use crate::types::{
+        BoundingBox, Color, PageElement, PageTemplate, PageTemplateSource, Point, Stroke,
+    };
 
     fn stroke_with(bbox: BoundingBox, points: Vec<Point>) -> Stroke {
         Stroke {
@@ -1618,8 +1650,8 @@ mod tests {
     /// pink `Rosina` sample). Skips cleanly when the samples are absent.
     #[test]
     fn decodes_paper_color_from_test_background_samples() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../samples/test-background");
+        let dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/test-background");
         let cases = [
             ("Default-Liscio_260709_125314.sdocx", (252, 252, 252)),
             ("Bianca-Liscio_260709_125449.sdocx", (230, 230, 230)),
@@ -1820,7 +1852,11 @@ mod tests {
             .elements
             .iter()
             .filter_map(|el| match el {
-                PageElement::Image { bbox, affine_transform, .. } => Some((bbox, affine_transform)),
+                PageElement::Image {
+                    bbox,
+                    affine_transform,
+                    ..
+                } => Some((bbox, affine_transform)),
                 _ => None,
             })
             .collect();
@@ -1864,7 +1900,11 @@ mod tests {
             .iter()
             .find_map(|(bbox, c)| c.map(|crop| (bbox, crop)))
             .expect("one image is cropped");
-        assert!(bbox.x_min > 80.0 && bbox.x_min < 84.0, "cropped bbox x_min = {}", bbox.x_min);
+        assert!(
+            bbox.x_min > 80.0 && bbox.x_min < 84.0,
+            "cropped bbox x_min = {}",
+            bbox.x_min
+        );
         assert!((crop.x - 0.065).abs() < 0.01, "x = {}", crop.x);
         assert!((crop.y - 0.156).abs() < 0.01, "y = {}", crop.y);
         assert!((crop.w - 0.475).abs() < 0.01, "w = {}", crop.w);

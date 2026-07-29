@@ -56,7 +56,9 @@ struct Row {
 fn row(s: &Shape) -> Row {
     let pts = &s.points;
     let n = pts.len() as f64;
-    let (sx, sy) = pts.iter().fold((0.0, 0.0), |(ax, ay), p| (ax + p.x, ay + p.y));
+    let (sx, sy) = pts
+        .iter()
+        .fold((0.0, 0.0), |(ax, ay), p| (ax + p.x, ay + p.y));
     let fold = |init: f64, f: fn(f64, f64) -> f64, get: fn(&sdocx::Point) -> f64| {
         pts.iter().fold(init, |acc, p| f(acc, get(p)))
     };
@@ -82,7 +84,13 @@ fn row(s: &Shape) -> Row {
 
 fn sort_key(bbox: &[f64; 4], kind: &str) -> (i64, i64, i64, i64, String) {
     let r = |v: f64| (v * 1000.0).round() as i64;
-    (r(bbox[0]), r(bbox[1]), r(bbox[2]), r(bbox[3]), kind.to_string())
+    (
+        r(bbox[0]),
+        r(bbox[1]),
+        r(bbox[2]),
+        r(bbox[3]),
+        kind.to_string(),
+    )
 }
 
 const TOL: f64 = 2e-3; // fixture floats are rounded to 3 decimals
@@ -92,7 +100,11 @@ fn close(a: f64, b: f64) -> bool {
 }
 
 fn f64s(v: &serde_json::Value) -> Vec<f64> {
-    v.as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect()
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x.as_f64().unwrap())
+        .collect()
 }
 
 fn assert_shape_matches(ctx: &str, got: &Row, want: &serde_json::Value) {
@@ -104,8 +116,16 @@ fn assert_shape_matches(ctx: &str, got: &Row, want: &serde_json::Value) {
         "{ctx}: type_code"
     );
     assert_eq!(got.closed, w("closed").as_bool().unwrap(), "{ctx}: closed");
-    assert_eq!(got.head_start, w("head_start").as_bool().unwrap(), "{ctx}: head_start");
-    assert_eq!(got.head_end, w("head_end").as_bool().unwrap(), "{ctx}: head_end");
+    assert_eq!(
+        got.head_start,
+        w("head_start").as_bool().unwrap(),
+        "{ctx}: head_start"
+    );
+    assert_eq!(
+        got.head_end,
+        w("head_end").as_bool().unwrap(),
+        "{ctx}: head_end"
+    );
     let want_color: Vec<u8> = w("color")
         .as_array()
         .unwrap()
@@ -118,11 +138,19 @@ fn assert_shape_matches(ctx: &str, got: &Row, want: &serde_json::Value) {
         (Some(g), Some(e)) => assert!((g as f64 - e).abs() <= 1e-3, "{ctx}: pen_width {g} vs {e}"),
         (g, e) => panic!("{ctx}: pen_width {g:?} vs {e:?}"),
     }
-    assert_eq!(got.n_points, w("n_points").as_u64().unwrap() as usize, "{ctx}: n_points");
+    assert_eq!(
+        got.n_points,
+        w("n_points").as_u64().unwrap() as usize,
+        "{ctx}: n_points"
+    );
     for (name, got_v, want_v) in [
         ("bbox", got.bbox.to_vec(), f64s(w("bbox"))),
         ("centroid", got.centroid.to_vec(), f64s(w("centroid"))),
-        ("points_bbox", got.points_bbox.to_vec(), f64s(w("points_bbox"))),
+        (
+            "points_bbox",
+            got.points_bbox.to_vec(),
+            f64s(w("points_bbox")),
+        ),
     ] {
         for (g, e) in got_v.iter().zip(&want_v) {
             assert!(close(*g, *e), "{ctx}: {name} {got_v:?} vs {want_v:?}");
@@ -132,8 +160,8 @@ fn assert_shape_matches(ctx: &str, got: &Row, want: &serde_json::Value) {
 
 #[test]
 fn shapes_match_pysdocx() {
-    let fixture: serde_json::Value = serde_json::from_str(include_str!("fixtures/shapes_pysdocx.json"))
-        .expect("fixture parses");
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/shapes_pysdocx.json")).expect("fixture parses");
 
     let mut compared = 0usize;
     for (sample_name, pages) in fixture.as_object().unwrap() {
@@ -148,9 +176,9 @@ fn shapes_match_pysdocx() {
             let bytes = reader.page_bytes(index).expect("page bytes");
             let page = sdocx::parse_page(&bytes).expect("parse page");
             let key = format!("{}.page", page.uuid);
-            let want = pages[&key].as_array().unwrap_or_else(|| {
-                panic!("{sample_name}: page {key} missing from fixture")
-            });
+            let want = pages[&key]
+                .as_array()
+                .unwrap_or_else(|| panic!("{sample_name}: page {key} missing from fixture"));
 
             let mut got: Vec<Row> = page
                 .elements

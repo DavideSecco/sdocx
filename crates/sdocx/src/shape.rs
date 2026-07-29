@@ -135,7 +135,13 @@ fn decode_outline(data: &[u8], off: usize, width: u32, height: u32) -> Vec<(u8, 
 }
 
 /// Sample a cubic Bezier at `per_seg` points (endpoint excluded; the caller adds it).
-fn cubic(p0: (f64, f64), p1: (f64, f64), p2: (f64, f64), p3: (f64, f64), out: &mut Vec<(f64, f64)>) {
+fn cubic(
+    p0: (f64, f64),
+    p1: (f64, f64),
+    p2: (f64, f64),
+    p3: (f64, f64),
+    out: &mut Vec<(f64, f64)>,
+) {
     for i in 0..BEZIER_PER_SEG {
         let t = i as f64 / BEZIER_PER_SEG as f64;
         let mt = 1.0 - t;
@@ -165,11 +171,18 @@ fn flatten_outline(segments: &[(u8, Vec<(f64, f64)>)]) -> Vec<(f64, f64)> {
 
 /// Read the `<u32 count><count × (f64 x, f64 y)>` vertex list that precedes the type
 /// marker, scanning backward for the nearest count-prefixed run of on-page doubles.
-fn read_vertex_list(data: &[u8], marker: usize, width: u32, height: u32) -> Option<Vec<(f64, f64)>> {
+fn read_vertex_list(
+    data: &[u8],
+    marker: usize,
+    width: u32,
+    height: u32,
+) -> Option<Vec<(f64, f64)>> {
     let mut best = None;
     let start = marker.saturating_sub(1200);
     for off in start..marker.saturating_sub(4) {
-        let Some(count) = read_u32(data, off) else { continue };
+        let Some(count) = read_u32(data, off) else {
+            continue;
+        };
         if !(SHAPE_MIN_VERTICES..=SHAPE_MAX_VERTICES).contains(&count)
             || off + 4 + count as usize * 16 > marker
         {
@@ -213,7 +226,11 @@ fn bgra_at(data: &[u8], i: usize) -> Option<Color> {
         && data[i - 1] == 0x00
         && (data[i], data[i + 1], data[i + 2]) != (0xFF, 0xFF, 0xFF)
     {
-        Some(Color { r: data[i + 2], g: data[i + 1], b: data[i] })
+        Some(Color {
+            r: data[i + 2],
+            g: data[i + 1],
+            b: data[i],
+        })
     } else {
         None
     }
@@ -283,7 +300,11 @@ fn to_outline_ops(segments: &[(u8, Vec<(f64, f64)>)]) -> Vec<OutlineOp> {
         .filter_map(|(tag, seg)| match tag {
             1 => Some(OutlineOp::MoveTo(to_point(seg[0]))),
             2 => Some(OutlineOp::LineTo(to_point(seg[0]))),
-            4 => Some(OutlineOp::CurveTo(to_point(seg[0]), to_point(seg[1]), to_point(seg[2]))),
+            4 => Some(OutlineOp::CurveTo(
+                to_point(seg[0]),
+                to_point(seg[1]),
+                to_point(seg[2]),
+            )),
             _ => None,
         })
         .collect()
@@ -292,7 +313,12 @@ fn to_outline_ops(segments: &[(u8, Vec<(f64, f64)>)]) -> Vec<OutlineOp> {
 /// Decode one marker-based shape at absolute offset `marker` (pysdocx
 /// `_parse_shape_marker`). Returns `None` when the bbox isn't a plausible on-page
 /// rect or no usable outline/vertex list is found.
-pub(crate) fn parse_shape_marker(data: &[u8], marker: usize, width: u32, height: u32) -> Option<Shape> {
+pub(crate) fn parse_shape_marker(
+    data: &[u8],
+    marker: usize,
+    width: u32,
+    height: u32,
+) -> Option<Shape> {
     if marker + 11 + 32 > data.len() {
         return None;
     }
@@ -303,7 +329,10 @@ pub(crate) fn parse_shape_marker(data: &[u8], marker: usize, width: u32, height:
         x_max: read_f64(data, marker + 27)?,
         y_max: read_f64(data, marker + 35)?,
     };
-    let finite = bbox.x_min.is_finite() && bbox.y_min.is_finite() && bbox.x_max.is_finite() && bbox.y_max.is_finite();
+    let finite = bbox.x_min.is_finite()
+        && bbox.y_min.is_finite()
+        && bbox.x_max.is_finite()
+        && bbox.y_max.is_finite();
     if !(finite
         && -5.0 <= bbox.x_min
         && bbox.x_min < bbox.x_max
@@ -380,7 +409,10 @@ pub(crate) fn parse_arrow_object(
     let x1 = read_f64(data, shaft_off + 16)?;
     let y1 = read_f64(data, shaft_off + 24)?;
     let in_page = |x: f64, y: f64| {
-        x.is_finite() && y.is_finite() && (1.0..=width as f64).contains(&x) && (1.0..=height as f64).contains(&y)
+        x.is_finite()
+            && y.is_finite()
+            && (1.0..=width as f64).contains(&x)
+            && (1.0..=height as f64).contains(&y)
     };
     if !(in_page(x0, y0) && in_page(x1, y1)) {
         return None;
@@ -427,7 +459,8 @@ pub(crate) fn parse_shapes_in_object(
         }
     }
     if !found_marker_shape
-        && let Some(arrow) = parse_arrow_object(data, blob_off, blob_end, width, height) {
-            out.push(arrow);
-        }
+        && let Some(arrow) = parse_arrow_object(data, blob_off, blob_end, width, height)
+    {
+        out.push(arrow);
+    }
 }

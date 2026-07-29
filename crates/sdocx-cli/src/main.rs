@@ -120,7 +120,10 @@ fn format_template(template: &PageTemplate) -> String {
             media_index,
             page_index,
         } => {
-            format!("PDF template (media {media_index}, page {})", page_index + 1)
+            format!(
+                "PDF template (media {media_index}, page {})",
+                page_index + 1
+            )
         }
         PageTemplateSource::CustomImage { filename } => format!("image template ({filename})"),
     }

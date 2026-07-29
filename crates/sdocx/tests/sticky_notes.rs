@@ -52,8 +52,7 @@ fn sticky_notes_match_pysdocx() {
             )]
         );
     }
-    if let Some(rows) =
-        sticky_rows("Associationpages&stickynote&images&audio_260701_183225.sdocx")
+    if let Some(rows) = sticky_rows("Associationpages&stickynote&images&audio_260701_183225.sdocx")
     {
         assert_eq!(
             rows,

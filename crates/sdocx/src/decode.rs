@@ -95,8 +95,16 @@ pub fn decode_coordinates(
         let dy_mag = data[i + 2];
         let dy_flag = data[i + 3];
 
-        let dx_scale = if dx_flag & 1 == 1 { DELTA_SCALE * 2.0 } else { DELTA_SCALE };
-        let dy_scale = if dy_flag & 1 == 1 { DELTA_SCALE * 2.0 } else { DELTA_SCALE };
+        let dx_scale = if dx_flag & 1 == 1 {
+            DELTA_SCALE * 2.0
+        } else {
+            DELTA_SCALE
+        };
+        let dy_scale = if dy_flag & 1 == 1 {
+            DELTA_SCALE * 2.0
+        } else {
+            DELTA_SCALE
+        };
 
         let dx = if dx_flag & 0x80 == 0 {
             dx_mag as f64
@@ -200,7 +208,11 @@ fn extract_color_and_width(data_blob: &[u8]) -> (Option<Color>, f32, Option<u8>,
         .map(|relative| search_start + relative);
 
     let (pos, marker_len, tool_id) = if let Some(pos) = long_pos {
-        (Some(pos), COLOR_MARKER_LEN, Some(data_blob[pos + 2].saturating_sub(1) / 2))
+        (
+            Some(pos),
+            COLOR_MARKER_LEN,
+            Some(data_blob[pos + 2].saturating_sub(1) / 2),
+        )
     } else {
         // Fallback: short-form marker (straight-line tool strokes), only
         // valid when immediately followed by a BGRA color (alpha 0xFF).
@@ -236,14 +248,22 @@ fn extract_color_and_width(data_blob: &[u8]) -> (Option<Color>, f32, Option<u8>,
     }
 
     let tapered = match (pos, tool_id) {
-        (Some(pos), Some(tool_id)) => has_pressure_taper(data_blob, pos, marker_len, tool_id, width),
+        (Some(pos), Some(tool_id)) => {
+            has_pressure_taper(data_blob, pos, marker_len, tool_id, width)
+        }
         _ => false,
     };
 
     (color, width, tool_id, tapered)
 }
 
-fn has_pressure_taper(data_blob: &[u8], pos: usize, marker_len: usize, tool_id: u8, width: f32) -> bool {
+fn has_pressure_taper(
+    data_blob: &[u8],
+    pos: usize,
+    marker_len: usize,
+    tool_id: u8,
+    width: f32,
+) -> bool {
     let offset = pos + marker_len + 8; // marker + BGRA(4) + width(4)
     if offset + TAPER_TAG_LEN > data_blob.len() {
         return false;

@@ -3,8 +3,7 @@ use std::io::{Read, Seek};
 use crate::error::{Error, Result};
 use crate::page::parse_page;
 use crate::types::{
-    BoundingBox, Color, Document, DocumentMetadata, MediaAsset, Page, RichTextBox,
-    Table, TableCell,
+    BoundingBox, Color, Document, DocumentMetadata, MediaAsset, Page, RichTextBox, Table, TableCell,
 };
 
 /// Parse a `.sdocx` ZIP archive from a reader.
@@ -243,7 +242,9 @@ fn media_index_positions(names: &[String]) -> std::collections::HashMap<usize, u
 }
 
 /// A media manifest (names + mime, no bytes) for lazy loading.
-fn media_manifest<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> (Vec<String>, Vec<MediaAsset>) {
+fn media_manifest<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> (Vec<String>, Vec<MediaAsset>) {
     let names = media_member_names(archive);
     let assets = names
         .iter()
@@ -287,10 +288,19 @@ fn parse_note_text(data: &[u8]) -> Option<RichTextBox> {
         // A body that is only object anchors (U+FFFC, e.g. table placeholders)
         // and whitespace has no visible typed text; render nothing (avoids a
         // stray column of blank lines / anchor glyphs on page 0).
-        if !rt.text.chars().all(|c| c == '\u{FFFC}' || c.is_whitespace()) {
+        if !rt
+            .text
+            .chars()
+            .all(|c| c == '\u{FFFC}' || c.is_whitespace())
+        {
             return Some(crate::note_doc::wrapper_rich_text_box(
                 rt,
-                BoundingBox { x_min: 0.0, y_min: 0.0, x_max: 0.0, y_max: 0.0 },
+                BoundingBox {
+                    x_min: 0.0,
+                    y_min: 0.0,
+                    x_max: 0.0,
+                    y_max: 0.0,
+                },
                 None,
                 None,
             ));
@@ -366,7 +376,11 @@ fn read_f64_at(data: &[u8], off: usize) -> Option<f64> {
 /// Only runs spanning the cell exactly (start=0, end=char_count) are accepted,
 /// so a run window overrunning into the next cell can't be mistaken for this
 /// one's (pysdocx `_cell_style`).
-fn cell_style(note: &[u8], cell_end: usize, char_count: usize) -> (bool, bool, bool, Option<Color>, Option<f32>) {
+fn cell_style(
+    note: &[u8],
+    cell_end: usize,
+    char_count: usize,
+) -> (bool, bool, bool, Option<Color>, Option<f32>) {
     let window = &note[cell_end..note.len().min(cell_end + CELL_STYLE_WINDOW)];
     let find = |tag: u8| -> Option<(usize, usize, u32)> {
         let marker = [0x18, 0x00, tag, 0x00];
@@ -426,17 +440,18 @@ fn parse_tables(note: &[u8]) -> Vec<Table> {
     }
     let mut cells: Vec<RawCell> = Vec::new();
     let mut off = 0usize;
-    while let Some(rel) = note[off..]
-        .windows(2)
-        .position(|w| w == TABLE_CELL_PREFIX)
-    {
+    while let Some(rel) = note[off..].windows(2).position(|w| w == TABLE_CELL_PREFIX) {
         let m = off + rel;
         off = m + 1;
         if m + TABLE_CELL_MARKER_LEN > note.len() {
             break;
         }
-        let Some(kind) = read_u16_at(note, m + 2) else { break };
-        let Some(char_count) = read_u32_at(note, m + 6).map(|v| v as usize) else { break };
+        let Some(kind) = read_u16_at(note, m + 2) else {
+            break;
+        };
+        let Some(char_count) = read_u32_at(note, m + 6).map(|v| v as usize) else {
+            break;
+        };
         if !TABLE_CELL_KINDS.contains(&kind) || !(1..=512).contains(&char_count) {
             continue;
         }
@@ -458,10 +473,16 @@ fn parse_tables(note: &[u8]) -> Vec<Table> {
         if units.is_empty() {
             continue;
         }
-        let Some(x) = m.checked_sub(TABLE_ANCHOR_X_BACK).and_then(|o| read_f64_at(note, o)) else {
+        let Some(x) = m
+            .checked_sub(TABLE_ANCHOR_X_BACK)
+            .and_then(|o| read_f64_at(note, o))
+        else {
             continue;
         };
-        let Some(y) = m.checked_sub(TABLE_ANCHOR_Y_BACK).and_then(|o| read_f64_at(note, o)) else {
+        let Some(y) = m
+            .checked_sub(TABLE_ANCHOR_Y_BACK)
+            .and_then(|o| read_f64_at(note, o))
+        else {
             continue;
         };
         if !(0.0..=3000.0).contains(&x) || !(0.0..=4000.0).contains(&y) {
@@ -485,12 +506,22 @@ fn parse_tables(note: &[u8]) -> Vec<Table> {
     let ys = cluster(cells.iter().map(|c| c.anchor.1).collect(), 8.0);
     let (cols, rows) = (xs.len(), ys.len());
 
-    let col_w = if cols > 1 { (xs[cols - 1] - xs[0]) / (cols - 1) as f64 } else { 0.0 };
-    let row_h = if rows > 1 { (ys[rows - 1] - ys[0]) / (rows - 1) as f64 } else { 0.0 };
+    let col_w = if cols > 1 {
+        (xs[cols - 1] - xs[0]) / (cols - 1) as f64
+    } else {
+        0.0
+    };
+    let row_h = if rows > 1 {
+        (ys[rows - 1] - ys[0]) / (rows - 1) as f64
+    } else {
+        0.0
+    };
     // Anchors are bottom-left corners: xs[0] is the table's left edge; the row
     // anchors are bottoms, so the table top is one row-height above row 0's.
     let x_edges: Vec<f64> = (0..=cols).map(|i| xs[0] + i as f64 * col_w).collect();
-    let y_edges: Vec<f64> = (0..=rows).map(|i| ys[0] - row_h + i as f64 * row_h).collect();
+    let y_edges: Vec<f64> = (0..=rows)
+        .map(|i| ys[0] - row_h + i as f64 * row_h)
+        .collect();
 
     let nearest = |edges: &[f64], v: f64| -> usize {
         edges
@@ -756,9 +787,10 @@ impl<R: Read + Seek> Reader<R> {
         // The typed note body is rendered as the first page's text layer, matching
         // `parse_from_reader`.
         if index == 0
-            && let Some(text) = self.metadata.note_text.clone() {
-                page.elements.push(crate::types::PageElement::TextBox(text));
-            }
+            && let Some(text) = self.metadata.note_text.clone()
+        {
+            page.elements.push(crate::types::PageElement::TextBox(text));
+        }
         Ok(page)
     }
 
@@ -882,9 +914,16 @@ mod tests {
                 panic!("page {i}: expected a PDF-backed template");
             };
             pdf_indices.insert(media_index);
-            let bytes = reader.media_bytes(media_index as usize).expect("media bytes");
-            assert!(bytes.starts_with(b"%PDF"), "page {i}: media {media_index} is not a PDF");
-            let asset = reader.media_asset(media_index as usize).expect("media asset");
+            let bytes = reader
+                .media_bytes(media_index as usize)
+                .expect("media bytes");
+            assert!(
+                bytes.starts_with(b"%PDF"),
+                "page {i}: media {media_index} is not a PDF"
+            );
+            let asset = reader
+                .media_asset(media_index as usize)
+                .expect("media asset");
             assert!(asset.name.ends_with(".pdf"), "page {i}: {}", asset.name);
         }
         // The raw indices themselves — byte-identical to what pysdocx decodes.
@@ -908,7 +947,11 @@ mod tests {
         assert_eq!(inline.len(), 4, "expected 4 inline images");
         let mut per_page = [0usize; 2];
         for img in inline {
-            assert!(img.page_index < 2, "page_index {} out of range", img.page_index);
+            assert!(
+                img.page_index < 2,
+                "page_index {} out of range",
+                img.page_index
+            );
             per_page[img.page_index] += 1;
         }
         assert_eq!(per_page, [1, 3], "1 image on page 0, 3 on page 1");
@@ -958,11 +1001,24 @@ mod tests {
         }
 
         for clip in &clips {
-            let bytes = reader.media_bytes(clip.file_id as usize).expect("media bytes");
-            assert!(bytes.len() > 8, "file_id {}: audio bytes too short", clip.file_id);
+            let bytes = reader
+                .media_bytes(clip.file_id as usize)
+                .expect("media bytes");
+            assert!(
+                bytes.len() > 8,
+                "file_id {}: audio bytes too short",
+                clip.file_id
+            );
             // ISO-BMFF/MP4 box layout: [u32 box_size]['f','t','y','p'].
-            assert_eq!(&bytes[4..8], b"ftyp", "file_id {}: not an MP4 container", clip.file_id);
-            let asset = reader.media_asset(clip.file_id as usize).expect("media asset");
+            assert_eq!(
+                &bytes[4..8],
+                b"ftyp",
+                "file_id {}: not an MP4 container",
+                clip.file_id
+            );
+            let asset = reader
+                .media_asset(clip.file_id as usize)
+                .expect("media asset");
             assert_eq!(asset.mime_type, "audio/mp4");
         }
     }
