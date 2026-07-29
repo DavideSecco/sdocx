@@ -15,13 +15,13 @@ class SdocxObjectHeader(KaitaiStruct):
     `field_flags`-gated extension model:
 
       0x1     ANGLE      +4   rotation-angle f32 at offset 105
-      0x20    EXTRA_KEY  variable-sized named property block
+      0x20    EXTRA_BUNDLE generic ObjectBase property bag
       0x40000 HDR_EXT    +16  [counter, seq, page_width, page_height]
       0x8000  MEDIA_FAMILY  0 image/shape/drawing discriminator (no size)
       0x2000|0x4000 BASE   0  present on every object
 
     The extensions are stored in bit order (angle, then extra_key, then hdr_ext).
-    The extra-key block consumes the bytes up to the optional final 16-byte
+    The extra-bundle block consumes the bytes up to the optional final 16-byte
     HDR_EXT. Payload data
     after the header (strokes, geometry wrappers) is NOT read here.
 
@@ -98,8 +98,46 @@ class SdocxObjectHeader(KaitaiStruct):
             pass
 
 
+    class AsciiKey(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxObjectHeader.AsciiKey, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.byte_count = self._io.read_u2le()
+            self.value = (self._io.read_bytes(self.byte_count)).decode(u"ASCII")
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class ByteVecProperty(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxObjectHeader.ByteVecProperty, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.key = SdocxObjectHeader.AsciiKey(self._io, self, self._root)
+            self.byte_count = self._io.read_u4le()
+            self.value = self._io.read_bytes(self.byte_count)
+
+
+        def _fetch_instances(self):
+            pass
+            self.key._fetch_instances()
+
+
     class ExtraKeyBlock(KaitaiStruct):
-        """Variable-sized named property. Values are decoded by their 3-byte head."""
+        """Generic ObjectBase bundle/property bag (sdocx2pdf `Bundle`): a one-byte
+        presence bitfield gates string, u32, string-vector and byte-buffer maps.
+        Older notes called the first three bytes a `head`; in this model those
+        bytes are simply `presence_flags + u16 map_count`.
+        """
         def __init__(self, _io, _parent=None, _root=None):
             super(SdocxObjectHeader.ExtraKeyBlock, self).__init__(_io)
             self._parent = _parent
@@ -107,71 +145,94 @@ class SdocxObjectHeader(KaitaiStruct):
             self._read()
 
         def _read(self):
-            self.head = self._io.read_bytes(3)
-            self.key_len = self._io.read_u2le()
-            self.key = (self._io.read_bytes(self.key_len)).decode(u"ASCII")
-            if self.head == b"\x02\x01\x00":
+            self.presence_flags = self._io.read_u1()
+            if self.presence_flags & 1 != 0:
                 pass
-                self.trailing = self._io.read_u4le()
+                self.string_prop_count = self._io.read_u2le()
 
-            if self.head == b"\x04\x01\x00":
+            if self.presence_flags & 1 != 0:
                 pass
-                self.string_count = self._io.read_u2le()
-
-            if self.head == b"\x04\x01\x00":
-                pass
-                self.strings = []
-                for i in range(self.string_count):
-                    self.strings.append(SdocxObjectHeader.Utf16String(self._io, self, self._root))
+                self.string_props = []
+                for i in range(self.string_prop_count):
+                    self.string_props.append(SdocxObjectHeader.StringProperty(self._io, self, self._root))
 
 
-            if self.head == b"\x07\x01\x00":
+            if self.presence_flags & 2 != 0:
                 pass
-                self.math_expression = SdocxObjectHeader.Utf16String(self._io, self, self._root)
+                self.integer_prop_count = self._io.read_u2le()
 
-            if self.head == b"\x06\x01\x00":
+            if self.presence_flags & 2 != 0:
                 pass
-                self.math_fail_code = self._io.read_u4le()
+                self.integer_props = []
+                for i in range(self.integer_prop_count):
+                    self.integer_props.append(SdocxObjectHeader.IntegerProperty(self._io, self, self._root))
 
-            if self.head == b"\x07\x01\x00":
-                pass
-                self.fail_property = SdocxObjectHeader.NamedU32Property(self._io, self, self._root)
 
-            if  ((self.head == b"\x06\x01\x00") or (self.head == b"\x07\x01\x00")) :
+            if self.presence_flags & 4 != 0:
                 pass
-                self.uuid_property = SdocxObjectHeader.NamedStringArrayProperty(self._io, self, self._root)
+                self.string_vec_prop_count = self._io.read_u2le()
+
+            if self.presence_flags & 4 != 0:
+                pass
+                self.string_vec_props = []
+                for i in range(self.string_vec_prop_count):
+                    self.string_vec_props.append(SdocxObjectHeader.StringVecProperty(self._io, self, self._root))
+
+
+            if self.presence_flags & 8 != 0:
+                pass
+                self.byte_vec_prop_count = self._io.read_u2le()
+
+            if self.presence_flags & 8 != 0:
+                pass
+                self.byte_vec_props = []
+                for i in range(self.byte_vec_prop_count):
+                    self.byte_vec_props.append(SdocxObjectHeader.ByteVecProperty(self._io, self, self._root))
+
 
 
 
         def _fetch_instances(self):
             pass
-            if self.head == b"\x02\x01\x00":
+            if self.presence_flags & 1 != 0:
                 pass
 
-            if self.head == b"\x04\x01\x00":
+            if self.presence_flags & 1 != 0:
                 pass
-
-            if self.head == b"\x04\x01\x00":
-                pass
-                for i in range(len(self.strings)):
+                for i in range(len(self.string_props)):
                     pass
-                    self.strings[i]._fetch_instances()
+                    self.string_props[i]._fetch_instances()
 
 
-            if self.head == b"\x07\x01\x00":
-                pass
-                self.math_expression._fetch_instances()
-
-            if self.head == b"\x06\x01\x00":
+            if self.presence_flags & 2 != 0:
                 pass
 
-            if self.head == b"\x07\x01\x00":
+            if self.presence_flags & 2 != 0:
                 pass
-                self.fail_property._fetch_instances()
+                for i in range(len(self.integer_props)):
+                    pass
+                    self.integer_props[i]._fetch_instances()
 
-            if  ((self.head == b"\x06\x01\x00") or (self.head == b"\x07\x01\x00")) :
+
+            if self.presence_flags & 4 != 0:
                 pass
-                self.uuid_property._fetch_instances()
+
+            if self.presence_flags & 4 != 0:
+                pass
+                for i in range(len(self.string_vec_props)):
+                    pass
+                    self.string_vec_props[i]._fetch_instances()
+
+
+            if self.presence_flags & 8 != 0:
+                pass
+
+            if self.presence_flags & 8 != 0:
+                pass
+                for i in range(len(self.byte_vec_props)):
+                    pass
+                    self.byte_vec_props[i]._fetch_instances()
+
 
 
 
@@ -192,6 +253,23 @@ class SdocxObjectHeader(KaitaiStruct):
 
         def _fetch_instances(self):
             pass
+
+
+    class IntegerProperty(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxObjectHeader.IntegerProperty, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.key = SdocxObjectHeader.AsciiKey(self._io, self, self._root)
+            self.value = self._io.read_u4le()
+
+
+        def _fetch_instances(self):
+            pass
+            self.key._fetch_instances()
 
 
     class NamedStringArrayProperty(KaitaiStruct):
@@ -236,6 +314,49 @@ class SdocxObjectHeader(KaitaiStruct):
 
         def _fetch_instances(self):
             pass
+
+
+    class StringProperty(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxObjectHeader.StringProperty, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.key = SdocxObjectHeader.AsciiKey(self._io, self, self._root)
+            self.value = SdocxObjectHeader.Utf16String(self._io, self, self._root)
+
+
+        def _fetch_instances(self):
+            pass
+            self.key._fetch_instances()
+            self.value._fetch_instances()
+
+
+    class StringVecProperty(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SdocxObjectHeader.StringVecProperty, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.key = SdocxObjectHeader.AsciiKey(self._io, self, self._root)
+            self.string_count = self._io.read_u2le()
+            self.strings = []
+            for i in range(self.string_count):
+                self.strings.append(SdocxObjectHeader.Utf16String(self._io, self, self._root))
+
+
+
+        def _fetch_instances(self):
+            pass
+            self.key._fetch_instances()
+            for i in range(len(self.strings)):
+                pass
+                self.strings[i]._fetch_instances()
+
 
 
     class Utf16String(KaitaiStruct):

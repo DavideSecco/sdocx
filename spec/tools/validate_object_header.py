@@ -21,6 +21,22 @@ BASE_FIELDS = [
 ]
 
 
+def _kaitai_bundle(k) -> dict:
+    def key(prop) -> str:
+        return prop.key.value.rstrip("\x00")
+
+    return {
+        "presence_flags": k.presence_flags,
+        "strings": {key(p): p.value.value for p in getattr(k, "string_props", [])},
+        "integers": {key(p): p.value for p in getattr(k, "integer_props", [])},
+        "string_vecs": {
+            key(p): [s.value for s in p.strings]
+            for p in getattr(k, "string_vec_props", [])
+        },
+        "byte_vecs": {key(p): p.value.hex() for p in getattr(k, "byte_vec_props", [])},
+    }
+
+
 def _objects(data: bytes):
     base = parse_page(data)["base"]
     tree = parse_page_tree(data, 0, 0, base)
@@ -39,26 +55,8 @@ def _diffs(blob: bytes) -> list[str]:
         out.append("bbox")
     if ref["field_flags"] & 0x20:
         ek = ref["extra_key_block"]
-        if k.extra_key is None or k.extra_key.key.rstrip("\x00") != ek["key"]:
-            out.append("extra_key")
-        elif ek["value_kind"] == "u32":
-            if k.extra_key.trailing != ek["trailing"]:
-                out.append("extra_key_u32")
-        elif ek["value_kind"] == "utf16_string_array":
-            if [s.value for s in k.extra_key.strings] != ek["strings"]:
-                out.append("extra_key_string_array")
-        elif ek["value_kind"] == "math_property_chain":
-            math_expression = getattr(k.extra_key, "math_expression", None)
-            expression = math_expression.value if math_expression else None
-            fail = getattr(k.extra_key, "fail_property", None)
-            fail_key = fail.key.rstrip("\x00") if fail else k.extra_key.key.rstrip("\x00")
-            fail_code = fail.value if fail else getattr(k.extra_key, "math_fail_code", None)
-            array = getattr(k.extra_key, "uuid_property", None)
-            if (expression != ek["expression"] or fail_key != ek["fail_key"]
-                    or fail_code != ek["fail_code"] or array is None
-                    or array.key.rstrip("\x00") != ek["array_key"]
-                    or [s.value for s in array.strings] != ek["strings"]):
-                out.append("math_property_chain")
+        if k.extra_key is None or _kaitai_bundle(k.extra_key) != ek["bundle"]:
+            out.append("extra_key_bundle")
     if ref["field_flags"] & 0x40000:
         ex = ref["ext_block"]
         if k.hdr_ext is None or (k.hdr_ext.counter, k.hdr_ext.seq,

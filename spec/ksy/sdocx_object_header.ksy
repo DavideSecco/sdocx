@@ -11,13 +11,13 @@ doc: |
   `field_flags`-gated extension model:
 
     0x1     ANGLE      +4   rotation-angle f32 at offset 105
-    0x20    EXTRA_KEY  variable-sized named property block
+    0x20    EXTRA_BUNDLE generic ObjectBase property bag
     0x40000 HDR_EXT    +16  [counter, seq, page_width, page_height]
     0x8000  MEDIA_FAMILY  0 image/shape/drawing discriminator (no size)
     0x2000|0x4000 BASE   0  present on every object
 
   The extensions are stored in bit order (angle, then extra_key, then hdr_ext).
-  The extra-key block consumes the bytes up to the optional final 16-byte
+  The extra-bundle block consumes the bytes up to the optional final 16-byte
   HDR_EXT. Payload data
   after the header (strokes, geometry wrappers) is NOT read here.
 
@@ -91,43 +91,84 @@ instances:
     if: (field_flags & 0x20) != 0
 types:
   extra_key_block:
-    doc: Variable-sized named property. Values are decoded by their 3-byte head.
+    doc: |
+      Generic ObjectBase bundle/property bag (sdocx2pdf `Bundle`): a one-byte
+      presence bitfield gates string, u32, string-vector and byte-buffer maps.
+      Older notes called the first three bytes a `head`; in this model those
+      bytes are simply `presence_flags + u16 map_count`.
     seq:
-      - id: head
-        size: 3
-        doc: 02 01 00 for scalar values; 04 01 00 for string arrays.
-      - id: key_len
+      - id: presence_flags
+        type: u1
+      - id: string_prop_count
         type: u2
-        doc: ASCII key byte length including its NUL terminator.
-      - id: key
+        if: (presence_flags & 0x1) != 0
+      - id: string_props
+        type: string_property
+        repeat: expr
+        repeat-expr: string_prop_count
+        if: (presence_flags & 0x1) != 0
+      - id: integer_prop_count
+        type: u2
+        if: (presence_flags & 0x2) != 0
+      - id: integer_props
+        type: integer_property
+        repeat: expr
+        repeat-expr: integer_prop_count
+        if: (presence_flags & 0x2) != 0
+      - id: string_vec_prop_count
+        type: u2
+        if: (presence_flags & 0x4) != 0
+      - id: string_vec_props
+        type: string_vec_property
+        repeat: expr
+        repeat-expr: string_vec_prop_count
+        if: (presence_flags & 0x4) != 0
+      - id: byte_vec_prop_count
+        type: u2
+        if: (presence_flags & 0x8) != 0
+      - id: byte_vec_props
+        type: byte_vec_property
+        repeat: expr
+        repeat-expr: byte_vec_prop_count
+        if: (presence_flags & 0x8) != 0
+  ascii_key:
+    seq:
+      - id: byte_count
+        type: u2
+      - id: value
         type: str
-        size: key_len
+        size: byte_count
         encoding: ASCII
-        doc: NUL-terminated ASCII property name.
-      - id: trailing
+  string_property:
+    seq:
+      - id: key
+        type: ascii_key
+      - id: value
+        type: utf16_string
+  integer_property:
+    seq:
+      - id: key
+        type: ascii_key
+      - id: value
         type: u4
-        if: head == [2, 1, 0]
-        doc: Scalar value; 1 for extra_key_stroke_shape.
+  string_vec_property:
+    seq:
+      - id: key
+        type: ascii_key
       - id: string_count
         type: u2
-        if: head == [4, 1, 0]
       - id: strings
         type: utf16_string
         repeat: expr
         repeat-expr: string_count
-        if: head == [4, 1, 0]
-      - id: math_expression
-        type: utf16_string
-        if: head == [7, 1, 0]
-      - id: math_fail_code
+  byte_vec_property:
+    seq:
+      - id: key
+        type: ascii_key
+      - id: byte_count
         type: u4
-        if: head == [6, 1, 0]
-      - id: fail_property
-        type: named_u32_property
-        if: head == [7, 1, 0]
-      - id: uuid_property
-        type: named_string_array_property
-        if: head == [6, 1, 0] or head == [7, 1, 0]
+      - id: value
+        size: byte_count
   utf16_string:
     seq:
       - id: char_count

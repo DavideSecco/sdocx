@@ -92,6 +92,22 @@ def _kaitai_layer_static_and_optional_len(layer) -> int:
     return n
 
 
+def _kaitai_bundle(k) -> dict:
+    def key(prop) -> str:
+        return prop.key.value.rstrip("\x00")
+
+    return {
+        "presence_flags": k.presence_flags,
+        "strings": {key(p): p.value.value for p in getattr(k, "string_props", [])},
+        "integers": {key(p): p.value for p in getattr(k, "integer_props", [])},
+        "string_vecs": {
+            key(p): [s.value for s in p.strings]
+            for p in getattr(k, "string_vec_props", [])
+        },
+        "byte_vecs": {key(p): p.value.hex() for p in getattr(k, "byte_vec_props", [])},
+    }
+
+
 @unittest.skipUnless(_KAITAI_AVAILABLE, "kaitaistruct runtime / generated parsers not available")
 class KaitaiSpecMatchesPysdocx(unittest.TestCase):
     """Every decoded field in each spec matches the reference parser, corpus-wide."""
@@ -263,11 +279,7 @@ class KaitaiSpecMatchesPysdocx(unittest.TestCase):
                             if ref["field_flags"] & 0x20:
                                 ek = ref["extra_key_block"]
                                 self.assertIsNotNone(k.extra_key, f"{where}: extra_key")
-                                self.assertEqual(k.extra_key.key.rstrip("\x00"), ek["key"], f"{where}: extra_key.key")
-                                if ek["value_kind"] == "u32":
-                                    self.assertEqual(k.extra_key.trailing, ek["trailing"], f"{where}: extra_key.trailing")
-                                elif ek["value_kind"] == "utf16_string_array":
-                                    self.assertEqual([s.value for s in k.extra_key.strings], ek["strings"], f"{where}: extra_key.strings")
+                                self.assertEqual(_kaitai_bundle(k.extra_key), ek["bundle"], f"{where}: extra_key.bundle")
                             if ref["field_flags"] & 0x40000:
                                 ex = ref["ext_block"]
                                 self.assertIsNotNone(k.hdr_ext, f"{where}: hdr_ext")
