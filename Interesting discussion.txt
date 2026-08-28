@@ -1,0 +1,12 @@
+https://www.reddit.com/r/GalaxyTab/comments/pva9px/exporting_a_vectorized_pdf_from_samsung_notes/
+
+https://docs.rs/sdocx/latest/sdocx/
+
+https://crates.io/crates/sdocx/versions
+
+https://github.com/twangodev/sdocx
+
+https://github.com/squ1dd13/sdocx2pdf/tree/master
+
+https://github.com/cable729/inkterop/commit/d9187cab7613a521032e847509cafbfd9086b4fd
+https://cable729.github.io/inkterop/docs/formats/sdocx/
